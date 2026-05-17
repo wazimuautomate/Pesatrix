@@ -1,0 +1,322 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { Plus, FileUp, Search, Loader2, X } from "lucide-react";
+import { toast } from "sonner";
+
+import { AdminPageShell, MetricCard } from "@/components/admin/admin-native";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { CATEGORY_LABELS, type TaskCategory, type TaskStatus } from "@/lib/task-types";
+import { TaskCard, type TaskRow } from "./components/TaskCard";
+import { TaskForm } from "./components/TaskForm";
+import { TaskImportPanel } from "./components/TaskImportPanel";
+
+type Counts = {
+  total: number;
+  draft: number;
+  active: number;
+  paused: number;
+  completed: number;
+  scheduled: number;
+};
+
+export default function TasksPage() {
+  const router = useRouter();
+  const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [counts, setCounts] = useState<Counts>({
+    total: 0,
+    draft: 0,
+    active: 0,
+    paused: 0,
+    completed: 0,
+    scheduled: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showNewTask, setShowNewTask] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
+
+  const fetchTasks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      if (categoryFilter && categoryFilter !== "all") params.set("category", categoryFilter);
+      if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
+
+      const res = await fetch(`/api/admin/tasks?${params.toString()}`);
+      if (!res.ok) {
+        toast.error("Failed to fetch tasks");
+        return;
+      }
+
+      const data = await res.json();
+      setTasks(data.tasks ?? []);
+      setCounts(data.counts ?? { total: 0, draft: 0, active: 0, paused: 0, completed: 0, scheduled: 0 });
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setLoading(false);
+    }
+  }, [search, categoryFilter, statusFilter]);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  async function handleSave(payload: Record<string, unknown>, publish: boolean) {
+    const method = payload.id ? "PATCH" : "POST";
+    const url = payload.id
+      ? `/api/admin/tasks/${payload.id}`
+      : "/api/admin/tasks";
+
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      toast.error(result?.error?.message ?? result?.error ?? "Failed to save task");
+      return;
+    }
+
+    toast.success(publish ? "Task published!" : "Task saved as draft");
+    setShowNewTask(false);
+    setEditingTask(null);
+    fetchTasks();
+  }
+
+  async function handleStatusChange(id: string, newStatus: TaskStatus) {
+    const res = await fetch(`/api/admin/tasks/${id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      toast.error(result?.error ?? "Failed to change status");
+      return;
+    }
+
+    toast.success(`Task ${newStatus}`);
+    fetchTasks();
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this draft task? This cannot be undone.")) return;
+
+    const res = await fetch(`/api/admin/tasks/${id}`, {
+      method: "DELETE",
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      toast.error(result?.error ?? "Failed to delete task");
+      return;
+    }
+
+    toast.success("Task deleted");
+    fetchTasks();
+  }
+
+  return (
+    <AdminPageShell
+      admin={{
+        role: "admin",
+        userId: "",
+        email: "",
+        adminUserId: "",
+      }}
+      title="Tasks"
+      description="Manage the task catalog: create, import, edit, and publish tasks for users."
+      actions={
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => setShowNewTask(true)}>
+            <Plus className="mr-1 h-4 w-4" /> New Task
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
+            <FileUp className="mr-1 h-4 w-4" /> Import JSON
+          </Button>
+        </div>
+      }
+    >
+      <section className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        <MetricCard label="Total" value={counts.total} detail="All tasks" tone="blue" />
+        <MetricCard label="Active" value={counts.active} detail="Live and accepting" tone="teal" />
+        <MetricCard label="Drafts" value={counts.draft} detail="Not yet published" tone="amber" />
+        <MetricCard label="Scheduled" value={counts.scheduled} detail="Pending publish" tone="blue" />
+        <MetricCard label="Paused" value={counts.paused} detail="Temporarily stopped" tone="amber" />
+        <MetricCard label="Completed" value={counts.completed} detail="Finished or expired" tone="blue" />
+      </section>
+
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search tasks..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All Categories" />
+          </SelectTrigger>
+          <SelectContent>
+             <SelectItem value="all">All Categories</SelectItem>
+            <SelectItem value="survey">Survey</SelectItem>
+            <SelectItem value="data_labeling">Data Labeling</SelectItem>
+            <SelectItem value="social_engagement">Social Engagement</SelectItem>
+            <SelectItem value="verification">Verification</SelectItem>
+            <SelectItem value="content_creation">Content Creation</SelectItem>
+            <SelectItem value="watch_respond">Watch & Respond</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+             <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="paused">Paused</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="scheduled">Scheduled</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button
+          variant={statusFilter === "draft" ? "default" : "outline"}
+          size="sm"
+          onClick={() =>
+            setStatusFilter(statusFilter === "draft" ? "all" : "draft")
+          }
+        >
+          Drafts
+          {counts.draft > 0 && (
+            <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-xs">
+              {counts.draft}
+            </Badge>
+          )}
+        </Button>
+
+        {(search || (categoryFilter && categoryFilter !== "all") || (statusFilter && statusFilter !== "all")) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearch("");
+              setCategoryFilter("all");
+              setStatusFilter("all");
+            }}
+          >
+            <X className="mr-1 h-3.5 w-3.5" /> Clear
+          </Button>
+        )}
+      </div>
+
+      <div className="mt-4 rounded-lg border bg-white">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Title</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Payout (KSh)</TableHead>
+              <TableHead>Slots</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>AI</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className="w-[120px]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                </td>
+              </TableRow>
+            ) : tasks.length === 0 ? (
+              <TableRow>
+                <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                  {search || (categoryFilter && categoryFilter !== "all") || (statusFilter && statusFilter !== "all")
+                    ? "No tasks match your filters"
+                    : "No tasks yet. Create one or import from JSON."}
+                </td>
+              </TableRow>
+            ) : (
+              tasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onEdit={setEditingTask}
+                  onStatusChange={handleStatusChange}
+                  onDelete={handleDelete}
+                  canDelete={task.status === "draft"}
+                />
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Dialog open={showNewTask} onOpenChange={setShowNewTask}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogTitle>New Task</DialogTitle>
+          <TaskForm
+            onSave={handleSave}
+            onCancel={() => setShowNewTask(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogTitle>Edit Task</DialogTitle>
+          {editingTask && (
+            <TaskForm
+              task={editingTask}
+              onSave={handleSave}
+              onCancel={() => setEditingTask(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {showImport && (
+        <TaskImportPanel
+          onClose={() => setShowImport(false)}
+          onImported={fetchTasks}
+        />
+      )}
+    </AdminPageShell>
+  );
+}

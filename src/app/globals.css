@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* --- Pesatrix Design System (shadcn CSS vars) --- */
+    --background: 235 100% 99%;       /* #F9F9FF */
+    --foreground: 222 36% 12%;        /* #141B2C */
+    --card: 0 0% 100%;                /* #FFFFFF */
+    --card-foreground: 222 36% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 36% 12%;
+    --primary: 220 100% 40%;          /* #004CCF */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 178 100% 21%;        /* #006A66 */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 230 100% 97%;            /* #F1F3FF */
+    --muted-foreground: 233 14% 30%;  /* #424656 */
+    --accent: 230 100% 95%;           /* #E9EDFF */
+    --accent-foreground: 222 36% 12%;
+    --destructive: 0 66% 41%;         /* #BA1A1A */
+    --destructive-foreground: 0 0% 100%;
+    --border: 234 20% 80%;            /* #C3C5D8 */
+    --input: 234 20% 80%;
+    --ring: 220 100% 54%;             /* #1463FF */
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
+  }
+}
+
+/* --- Utility Classes --- */
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tracking-tighter-pesatrix {
+    letter-spacing: -0.04em;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Press scale interaction */
+  .press-scale:active {
+    transform: scale(0.98);
+  }
+
+  /* Session status pulse animation */
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .animate-pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+}
