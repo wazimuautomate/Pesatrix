@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { getDailyTaskLimit } from "@/lib/platform-settings";
+import { sanitizeTaskDataForClient } from "@/lib/task-data";
 
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -91,7 +92,7 @@ export async function GET() {
     slotsRemaining: task.slots_remaining as number,
     difficulty: task.difficulty as string,
     expiresAt: task.expires_at as string | null,
-    taskData: task.task_data as Record<string, unknown>,
+    taskData: sanitizeTaskDataForClient(task.task_data) as Record<string, unknown>,
     requiresScreenshot: task.requires_screenshot as boolean,
     requiresUrl: task.requires_url as boolean,
     minWordCount: task.min_word_count as number,

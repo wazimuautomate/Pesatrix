@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     .from("task_submissions")
     .select(`
       *,
-      task:tasks(title, category, payout_ksh, instructions),
+      task:tasks(title, category, payout_ksh, instructions, task_data),
       profile:profiles!task_submissions_user_id_fkey(full_name, email, phone)
     `)
     .eq("status", statusFilter)

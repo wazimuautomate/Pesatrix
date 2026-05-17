@@ -4,6 +4,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { TaskSubmissionForm } from "@/components/tasks/task-submission-form";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
+import { sanitizeTaskForClient } from "@/lib/task-data";
 
 export const metadata = {
   title: "Task Detail",
@@ -63,7 +64,7 @@ export default async function TaskDetailPage({ params }: RouteContext) {
     >
       <div className="mx-auto w-full max-w-3xl px-4 py-6">
         <TaskSubmissionForm
-          task={task}
+          task={sanitizeTaskForClient(task)}
           existingSubmission={existingSubmission}
         />
       </div>

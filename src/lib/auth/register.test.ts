@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
+const {
   buildRegisterSignUpInput,
   mapRegisterErrorMessage,
-} from "./register";
+} = await import("./register" + ".ts");
 
 test("buildRegisterSignUpInput normalizes and trims signup payload", () => {
   const payload = buildRegisterSignUpInput(

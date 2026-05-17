@@ -197,7 +197,7 @@ export function BulkImportForm() {
                           onChange={(e) => updateTaskField(index, "title", e.target.value)}
                           className="font-semibold"
                         />
-                        <Badge>{CATEGORY_LABELS[task.category]}</Badge>
+                        <Badge>{CATEGORY_LABELS[task.category as keyof typeof CATEGORY_LABELS]}</Badge>
                         <Badge variant="outline">KSh {task.payout_ksh}</Badge>
                         <Badge variant="outline">{task.total_slots} slots</Badge>
                         {task.publish_at ? (

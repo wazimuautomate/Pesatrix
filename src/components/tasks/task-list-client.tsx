@@ -54,6 +54,17 @@ function difficultyClass(difficulty: string): string {
   return DIFFICULTY_COLORS[difficulty as keyof typeof DIFFICULTY_COLORS] ?? "bg-slate-100 text-slate-700 border-slate-200";
 }
 
+function formatSubtype(value: unknown): string {
+  return String(value ?? "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatEstimatedTime(batchSize: number): string {
+  const minutes = Math.max(1, Math.ceil((batchSize * 15) / 60));
+  return `~${minutes} min`;
+}
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
@@ -172,6 +183,8 @@ function TaskCard({
   const isLowSlots = task.slotsRemaining <= 10;
   const isCriticalSlots = task.slotsRemaining <= 3;
   const isExpiringSoon = expiresAt && expiresAt.getTime() - now.getTime() < 24 * 60 * 60 * 1000;
+  const isDataLabeling = task.category === "data_labeling";
+  const batchSize = Number(task.taskData?.batch_size ?? ((task.taskData?.items as unknown[]) ?? []).length ?? 0);
 
   const summary = task.description || task.instructions;
   const truncatedSummary =
@@ -189,6 +202,11 @@ function TaskCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold text-navy">{task.title}</h3>
+            {isDataLabeling && (
+              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                {formatSubtype(task.taskData?.subtype)} - {batchSize} items
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-1.5">
               <Badge className={categoryClass(task.category)}>
                 {formatCategory(task.category)}
@@ -227,7 +245,7 @@ function TaskCard({
           {!expiresAt && (
             <span className="flex items-center gap-1 text-muted-foreground">
               <Clock className="h-3.5 w-3.5" />
-              No expiry
+              {isDataLabeling ? formatEstimatedTime(batchSize) : "No expiry"}
             </span>
           )}
         </div>

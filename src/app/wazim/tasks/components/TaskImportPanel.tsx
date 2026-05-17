@@ -160,7 +160,20 @@ function validateRow(raw: Record<string, unknown>, index: number): { errors: str
     normalizedTaskData.questions = normalizedQuestions;
   }
   if (category === "data_labeling") {
-    normalizedTaskData.items = (td.items as Array<Record<string, unknown>>) ?? [];
+    const rawItems = (td.items as Array<Record<string, unknown>>) ?? [];
+    const labelOptions =
+      ((td.label_options as string[]) ?? (rawItems[0]?.label_options as string[]) ?? ["Positive", "Negative", "Neutral"])
+        .map((label) => String(label).trim())
+        .filter(Boolean);
+    normalizedTaskData.subtype = td.subtype ?? "sentiment";
+    normalizedTaskData.label_options = Array.from(new Set(labelOptions));
+    normalizedTaskData.items = rawItems.map((item, itemIndex) => ({
+      id: item.id ?? `item${itemIndex + 1}`,
+      content: item.content ?? "",
+      content_type: item.content_type === "image" ? "image_url" : item.content_type ?? "text",
+      correct_label: item.correct_label ?? "",
+    }));
+    normalizedTaskData.batch_size = (normalizedTaskData.items as Array<unknown>).length;
   }
   if (category === "social_engagement") {
     normalizedTaskData.platform = td.platform ?? "";

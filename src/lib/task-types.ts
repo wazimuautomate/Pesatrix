@@ -71,14 +71,16 @@ export const surveyTaskDataSchema = z.object({
 export const dataLabelingItemSchema = z.object({
   id: z.string().min(1),
   content: z.string().min(1),
-  content_type: z.enum(["text", "image"]).default("text"),
-  label_options: z.array(z.string().min(1)).min(2),
-  correct_label: z.string().min(1).optional(),
+  content_type: z.enum(["text", "image_url"]).default("text"),
+  correct_label: z.string().min(1),
 });
 
 export const dataLabelingTaskDataSchema = z.object({
   type: z.literal("data_labeling"),
-  items: z.array(dataLabelingItemSchema).min(1),
+  subtype: z.enum(["sentiment", "image_classification", "language_detection", "text_correction", "category_tagging"]).default("sentiment"),
+  batch_size: z.number().int().min(5).max(15),
+  label_options: z.array(z.string().min(1)).min(2).max(6),
+  items: z.array(dataLabelingItemSchema).min(5).max(15),
 });
 
 export const socialEngagementTaskDataSchema = z.object({
@@ -226,6 +228,9 @@ export function createEmptySurveyTaskData(): SurveyTaskData {
 export function createEmptyDataLabelingTaskData(): DataLabelingTaskData {
   return {
     type: "data_labeling",
+    subtype: "sentiment",
+    batch_size: 0,
+    label_options: ["Positive", "Negative", "Neutral"],
     items: [],
   };
 }

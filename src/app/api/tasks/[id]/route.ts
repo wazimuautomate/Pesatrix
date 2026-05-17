@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
+import { sanitizeTaskForClient } from "@/lib/task-data";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -57,10 +58,10 @@ export async function GET(request: Request, { params }: RouteContext) {
 
   if (existingSubmission) {
     return NextResponse.json({
-      task,
+      task: sanitizeTaskForClient(task),
       existingSubmission,
     });
   }
 
-  return NextResponse.json({ task });
+  return NextResponse.json({ task: sanitizeTaskForClient(task) });
 }

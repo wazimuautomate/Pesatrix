@@ -1,6 +1,7 @@
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getVaultSecret } from "@/lib/ai/provider-secrets";
 import { getWithdrawalHoldDays } from "@/lib/platform-settings";
+import { isDataLabelingTaskData } from "@/lib/task-data";
 
 const SYSTEM_PROMPT = `You are a strict but fair task submission reviewer for Pesatrix, a Kenyan online earning platform. Your job is to evaluate user task submissions and decide if they meet the required quality standard.
 
@@ -53,6 +54,7 @@ type GradingResult = {
   decision: "approved" | "flagged" | "declined";
   reasoning: string;
   criteria_scores: Record<string, number>;
+  grading_detail?: Record<string, unknown>;
 };
 
 const FALLBACK_NVIDIA_MODEL = "minimaxai/minimax-m2.7";
@@ -67,7 +69,7 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
       id, user_id, answers, screenshot_url, submitted_url, status, ai_reviewed_at, payout_credited,
       tasks (
         id, title, category, instructions, ai_rubric,
-        payout_ksh, requires_screenshot, requires_url, min_word_count, ai_grading_enabled
+        payout_ksh, requires_screenshot, requires_url, min_word_count, ai_grading_enabled, task_data
       )
     `)
     .eq("id", submissionId)
@@ -87,6 +89,12 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
     : submission.tasks;
 
   if (!task?.ai_grading_enabled) {
+    return;
+  }
+
+  if (isDataLabelingTaskData(task.task_data)) {
+    const result = gradeDataLabelingSubmission(task.task_data, submission.answers as Record<string, unknown>);
+    await writeGradingResultAndCredit(supabaseAdmin, submission, task, result);
     return;
   }
 
@@ -179,6 +187,22 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
     return;
   }
 
+  await writeGradingResultAndCredit(supabaseAdmin, submission, task, result);
+}
+
+async function writeGradingResultAndCredit(
+  supabaseAdmin: ReturnType<typeof createAdminSupabaseClient>,
+  submission: {
+    id: string;
+    user_id: string;
+    payout_credited: boolean | null;
+  },
+  task: {
+    title?: string | null;
+    payout_ksh?: number | string | null;
+  },
+  result: GradingResult
+) {
   const mappedStatus = result.decision;
   const now = new Date().toISOString();
 
@@ -189,15 +213,16 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
       ai_reasoning: result.reasoning,
       ai_reviewed_at: now,
       status: mappedStatus,
+      ...(result.grading_detail ? { grading_detail: result.grading_detail } : {}),
     })
-    .eq("id", submissionId)
+    .eq("id", submission.id)
     .is("ai_reviewed_at", null)
     .select("id, payout_credited")
     .maybeSingle();
 
   if (updateError || !updated) {
     if (updateError) {
-      console.error("[Grading] Failed to write grading result:", submissionId, updateError);
+      console.error("[Grading] Failed to write grading result:", submission.id, updateError);
     }
     return;
   }
@@ -226,7 +251,7 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
     });
 
   if (walletError) {
-    console.error("[Grading] Wallet credit failed:", submissionId, walletError);
+    console.error("[Grading] Wallet credit failed:", submission.id, walletError);
     return;
   }
 
@@ -237,11 +262,60 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
       payout_credited: true,
       payout_credited_at: creditedAt,
     })
-    .eq("id", submissionId);
+    .eq("id", submission.id);
 
   if (creditUpdateError) {
-    console.error("[Grading] Failed to mark payout credited:", submissionId, creditUpdateError);
+    console.error("[Grading] Failed to mark payout credited:", submission.id, creditUpdateError);
   }
+}
+
+function gradeDataLabelingSubmission(
+  taskData: unknown,
+  answers: Record<string, unknown>
+): GradingResult {
+  if (!isDataLabelingTaskData(taskData)) {
+    return {
+      score: 0,
+      decision: "flagged",
+      reasoning: "Task data could not be read. Manual review required.",
+      criteria_scores: {},
+    };
+  }
+
+  const items = taskData.items ?? [];
+  let correct = 0;
+  const itemResults = items.map((item) => {
+    const userAnswer = typeof answers[item.id] === "string" ? answers[item.id] : null;
+    const isCorrect = userAnswer === item.correct_label;
+    if (isCorrect) correct++;
+    return {
+      id: item.id,
+      user_answer: userAnswer,
+      correct_label: item.correct_label,
+      correct: isCorrect,
+    };
+  });
+
+  const total = items.length;
+  const score = total > 0 ? Math.round((correct / total) * 100) : 0;
+  let decision: GradingResult["decision"];
+  if (score >= 70) decision = "approved";
+  else if (score >= 50) decision = "flagged";
+  else decision = "declined";
+
+  return {
+    decision,
+    score,
+    reasoning: `User got ${correct}/${total} labels correct (${score}%). Threshold: 70% to approve.`,
+    criteria_scores: { accuracy: score },
+    grading_detail: {
+      type: "data_labeling",
+      correct,
+      total,
+      score,
+      itemResults,
+    },
+  };
 }
 
 async function getActiveProviderConfig(supabaseAdmin: ReturnType<typeof createAdminSupabaseClient>) {

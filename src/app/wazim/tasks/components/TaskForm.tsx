@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, Plus, Trash2, X } from "lucide-react";
+import { Eye, Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,15 +18,18 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   type TaskCategory,
   type TaskDifficulty,
   type TaskStatus,
   CATEGORY_LABELS,
+  generateItemId,
   generateQuestionId,
   createEmptyTaskData,
   taskInsertSchema,
 } from "@/lib/task-types";
+import { DataLabelingTask } from "@/components/tasks/DataLabelingTask";
 import { normalizeDatetime } from "@/lib/datetime";
 import type { TaskRow } from "./TaskCard";
 
@@ -844,47 +847,220 @@ function DataLabelingEditor({
   taskData: Record<string, unknown>;
   setTaskData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
 }) {
-  const items =
-    ((taskData.items as Array<Record<string, unknown>>) ?? []);
+  const [newLabel, setNewLabel] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState("");
+  const labelOptions = ((taskData.label_options as string[]) ?? []);
+  const items = ((taskData.items as Array<Record<string, unknown>>) ?? []);
+  const allSameCorrectLabel =
+    items.length >= 2 &&
+    new Set(items.map((item) => String(item.correct_label ?? ""))).size === 1 &&
+    Boolean(items[0]?.correct_label);
+
+  function updateTaskData(updates: Record<string, unknown>) {
+    setTaskData((current) => {
+      const next = { ...current, ...updates };
+      const nextItems = (next.items as Array<Record<string, unknown>>) ?? [];
+      return { ...next, batch_size: nextItems.length };
+    });
+  }
+
+  function addLabel() {
+    const label = newLabel.trim();
+    if (!label) return;
+    if (labelOptions.length >= 6) {
+      toast.error("Maximum 6 labels allowed");
+      return;
+    }
+    if (labelOptions.some((existing) => existing.toLowerCase() === label.toLowerCase())) {
+      toast.error("Label already exists");
+      return;
+    }
+    updateTaskData({ label_options: [...labelOptions, label] });
+    setNewLabel("");
+  }
+
+  function removeLabel(label: string) {
+    if (labelOptions.length <= 2) {
+      toast.error("At least 2 labels are required");
+      return;
+    }
+    updateTaskData({
+      label_options: labelOptions.filter((option) => option !== label),
+      items: items.map((item) => ({
+        ...item,
+        correct_label: item.correct_label === label ? "" : item.correct_label,
+      })),
+    });
+  }
 
   function addItem() {
-    setTaskData((d) => ({
-      ...d,
+    if (items.length >= 15) {
+      toast.error("Maximum 15 items allowed");
+      return;
+    }
+    updateTaskData({
       items: [
         ...items,
         {
-          id: `item${Date.now()}`,
+          id: generateItemId(),
           content: "",
           content_type: "text",
-          label_options: ["Positive", "Negative", "Neutral"],
-          correct_label: "",
+          correct_label: labelOptions[0] ?? "",
         },
       ],
-    }));
+    });
   }
 
   function updateItem(index: number, updates: Record<string, unknown>) {
-    setTaskData((d) => ({
-      ...d,
+    updateTaskData({
       items: items.map((item, i) =>
         i === index ? { ...item, ...updates } : item
       ),
-    }));
+    });
   }
 
   function removeItem(index: number) {
-    setTaskData((d) => ({
-      ...d,
+    updateTaskData({
       items: items.filter((_, i) => i !== index),
-    }));
+    });
   }
+
+  function importItems() {
+    setImportError("");
+    try {
+      const parsed = JSON.parse(importText) as unknown;
+      if (!Array.isArray(parsed)) {
+        setImportError("JSON must be an array of items");
+        return;
+      }
+      if (parsed.length < 5 || parsed.length > 15) {
+        setImportError("Import must include 5 to 15 items");
+        return;
+      }
+
+      const imported = parsed.map((raw, index) => {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+          throw new Error(`Item ${index + 1} is not an object`);
+        }
+        const item = raw as Record<string, unknown>;
+        const content = String(item.content ?? "").trim();
+        const contentType = String(item.content_type ?? "text");
+        const correctLabel = String(item.correct_label ?? "").trim();
+        if (!content) throw new Error(`Item ${index + 1} is missing content`);
+        if (!["text", "image_url"].includes(contentType)) {
+          throw new Error(`Item ${index + 1} has an invalid content_type`);
+        }
+        if (!labelOptions.includes(correctLabel)) {
+          throw new Error(`Item ${index + 1} correct_label must match an existing label option`);
+        }
+        return {
+          id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : generateItemId(),
+          content,
+          content_type: contentType,
+          correct_label: correctLabel,
+        };
+      });
+
+      updateTaskData({ items: imported });
+      setImportText("");
+      setImportOpen(false);
+      toast.success("Items imported");
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Invalid JSON");
+    }
+  }
+
+  const previewTaskData = {
+    type: "data_labeling" as const,
+    subtype: String(taskData.subtype ?? "sentiment"),
+    batch_size: items.length,
+    label_options: labelOptions,
+    items: items.map((item) => ({
+      id: String(item.id),
+      content: String(item.content ?? ""),
+      content_type: (item.content_type === "image_url" ? "image_url" : "text") as "text" | "image_url",
+    })),
+  };
 
   return (
     <div className="space-y-4">
-      <h3 className="font-medium text-navy">Data Labeling Items</h3>
-      <Button variant="outline" size="sm" onClick={addItem}>
-        <Plus className="mr-1 h-3 w-3" /> Add Item
-      </Button>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Subtype</Label>
+          <Select
+            value={String(taskData.subtype ?? "sentiment")}
+            onValueChange={(value) => updateTaskData({ subtype: value })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sentiment">Sentiment Analysis</SelectItem>
+              <SelectItem value="image_classification">Image Classification</SelectItem>
+              <SelectItem value="language_detection">Language Detection</SelectItem>
+              <SelectItem value="text_correction">Text Correction</SelectItem>
+              <SelectItem value="category_tagging">Category Tagging</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Batch Size</Label>
+          <Input value={String(items.length)} disabled />
+        </div>
+      </div>
+
+      <div className="space-y-2 rounded-lg border p-4">
+        <Label>Label Options</Label>
+        <div className="flex gap-2">
+          <Input
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addLabel();
+              }
+            }}
+            placeholder="Add a label"
+          />
+          <Button type="button" variant="outline" onClick={addLabel}>
+            Add
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {labelOptions.map((label) => (
+            <Badge key={label} variant="outline" className="gap-1">
+              {label}
+              <button type="button" onClick={() => removeLabel(label)} aria-label={`Remove ${label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">Minimum 2 labels, maximum 6. Duplicates are blocked.</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={addItem} disabled={items.length >= 15}>
+          <Plus className="mr-1 h-3 w-3" /> Add Item
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+          Import from JSON
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)} disabled={items.length === 0}>
+          <Eye className="mr-1 h-3 w-3" /> Preview
+        </Button>
+        <span className="text-xs text-muted-foreground">{items.length}/15 items</span>
+      </div>
+      {items.length > 0 && items.length < 5 && (
+        <p className="text-sm text-amber-700">Minimum 5 items required before saving.</p>
+      )}
+      {allSameCorrectLabel && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          All correct labels are the same. Review this task before publishing.
+        </p>
+      )}
       {items.length === 0 && (
         <p className="text-sm text-muted-foreground">No items yet.</p>
       )}
@@ -893,31 +1069,8 @@ function DataLabelingEditor({
           key={String(item.id ?? i)}
           className="rounded-lg border p-4 space-y-2"
         >
-          <Input
-            value={String(item.content ?? "")}
-            onChange={(e) => updateItem(i, { content: e.target.value })}
-            placeholder="Text or image URL to label"
-          />
-          <Input
-            value={((item.label_options as string[]) ?? []).join(", ")}
-            onChange={(e) =>
-              updateItem(i, {
-                label_options: e.target.value
-                  .split(",")
-                  .map((s: string) => s.trim())
-                  .filter(Boolean),
-              })
-            }
-            placeholder="Label options (comma separated)"
-          />
-          <div className="flex gap-2">
-            <Input
-              value={String(item.correct_label ?? "")}
-              onChange={(e) =>
-                updateItem(i, { correct_label: e.target.value })
-              }
-              placeholder="Correct label (optional)"
-            />
+          <div className="flex items-center justify-between gap-2">
+            <Badge variant="muted">Item {i + 1}</Badge>
             <Button
               variant="ghost"
               size="sm"
@@ -926,8 +1079,78 @@ function DataLabelingEditor({
               <Trash2 className="h-3.5 w-3.5 text-destructive" />
             </Button>
           </div>
+          <Textarea
+            value={String(item.content ?? "")}
+            onChange={(e) => updateItem(i, { content: e.target.value })}
+            placeholder="Sentence, description, or image URL"
+            rows={2}
+          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div>
+              <Label className="text-xs">Content Type</Label>
+              <Select
+                value={String(item.content_type ?? "text")}
+                onValueChange={(value) => updateItem(i, { content_type: value })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text">Text</SelectItem>
+                  <SelectItem value="image_url">Image URL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Correct Label</Label>
+              <Select
+                value={String(item.correct_label ?? "")}
+                onValueChange={(value) => updateItem(i, { correct_label: value })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select label" /></SelectTrigger>
+                <SelectContent>
+                  {labelOptions.map((label) => (
+                    <SelectItem key={label} value={label}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
       ))}
+
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Import Data Labeling Items</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            rows={10}
+            placeholder='[{"content":"...","content_type":"text","correct_label":"Positive"}]'
+            className="font-mono text-xs"
+          />
+          {importError && <p className="text-sm text-destructive">{importError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
+            <Button onClick={importItems}>Import</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>User Preview</DialogTitle>
+          </DialogHeader>
+          <DataLabelingTask
+            taskId="admin-preview"
+            taskData={previewTaskData}
+            payoutKsh={0}
+            onSubmitSuccess={() => setPreviewOpen(false)}
+            previewMode
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/task-types";
+import { DataLabelingTask } from "@/components/tasks/DataLabelingTask";
 
 type Task = {
   id: string;
@@ -273,10 +274,19 @@ export function TaskSubmissionForm({
             />
           )}
           {taskType === "data_labeling" && (
-            <DataLabelingForm
-              items={taskData.items as Array<Record<string, unknown>>}
-              answers={answers}
-              setAnswers={setAnswers}
+            <DataLabelingTask
+              taskId={task.id}
+              taskData={taskData as {
+                type: "data_labeling";
+                subtype: string;
+                batch_size: number;
+                label_options: string[];
+                items: Array<{ id: string; content: string; content_type: "text" | "image_url" }>;
+              }}
+              payoutKsh={task.payout_ksh}
+              onSubmitSuccess={() => {
+                setSubmitted(true);
+              }}
             />
           )}
           {taskType === "social_engagement" && (
@@ -338,19 +348,23 @@ export function TaskSubmissionForm({
             </div>
           )}
 
-          <Button
-            onClick={handleSubmit}
-            disabled={loading || !canSubmit()}
-            className="w-full"
-          >
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Submit Task
-          </Button>
+          {taskType !== "data_labeling" && (
+            <>
+              <Button
+                onClick={handleSubmit}
+                disabled={loading || !canSubmit()}
+                className="w-full"
+              >
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Submit Task
+              </Button>
 
-          {!canSubmit() && (
-            <p className="text-center text-xs text-muted-foreground">
-              Complete all required fields to submit
-            </p>
+              {!canSubmit() && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Complete all required fields to submit
+                </p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

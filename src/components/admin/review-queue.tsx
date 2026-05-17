@@ -34,11 +34,13 @@ type Submission = {
   status: string;
   ai_score: number | null;
   ai_reasoning: string | null;
+  grading_detail: Record<string, unknown> | null;
   task: {
     title: string;
     category: string;
     payout_ksh: number;
     instructions: string;
+    task_data?: Record<string, unknown> | null;
   };
   profile: {
     full_name: string | null;
@@ -267,6 +269,10 @@ export function ReviewQueue() {
                 </pre>
               </div>
 
+              {selectedSubmission.task?.category === "data_labeling" && (
+                <DataLabelingReviewBreakdown submission={selectedSubmission} />
+              )}
+
               {selectedSubmission.status === "flagged" && (
                 <div className="space-y-2">
                   <Label htmlFor="note">Admin Note</Label>
@@ -298,6 +304,53 @@ export function ReviewQueue() {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function DataLabelingReviewBreakdown({ submission }: { submission: Submission }) {
+  const detail = submission.grading_detail ?? {};
+  const itemResults = Array.isArray(detail.itemResults)
+    ? detail.itemResults as Array<Record<string, unknown>>
+    : [];
+  const taskData = submission.task?.task_data ?? {};
+  const items = Array.isArray(taskData.items) ? taskData.items as Array<Record<string, unknown>> : [];
+  const correct = Number(detail.correct ?? itemResults.filter((item) => item.correct === true).length);
+  const total = Number(detail.total ?? items.length);
+  const score = Number(detail.score ?? submission.ai_score ?? 0);
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-muted-foreground">Labeling Breakdown</Label>
+      <p className="text-sm font-medium">{correct}/{total} correct ({Math.round(score)}%)</p>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Item</TableHead>
+              <TableHead>Content</TableHead>
+              <TableHead>User Answer</TableHead>
+              <TableHead>Correct Label</TableHead>
+              <TableHead>Result</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {itemResults.map((result) => {
+              const item = items.find((candidate) => candidate.id === result.id);
+              const content = String(item?.content ?? "");
+              return (
+                <TableRow key={String(result.id)}>
+                  <TableCell className="font-mono text-xs">{String(result.id)}</TableCell>
+                  <TableCell className="max-w-[220px] truncate">{content}</TableCell>
+                  <TableCell>{String(result.user_answer ?? "")}</TableCell>
+                  <TableCell>{String(result.correct_label ?? "")}</TableCell>
+                  <TableCell>{result.correct ? "Yes" : "No"}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

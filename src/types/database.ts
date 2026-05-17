@@ -357,6 +357,7 @@ export interface Database {
           ai_score: number | null;
           ai_reasoning: string | null;
           ai_reviewed_at: string | null;
+          grading_detail: Record<string, unknown> | null;
           admin_reviewed_by: string | null;
           admin_decision: string | null;
           admin_note: string | null;

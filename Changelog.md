@@ -1,5 +1,14 @@
 # Changelog
 
+## [feat] Data Labeling Task Category - 2026-05-18
+- Added user-facing data labeling card stack with draft restore, image fallback, progress, back navigation, and one-label-per-item selection.
+- Sanitized data labeling task payloads so `correct_label` never reaches user-facing task APIs or client task detail rendering.
+- Added server-side data labeling submission validation and objective grading against stored `correct_label` values without calling an LLM.
+- Stored data labeling item review details in `task_submissions.grading_detail` for admin review.
+- Extended Wazim task creation with subtype, label option chips, item builder, JSON import, same-label warning, and user preview.
+- Added data labeling review breakdowns and dashboard card metadata.
+- Added an automated sanitizer test for `correct_label` stripping.
+
 ## [fix] Wallet Display, Training Reward, Admin Hold Settings - 2026-05-18
 - Wallet now shows available, pending, and total earned separately
 - Training completion credits wallet instantly with configurable reward

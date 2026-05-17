@@ -5,6 +5,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { gradeSubmission } from "@/lib/ai/grading";
 import { getDailyTaskLimit } from "@/lib/platform-settings";
+import { isDataLabelingTaskData } from "@/lib/task-data";
 
 const submissionSchema = z.object({
   taskId: z.string().uuid(),
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
 
   const { data: task } = await admin
     .from("tasks")
-    .select("slots_remaining, status, ai_grading_enabled")
+    .select("slots_remaining, status, ai_grading_enabled, task_data")
     .eq("id", taskId)
     .single();
 
@@ -63,6 +64,16 @@ export async function POST(request: Request) {
       { error: "This task is no longer available" },
       { status: 409 }
     );
+  }
+
+  if (isDataLabelingTaskData(task.task_data)) {
+    const validationError = validateDataLabelingAnswers(task.task_data, answers);
+    if (validationError) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: validationError } },
+        { status: 422 }
+      );
+    }
   }
 
   const { data: existingSubmission } = await admin
@@ -143,16 +154,56 @@ export async function POST(request: Request) {
       .update({ status: "ai_reviewing" })
       .eq("id", submission.id);
 
-    gradeSubmission(submission.id).catch((err) => {
-      console.error("[Grading] Failed for submission:", submission.id, err);
-    });
+    if (isDataLabelingTaskData(task.task_data)) {
+      await gradeSubmission(submission.id);
+    } else {
+      gradeSubmission(submission.id).catch((err) => {
+        console.error("[Grading] Failed for submission:", submission.id, err);
+      });
+    }
   }
+
+  const { data: reviewedSubmission } = task.ai_grading_enabled && isDataLabelingTaskData(task.task_data)
+    ? await admin
+      .from("task_submissions")
+      .select("id, status, submitted_at, ai_score, ai_reasoning")
+      .eq("id", submission.id)
+      .maybeSingle()
+    : { data: null };
 
   return NextResponse.json({
     submission: {
-      id: submission.id,
-      status: submission.status,
-      submittedAt: submission.submitted_at,
+      id: reviewedSubmission?.id ?? submission.id,
+      status: reviewedSubmission?.status ?? submission.status,
+      submittedAt: reviewedSubmission?.submitted_at ?? submission.submitted_at,
+      aiScore: reviewedSubmission?.ai_score ?? null,
+      aiReasoning: reviewedSubmission?.ai_reasoning ?? null,
     },
   });
+}
+
+function validateDataLabelingAnswers(taskData: unknown, answers: Record<string, unknown>) {
+  if (!isDataLabelingTaskData(taskData)) return null;
+
+  const items = taskData.items ?? [];
+  const batchSize = taskData.batch_size ?? items.length;
+  const labelOptions = taskData.label_options ?? [];
+  const itemIds = new Set(items.map((item) => item.id));
+  const answerEntries = Object.entries(answers);
+
+  if (answerEntries.length !== batchSize || items.some((item) => answers[item.id] === undefined)) {
+    return "Please label all items before submitting";
+  }
+
+  for (const [itemId, answer] of answerEntries) {
+    if (!itemIds.has(itemId)) {
+      return "Submitted answers include an unknown item";
+    }
+
+    if (typeof answer !== "string" || !labelOptions.includes(answer)) {
+      return "Submitted answers include an invalid label";
+    }
+  }
+
+  return null;
 }

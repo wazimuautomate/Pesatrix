@@ -74,6 +74,7 @@ type SubmissionItem = {
   ai_score: number | null;
   ai_reasoning: string | null;
   ai_reviewed_at: string | null;
+  grading_detail: Record<string, unknown> | null;
   admin_decision: string | null;
   admin_note: string | null;
   admin_reviewed_at: string | null;
@@ -448,6 +449,56 @@ function SubmissionRow({ sub, onView }: { sub: SubmissionItem; onView: () => voi
   );
 }
 
+function DataLabelingBreakdown({ detail }: { detail: SubmissionDetail }) {
+  const gradingDetail = detail.grading_detail ?? {};
+  const results = Array.isArray(gradingDetail.itemResults)
+    ? gradingDetail.itemResults as Array<Record<string, unknown>>
+    : [];
+  const taskItems = Array.isArray(detail.tasks?.task_data?.items)
+    ? detail.tasks.task_data.items as Array<Record<string, unknown>>
+    : [];
+  const correct = Number(gradingDetail.correct ?? results.filter((item) => item.correct === true).length);
+  const total = Number(gradingDetail.total ?? taskItems.length);
+  const score = Number(gradingDetail.score ?? detail.ai_score ?? 0);
+
+  if (results.length === 0) return null;
+
+  return (
+    <section className="rounded-lg border border-outline-variant/40 bg-white p-4">
+      <h3 className="text-sm font-semibold text-navy mb-3">Data Labeling Review</h3>
+      <p className="mb-3 text-sm font-medium">{correct}/{total} correct ({Math.round(score)}%)</p>
+      <div className="overflow-x-auto rounded-lg border border-outline-variant/40">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Item</TableHead>
+              <TableHead>Content</TableHead>
+              <TableHead>User Answer</TableHead>
+              <TableHead>Correct Label</TableHead>
+              <TableHead>Result</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {results.map((result) => {
+              const sourceItem = taskItems.find((item) => item.id === result.id);
+              const content = String(sourceItem?.content ?? "");
+              return (
+                <TableRow key={String(result.id)}>
+                  <TableCell className="font-mono text-xs">{String(result.id)}</TableCell>
+                  <TableCell className="max-w-[220px] truncate">{content}</TableCell>
+                  <TableCell>{String(result.user_answer ?? "")}</TableCell>
+                  <TableCell>{String(result.correct_label ?? "")}</TableCell>
+                  <TableCell>{result.correct ? "Yes" : "No"}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  );
+}
+
 let detailId: string | null = null;
 let onDetailRefresh: (() => void) | null = null;
 
@@ -706,6 +757,10 @@ function DetailDrawer() {
                   <p className="text-sm text-muted-foreground">No answers submitted.</p>
                 )}
               </section>
+
+              {task?.category === "data_labeling" && (
+                <DataLabelingBreakdown detail={detail} />
+              )}
 
               {/* AI Review Info */}
               {(detail.ai_score != null || detail.ai_reasoning) && (
