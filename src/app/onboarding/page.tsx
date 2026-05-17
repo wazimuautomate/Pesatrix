@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { OnboardingPageClient } from "@/components/onboarding/onboarding-page-client";
 
@@ -44,7 +45,24 @@ export default async function OnboardingPage() {
     throw new Error("Could not load account status");
   }
 
-  const accountStatus = statusResult.data as AccountStatusRow | null;
+  let accountStatus = statusResult.data as AccountStatusRow | null;
+
+  if (!accountStatus) {
+    const admin = createAdminSupabaseClient();
+    const { data: adminStatus, error: adminStatusError } = await admin
+      .from("account_status")
+      .select("is_setup_complete, state, status")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (adminStatusError) {
+      console.error("[OnboardingPage] Failed to read account_status with service role:", adminStatusError);
+      throw new Error("Could not load account status");
+    }
+
+    accountStatus = adminStatus as AccountStatusRow | null;
+  }
+
   const isSetupComplete = accountStatus?.is_setup_complete === true;
 
   if (isSetupComplete) {

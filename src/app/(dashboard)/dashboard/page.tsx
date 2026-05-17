@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getAccountProgressSnapshot, resolveAccountFlags } from "@/lib/account-progress";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { formatKSh } from "@/lib/utils";
@@ -135,11 +136,46 @@ export default async function DashboardPage() {
     );
   }
 
-  if (!accountStatusResult.data) {
+  let accountStatusRow = accountStatusResult.data;
+
+  if (!accountStatusRow) {
+    const admin = createAdminSupabaseClient();
+    const { data: adminStatus, error: adminStatusError } = await admin
+      .from("account_status")
+      .select("is_activated, is_setup_complete, status, state")
+      .eq("user_id", user!.id)
+      .maybeSingle();
+
+    if (adminStatusError) {
+      console.error("[DashboardPage] Failed to read account_status with service role:", adminStatusError);
+      return (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-navy">Dashboard</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage your tasks, wallet, and referrals
+            </p>
+          </div>
+          <Card className="border-destructive/30 bg-destructive/5">
+            <CardContent className="p-4">
+              <p className="font-medium text-foreground">Account status unavailable</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                We could not load your account state. Refresh the page or try again shortly.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    accountStatusRow = adminStatus;
+  }
+
+  if (!accountStatusRow) {
     redirect("/onboarding");
   }
 
-  const accountStatus = resolveAccountFlags(accountStatusResult.data as any);
+  const accountStatus = resolveAccountFlags(accountStatusRow as any);
   const progressSnapshot = getAccountProgressSnapshot(profileRow?.metadata);
   const rewardState = progressSnapshot.rewards;
   const canStartTasks = trainingSnapshot.canStartTasks;

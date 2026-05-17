@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -76,7 +75,6 @@ const dashboardSections = [
 ];
 
 export function OnboardingPageClient({ fullName, county }: OnboardingPageClientProps) {
-  const router = useRouter();
   const {
     register,
     handleSubmit,
@@ -110,8 +108,7 @@ export function OnboardingPageClient({ fullName, county }: OnboardingPageClientP
       }
 
       toast.success("Onboarding completed. Proceed to activation.");
-      router.replace("/dashboard");
-      router.refresh();
+      window.location.assign("/dashboard");
     } catch {
       toast.error("Unable to complete onboarding right now.");
     }

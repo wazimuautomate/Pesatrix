@@ -121,11 +121,13 @@ export async function POST(request: Request) {
           state: "setup_complete",
         };
 
-    const { data: updatedStatus, error: accountStatusError } = await (admin.from("account_status" as never) as any)
-      .update(statusPatch)
-      .eq("user_id", user.id)
-      .select("user_id")
-      .maybeSingle();
+    const { error: accountStatusError } = await (admin.from("account_status" as never) as any).upsert(
+      {
+        user_id: user.id,
+        ...statusPatch,
+      },
+      { onConflict: "user_id" }
+    );
 
     if (accountStatusError) {
       console.error("[POST /api/onboarding/complete] Status update failed:", accountStatusError);
@@ -141,27 +143,26 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!updatedStatus) {
-      const { error: insertStatusError } = await (admin.from("account_status" as never) as any).insert({
-        user_id: user.id,
-        ...statusPatch,
-        is_activated: activated,
-        activated_at: currentStatus?.activated_at ?? null,
-      });
+    const { data: verifiedStatus, error: verifyError } = await (admin.from("account_status" as never) as any)
+      .select("is_setup_complete, status, state")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-      if (insertStatusError) {
-        console.error("[POST /api/onboarding/complete] Status insert failed:", insertStatusError);
-        return NextResponse.json(
-          {
-            error: {
-              code: "STATUS_INSERT_FAILED",
-              message: "Status insert failed",
-              detail: insertStatusError.message,
-            },
+    if (verifyError || verifiedStatus?.is_setup_complete !== true) {
+      console.error("[POST /api/onboarding/complete] Status verification failed:", {
+        error: verifyError,
+        status: verifiedStatus,
+      });
+      return NextResponse.json(
+        {
+          error: {
+            code: "STATUS_VERIFY_FAILED",
+            message: "Status verification failed",
+            detail: verifyError?.message ?? "Setup completion was not persisted",
           },
-          { status: 500 }
-        );
-      }
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ ok: true, setupComplete: true });

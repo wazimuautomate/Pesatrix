@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 
 export const metadata = {
@@ -47,12 +48,28 @@ export default async function DashboardLayout({
       .maybeSingle(),
   ]);
 
-  const profile = profileRow as DashboardProfile | null;
-  const accountStatus = statusResult.data as DashboardAccountStatus | null;
-
   if (statusResult.error) {
     console.error("[DashboardLayout] Failed to read account_status:", statusResult.error);
     throw new Error("Could not load account status");
+  }
+
+  const profile = profileRow as DashboardProfile | null;
+  let accountStatus = statusResult.data as DashboardAccountStatus | null;
+
+  if (!accountStatus) {
+    const admin = createAdminSupabaseClient();
+    const { data: adminStatus, error: adminStatusError } = await admin
+      .from("account_status")
+      .select("is_setup_complete, state, status")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (adminStatusError) {
+      console.error("[DashboardLayout] Failed to read account_status with service role:", adminStatusError);
+      throw new Error("Could not load account status");
+    }
+
+    accountStatus = adminStatus as DashboardAccountStatus | null;
   }
 
   const shellUser = profile
