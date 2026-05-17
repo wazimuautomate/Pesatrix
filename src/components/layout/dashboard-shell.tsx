@@ -6,6 +6,7 @@ import { useState } from "react";
 import {
   LayoutDashboard,
   ClipboardList,
+  History,
   Wallet,
   Users,
   HeadphonesIcon,
@@ -22,6 +23,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 const sidebarLinks = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/tasks", label: "Tasks", icon: ClipboardList },
+  { href: "/submissions", label: "My Submissions", icon: History },
   { href: "/dashboard/wallet", label: "Wallet", icon: Wallet },
   { href: "/dashboard/referrals", label: "Referrals", icon: Users },
   { href: "/dashboard/rewards", label: "Daily Rewards", icon: Gift },
@@ -33,12 +35,13 @@ const sidebarLinks = [
 const mobileNavLinks = [
   sidebarLinks[0],
   sidebarLinks[1],
-  sidebarLinks[4],
-  sidebarLinks[6],
-  sidebarLinks[5],
   sidebarLinks[2],
-  sidebarLinks[3],
+  sidebarLinks[5],
   sidebarLinks[7],
+  sidebarLinks[6],
+  sidebarLinks[3],
+  sidebarLinks[4],
+  sidebarLinks[8],
 ];
 
 const immersiveDashboardRoutes = new Set([

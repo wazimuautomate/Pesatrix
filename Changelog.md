@@ -1,6 +1,15 @@
 # Changelog
 
 
+## [feat] User Task Submissions History Page - 2026-05-18
+- New page /submissions showing all user task submissions
+- Status badges: pending, ai_reviewing, approved, declined, flagged
+- AI score and reasoning shown per submission
+- Declined submissions show reason clearly
+- Pagination for users with many submissions
+- Navigation link added to dashboard sidebar
+
+
 ## [feat] AI Grading Pipeline + Admin AI Provider Management - 2026-05-17
 - Built AI grading service with OpenAI-compatible provider support
 - Admin can configure NVIDIA, OpenRouter, Groq, Ollama providers
