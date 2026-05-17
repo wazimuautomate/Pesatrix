@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { OnboardingPageClient } from "@/components/onboarding/onboarding-page-client";
 
@@ -45,31 +44,8 @@ export default async function OnboardingPage() {
     throw new Error("Could not load account status");
   }
 
-  let accountStatus = statusResult.data as AccountStatusRow | null;
-
-  if (!accountStatus) {
-    const admin = createAdminSupabaseClient();
-    const { data: createdStatus, error: createError } = await admin
-      .from("account_status")
-      .insert({
-        user_id: user.id,
-        state: "registered",
-        status: "registered",
-        is_setup_complete: false,
-        is_activated: false,
-      })
-      .select("is_setup_complete, state, status")
-      .single();
-
-    if (createError) {
-      console.error("[OnboardingPage] Failed to create account_status:", createError);
-      throw new Error("Could not initialize account status");
-    }
-
-    accountStatus = createdStatus as AccountStatusRow;
-  }
-
-  const isSetupComplete = accountStatus.is_setup_complete === true;
+  const accountStatus = statusResult.data as AccountStatusRow | null;
+  const isSetupComplete = accountStatus?.is_setup_complete === true;
 
   if (isSetupComplete) {
     redirect("/dashboard");

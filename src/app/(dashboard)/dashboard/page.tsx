@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAccountProgressSnapshot, resolveAccountFlags } from "@/lib/account-progress";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { formatKSh } from "@/lib/utils";
+import { redirect } from "next/navigation";
 import {
   Wallet,
   ClipboardList,
@@ -104,7 +105,7 @@ export default async function DashboardPage() {
     (supabase.from("account_status" as never) as any)
       .select("is_activated, is_setup_complete, status, state")
       .eq("user_id", user!.id)
-      .single(),
+      .maybeSingle(),
     (supabase.from("profiles" as never) as any)
       .select("metadata")
       .eq("id", user!.id)
@@ -112,7 +113,7 @@ export default async function DashboardPage() {
     getTrainingProgramSnapshotForUser(user!.id),
   ]);
 
-  if (accountStatusResult.error || !accountStatusResult.data) {
+  if (accountStatusResult.error) {
     console.error("[DashboardPage] Failed to read account_status:", accountStatusResult.error);
     return (
       <div className="space-y-6">
@@ -132,6 +133,10 @@ export default async function DashboardPage() {
         </Card>
       </div>
     );
+  }
+
+  if (!accountStatusResult.data) {
+    redirect("/onboarding");
   }
 
   const accountStatus = resolveAccountFlags(accountStatusResult.data as any);
