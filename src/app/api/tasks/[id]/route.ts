@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -17,21 +19,36 @@ export async function GET(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: task, error } = await supabase
+  const access = await getTrainingProgramSnapshotForUser(user.id);
+
+  if (!access.canStartTasks) {
+    return NextResponse.json(
+      { error: access.gateMessage ?? "Task access is locked" },
+      { status: 403 }
+    );
+  }
+
+  const admin = createAdminSupabaseClient();
+  const { data: task, error } = await admin
     .from("tasks")
     .select("*")
     .eq("id", id)
-    .eq("status", "active")
+    .in("status", ["active", "scheduled"])
     .gt("slots_remaining", 0)
-    .or("publish_at.is.null,publish_at.lte.now()")
     .or("expires_at.is.null,expires_at.gt.now()")
     .maybeSingle();
 
-  if (error || !task) {
+  const publishAt = task?.publish_at ? new Date(task.publish_at as string).getTime() : null;
+  const isVisible =
+    task?.status === "active"
+      ? publishAt === null || publishAt <= Date.now()
+      : task?.status === "scheduled" && publishAt !== null && publishAt <= Date.now();
+
+  if (error || !task || !isVisible) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
 
-  const { data: existingSubmission } = await supabase
+  const { data: existingSubmission } = await admin
     .from("task_submissions")
     .select("id, status")
     .eq("task_id", id)

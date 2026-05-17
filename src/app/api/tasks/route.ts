@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 
 export async function GET() {
@@ -39,12 +40,12 @@ export async function GET() {
     });
   }
 
-  const { data, error } = await supabase
+  const admin = createAdminSupabaseClient();
+  const { data, error } = await admin
     .from("tasks")
-    .select("id, title, category, description, instructions, payout_ksh, slots_remaining, difficulty, expires_at, task_data, requires_screenshot, requires_url, min_word_count")
-    .eq("status", "active")
+    .select("id, title, category, description, instructions, payout_ksh, slots_remaining, difficulty, status, publish_at, expires_at, task_data, requires_screenshot, requires_url, min_word_count")
+    .in("status", ["active", "scheduled"])
     .gt("slots_remaining", 0)
-    .or("publish_at.is.null,publish_at.lte.now()")
     .or("expires_at.is.null,expires_at.gt.now()")
     .order("created_at", { ascending: false });
 
@@ -52,14 +53,22 @@ export async function GET() {
     return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 });
   }
 
-  const { data: submissions } = await supabase
+  const { data: submissions } = await admin
     .from("task_submissions")
     .select("task_id")
     .eq("user_id", user.id);
 
   const submittedTaskIds = (submissions ?? []).map((s: { task_id: string }) => s.task_id);
+  const now = Date.now();
+  const visibleTasks = (data ?? []).filter((task: Record<string, unknown>) => {
+    if (task.status === "active") {
+      return !task.publish_at || new Date(task.publish_at as string).getTime() <= now;
+    }
 
-  const formattedTasks = (data ?? []).map((task: Record<string, unknown>) => ({
+    return task.status === "scheduled" && Boolean(task.publish_at) && new Date(task.publish_at as string).getTime() <= now;
+  });
+
+  const formattedTasks = visibleTasks.map((task: Record<string, unknown>) => ({
     id: task.id as string,
     title: task.title as string,
     category: task.category as string,

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { TaskSubmissionForm } from "@/components/tasks/task-submission-form";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
@@ -24,9 +25,10 @@ export default async function TaskDetailPage({ params }: RouteContext) {
     redirect("/login");
   }
 
+  const admin = createAdminSupabaseClient();
   const [{ data: profile }, { data: task }, access] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
-    supabase.from("tasks").select("*").eq("id", id).maybeSingle(),
+    admin.from("tasks").select("*").eq("id", id).maybeSingle(),
     getTrainingProgramSnapshotForUser(user.id),
   ]);
 
@@ -38,11 +40,17 @@ export default async function TaskDetailPage({ params }: RouteContext) {
     redirect("/tasks");
   }
 
-  if (!task) {
+  const publishAt = task?.publish_at ? new Date(task.publish_at as string).getTime() : null;
+  const isVisible =
+    task?.status === "active"
+      ? publishAt === null || publishAt <= Date.now()
+      : task?.status === "scheduled" && publishAt !== null && publishAt <= Date.now();
+
+  if (!task || task.slots_remaining <= 0 || !isVisible) {
     redirect("/tasks");
   }
 
-  const { data: existingSubmission } = await supabase
+  const { data: existingSubmission } = await admin
     .from("task_submissions")
     .select("*")
     .eq("task_id", id)
