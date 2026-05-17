@@ -6,7 +6,13 @@ import { TrainingSettingsForm } from "@/components/admin/training-settings-form"
 import { PlatformSettingsForm } from "@/components/admin/platform-settings-form";
 import { TaskLimitsSettingsForm } from "@/components/admin/task-limits-settings-form";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { DEFAULT_DAILY_TASK_LIMIT, DAILY_TASK_LIMIT_KEY } from "@/lib/platform-settings";
+import {
+  DEFAULT_DAILY_TASK_LIMIT,
+  DAILY_TASK_LIMIT_KEY,
+  DEFAULT_TRAINING_REWARD_KSH,
+  DEFAULT_WITHDRAWAL_HOLD_DAYS,
+  WITHDRAWAL_HOLD_DAYS_KEY,
+} from "@/lib/platform-settings";
 import { requireWazimAdmin } from "@/lib/wazim-admin";
 
 async function getPlatformSettings() {
@@ -45,13 +51,8 @@ export default async function AdminSettingsPage() {
   const settings = await getPlatformSettings();
   const aiProviders = await getAiProviderConfigs();
 
-  const numericSettings = settings.filter((s: { key: string; value: string }) => {
-    const num = Number(s.value);
-    return Number.isFinite(num);
-  });
-
   const trainingRewardSetting = settings.find((s: { key: string }) => s.key === "training_completion_reward_ksh");
-  const taskUnlockSetting = settings.find((s: { key: string }) => s.key === "task_unlock_delay_hours");
+  const holdSetting = settings.find((s: { key: string }) => s.key === WITHDRAWAL_HOLD_DAYS_KEY);
   const dailyTaskLimitSetting = settings.find((s: { key: string }) => s.key === DAILY_TASK_LIMIT_KEY);
   const dailyTaskLimit = Number.isInteger(Number(dailyTaskLimitSetting?.value))
     ? Number(dailyTaskLimitSetting?.value)
@@ -61,8 +62,6 @@ export default async function AdminSettingsPage() {
     { label: "Supabase URL", configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) },
     { label: "Service role key", configured: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY) },
     { label: "M-Pesa shortcode", configured: Boolean(process.env.MPESA_SHORTCODE) },
-    { label: "CPX app id", configured: Boolean(process.env.CPX_APP_ID) },
-    { label: "CPX secure hash", configured: Boolean(process.env.CPX_SECURE_HASH) },
     { label: "NVIDIA API key fallback", configured: Boolean(process.env.NVIDIA_API_KEY) },
     { label: "Cron secret", configured: Boolean(process.env.CRON_SECRET) },
   ];
@@ -76,14 +75,14 @@ export default async function AdminSettingsPage() {
       <section className="grid gap-4 md:grid-cols-3">
         <MetricCard
           label="Training reward"
-          value={`KSh ${trainingRewardSetting?.value ?? "100"}`}
+          value={`KSh ${trainingRewardSetting?.value ?? DEFAULT_TRAINING_REWARD_KSH}`}
           detail="Configurable below"
           tone="amber"
         />
         <MetricCard
-          label="Task unlock delay"
-          value={`${taskUnlockSetting?.value ?? "24"} hours`}
-          detail="After training completion"
+          label="Withdrawal hold"
+          value={`${holdSetting?.value ?? DEFAULT_WITHDRAWAL_HOLD_DAYS} days`}
+          detail="Before funds are withdrawable"
         />
         <MetricCard
           label="Admin role"

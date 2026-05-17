@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
+import { getWithdrawalHoldDays } from "@/lib/platform-settings";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -62,7 +63,9 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (parsed.data.decision === "approved") {
     const taskData = submission.task as Record<string, unknown> | null;
     const payoutKsh = Number(taskData?.payout_ksh ?? 0);
-    const availableAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const holdDays = await getWithdrawalHoldDays();
+    const availableAt = new Date(Date.now() + holdDays * 24 * 60 * 60 * 1000).toISOString();
+    const walletState = holdDays === 0 ? "available" : "pending";
 
     const { error: updateError } = await admin
       .from("task_submissions")
@@ -91,8 +94,8 @@ export async function POST(request: Request, { params }: RouteContext) {
         type: "task_earning",
         direction: "credit",
         amount: Math.round(payoutKsh),
-        status: "pending",
-        bucket: "pending",
+        status: walletState,
+        bucket: walletState,
         description: `Task earning (admin approved): ${taskData?.title ?? "Task"}`,
         reference_table: "task_submissions",
         reference_id: id,
@@ -101,6 +104,19 @@ export async function POST(request: Request, { params }: RouteContext) {
       });
 
     if (walletError) {
+      await admin
+        .from("task_submissions")
+        .update({
+          payout_credited: false,
+          payout_credited_at: null,
+          admin_decision: null,
+          admin_note: null,
+          admin_reviewed_by: null,
+          admin_reviewed_at: null,
+          status: submission.status,
+        })
+        .eq("id", id);
+
       return NextResponse.json(
         { error: "Failed to create wallet transaction" },
         { status: 500 }

@@ -1,9 +1,9 @@
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getWithdrawalHoldDays } from "@/lib/platform-settings";
 
 export const ACTIVATION_FEE_AMOUNT = 500;
 export const MIN_WITHDRAWAL_AMOUNT = 100;
 export const MAX_WITHDRAWAL_AMOUNT = 100000;
-export const TASK_EARNING_HOLD_DAYS = 7;
 
 export type WalletLedgerRow = {
   id?: string;
@@ -24,6 +24,7 @@ export type WalletSummary = {
   pending: number;
   available: number;
   total: number;
+  totalEarned: number;
 };
 
 function signedAmount(transaction: Pick<WalletLedgerRow, "amount" | "direction">) {
@@ -32,17 +33,25 @@ function signedAmount(transaction: Pick<WalletLedgerRow, "amount" | "direction">
 
 export function computeWalletSummary(rows: WalletLedgerRow[]): WalletSummary {
   const pending = rows
-    .filter((row) => row.status === "pending")
+    .filter((row) => row.status === "pending" && row.bucket === "pending")
     .reduce((sum, row) => sum + signedAmount(row), 0);
 
-  const available = rows
-    .filter((row) => row.status === "available")
+  const availableRaw = rows
+    .filter((row) => row.status === "available" && row.bucket === "available")
     .reduce((sum, row) => sum + signedAmount(row), 0);
+  const totalEarned = rows
+    .filter((row) => row.direction === "credit" && row.status === row.bucket)
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+
+  if (availableRaw < 0) {
+    console.error("[Wallet] available balance calculated below zero from ledger", { availableRaw });
+  }
 
   return {
     pending,
-    available: Math.max(0, available),
-    total: pending + Math.max(0, available),
+    available: Math.max(0, availableRaw),
+    total: totalEarned,
+    totalEarned,
   };
 }
 
@@ -62,45 +71,36 @@ export function mapWalletTransactionForApi(row: WalletLedgerRow) {
 }
 
 export async function getWalletSummaryForUser(userId: string) {
-  const admin = createAdminSupabaseClient();
-  const { data, error } = await admin
-    .from("wallet_transactions")
-    .select("id, type, direction, amount, status, bucket, description, reference_table, reference_id, available_at, created_at")
-    .eq("user_id", userId);
-
-  if (error) {
-    throw error;
-  }
-
-  return computeWalletSummary((data ?? []) as WalletLedgerRow[]);
+  return getWalletSummary(userId);
 }
 
 export async function getWalletSummary(userId: string) {
   const admin = createAdminSupabaseClient();
-  const { data: wallet } = await admin
+  const { data: wallet, error } = await admin
     .from("wallets")
     .select("available_balance, pending_balance, total_earned")
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (wallet) {
-    return {
-      available: Number(wallet.available_balance),
-      pending: Number(wallet.pending_balance),
-      total: Number(wallet.total_earned),
-    };
-  }
-
-  const { data, error } = await admin
-    .from("wallet_transactions")
-    .select("id, type, direction, amount, status, bucket, description, reference_table, reference_id, available_at, created_at")
-    .eq("user_id", userId);
-
   if (error) {
     throw error;
   }
 
-  return computeWalletSummary((data ?? []) as WalletLedgerRow[]);
+  if (wallet) {
+    const available = Number(wallet.available_balance ?? 0);
+    if (available < 0) {
+      console.error("[Wallet] available_balance is below zero", { userId, available });
+    }
+
+    return {
+      available: Math.max(0, available),
+      pending: Number(wallet.pending_balance ?? 0),
+      total: Number(wallet.total_earned ?? 0),
+      totalEarned: Number(wallet.total_earned ?? 0),
+    };
+  }
+
+  return { available: 0, pending: 0, total: 0, totalEarned: 0 };
 }
 
 export async function creditTaskEarning(
@@ -110,9 +110,11 @@ export async function creditTaskEarning(
   taskTitle: string
 ) {
   const admin = createAdminSupabaseClient();
+  const holdDays = await getWithdrawalHoldDays();
   const availableAt = new Date(
-    Date.now() + TASK_EARNING_HOLD_DAYS * 24 * 60 * 60 * 1000
+    Date.now() + holdDays * 24 * 60 * 60 * 1000
   ).toISOString();
+  const walletState = holdDays === 0 ? "available" : "pending";
 
   const { data, error } = await admin
     .from("wallet_transactions")
@@ -121,8 +123,8 @@ export async function creditTaskEarning(
       type: "task_earning",
       direction: "credit",
       amount,
-      status: "pending",
-      bucket: "pending",
+      status: walletState,
+      bucket: walletState,
       description: `Task earning: ${taskTitle}`,
       reference_table: "task_submissions",
       reference_id: submissionId,
@@ -138,7 +140,7 @@ export async function creditTaskEarning(
   return {
     transaction: data,
     availableAt,
-    holdDays: TASK_EARNING_HOLD_DAYS,
+    holdDays,
   };
 }
 

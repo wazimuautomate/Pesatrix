@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
+import { createVaultSecret } from "@/lib/ai/provider-secrets";
 
 const providerSchema = z.object({
   provider: z.enum(["nvidia", "openrouter", "groq", "ollama"]),
@@ -41,7 +42,9 @@ export async function POST(request: Request) {
     allowedRoles: ["super_admin", "admin"],
   });
   if (authResult.error) return authResult.error;
-  if (!authResult.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!authResult.userId || !authResult.adminUser) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await request.json();
   const parsed = providerSchema.safeParse(body);
@@ -67,7 +70,12 @@ export async function POST(request: Request) {
   const admin = createAdminSupabaseClient();
   const secretName = `ai_provider_${provider}_${Date.now()}`;
 
-  const secretError = await createVaultSecret(admin, secretName, apiKey);
+  const { error: secretError } = await createVaultSecret(
+    admin,
+    secretName,
+    apiKey,
+    `AI provider key for ${displayName}`
+  );
   if (secretError) {
     console.error("[POST /api/admin/ai-providers] Vault write failed:", secretError);
     return NextResponse.json({ error: "Failed to store provider secret" }, { status: 500 });
@@ -96,7 +104,7 @@ export async function POST(request: Request) {
       base_url: baseUrl,
       max_tokens: maxTokens,
       temperature,
-      created_by: authResult.userId,
+      created_by: authResult.adminUser.id,
     })
     .select("id, provider, model_id, display_name, api_key_secret_name, is_active, is_grading_model, base_url, max_tokens, temperature, created_by, created_at, updated_at")
     .single();
@@ -118,25 +126,4 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ provider: data }, { status: 201 });
-}
-
-async function createVaultSecret(
-  admin: ReturnType<typeof createAdminSupabaseClient>,
-  name: string,
-  secret: string
-) {
-  const { error: rpcError } = await admin.rpc("vault.create_secret", {
-    secret,
-    name,
-  });
-
-  if (!rpcError) {
-    return null;
-  }
-
-  const { error: insertError } = await admin
-    .from("vault.secrets")
-    .insert({ secret, name });
-
-  return insertError ?? rpcError;
 }

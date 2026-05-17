@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
+import { createVaultSecret } from "@/lib/ai/provider-secrets";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -9,10 +10,13 @@ type RouteContext = {
 
 const updateProviderSchema = z.object({
   provider: z.enum(["nvidia", "openrouter", "groq", "ollama"]).optional(),
-  displayName: z.string().trim().min(1).max(120).optional(),
-  modelId: z.string().trim().min(1).max(200).optional(),
-  apiKey: z.string().min(1).optional(),
-  baseUrl: z.string().url().optional(),
+  displayName: optionalNonEmptyString(120),
+  modelId: optionalNonEmptyString(200),
+  apiKey: optionalNonEmptyString(),
+  baseUrl: z.preprocess(
+    emptyStringToUndefined,
+    z.string().url().optional()
+  ),
   maxTokens: z.coerce.number().int().min(1).max(200000).optional(),
   temperature: z.coerce.number().min(0).max(2).optional(),
   isActive: z.boolean().optional(),
@@ -68,7 +72,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   if (parsed.data.apiKey) {
     const providerName = parsed.data.provider ?? before.provider ?? "provider";
     const secretName = `ai_provider_${providerName}_${Date.now()}`;
-    const secretError = await createVaultSecret(admin, secretName, parsed.data.apiKey);
+    const { error: secretError } = await createVaultSecret(
+      admin,
+      secretName,
+      parsed.data.apiKey,
+      `AI provider key for ${before.display_name ?? providerName}`
+    );
     if (secretError) {
       console.error("[PATCH /api/admin/ai-providers/:id] Vault write failed:", secretError);
       return NextResponse.json({ error: "Failed to store provider secret" }, { status: 500 });
@@ -112,25 +121,17 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   return NextResponse.json({ provider: data });
 }
 
-async function createVaultSecret(
-  admin: ReturnType<typeof createAdminSupabaseClient>,
-  name: string,
-  secret: string
-) {
-  const { error: rpcError } = await admin.rpc("vault.create_secret", {
-    secret,
-    name,
-  });
+function optionalNonEmptyString(maxLength?: number) {
+  return z.preprocess(
+    emptyStringToUndefined,
+    z.string().trim().min(1).max(maxLength ?? Number.MAX_SAFE_INTEGER).optional()
+  );
+}
 
-  if (!rpcError) {
-    return null;
-  }
-
-  const { error: insertError } = await admin
-    .from("vault.secrets")
-    .insert({ secret, name });
-
-  return insertError ?? rpcError;
+function emptyStringToUndefined(value: unknown) {
+  return typeof value === "string" && value.trim().length === 0
+    ? undefined
+    : value;
 }
 
 export async function DELETE(request: Request, { params }: RouteContext) {

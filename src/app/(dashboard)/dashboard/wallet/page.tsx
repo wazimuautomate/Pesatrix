@@ -1,5 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { formatKSh } from "@/lib/utils";
+import { getWithdrawalHoldDays } from "@/lib/platform-settings";
+import { getWalletSummaryForUser } from "@/lib/wallet";
 import {
   Wallet as WalletIcon,
   ArrowUpRight,
@@ -33,15 +35,10 @@ export default async function WalletPage() {
     .select("id, type, direction, amount, status, created_at")
     .eq("user_id", user!.id);
 
-  const pending: number =
-    (transactionRows ?? [] as TransactionRow[])
-      .filter((t: TransactionRow) => t.status === "pending")
-      .reduce((sum: number, tx: TransactionRow) => sum + (tx.direction === "credit" ? tx.amount : -tx.amount), 0);
-
-  const available: number =
-    (transactionRows ?? [] as TransactionRow[])
-      .filter((t: TransactionRow) => t.status === "available")
-      .reduce((sum: number, tx: TransactionRow) => sum + (tx.direction === "credit" ? tx.amount : -tx.amount), 0);
+  const [wallet, withdrawalHoldDays] = await Promise.all([
+    getWalletSummaryForUser(user!.id),
+    getWithdrawalHoldDays(),
+  ]);
 
   const withdrawn: number =
     (transactionRows ?? [] as TransactionRow[])
@@ -75,10 +72,10 @@ export default async function WalletPage() {
               Available Balance
             </div>
             <p className="mt-2 text-3xl font-bold tabular-nums text-navy">
-              {formatKSh(Math.max(0, available))}
+              {formatKSh(wallet.available)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Ready to withdraw
+              Available (withdrawable)
             </p>
           </CardContent>
         </Card>
@@ -90,10 +87,13 @@ export default async function WalletPage() {
               Pending Balance
             </div>
             <p className="mt-2 text-3xl font-bold tabular-nums text-navy">
-              {formatKSh(pending)}
+              {formatKSh(wallet.pending)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              7-day hold period
+              Pending (held)
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Pending funds are held for {withdrawalHoldDays} days before becoming withdrawable.
             </p>
           </CardContent>
         </Card>
@@ -102,13 +102,13 @@ export default async function WalletPage() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <ArrowUpRight className="h-4 w-4 text-teal" />
-              Total Withdrawn
+              Total Earned
             </div>
             <p className="mt-2 text-3xl font-bold tabular-nums text-navy">
-              {formatKSh(withdrawn)}
+              {formatKSh(wallet.totalEarned)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Lifetime payouts
+              Lifetime earnings
             </p>
           </CardContent>
         </Card>

@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { requireAdmin, auditLog, getRequestMeta } from "../_lib";
-import { DAILY_TASK_LIMIT_KEY } from "@/lib/platform-setting-keys";
+import { requireAdmin, auditLog } from "../_lib";
+import {
+  DAILY_TASK_LIMIT_KEY,
+  TRAINING_REWARD_SETTING_KEY,
+  WITHDRAWAL_HOLD_DAYS_KEY,
+  WITHDRAWAL_PROCESSING_DAYS_KEY,
+} from "@/lib/platform-setting-keys";
 
 export async function GET(request: Request) {
   const { error, adminUser, userId: adminAuthId, requestMeta } = await requireAdmin({});
@@ -37,13 +42,45 @@ export async function PATCH(request: Request) {
   }
 
   const numericSettings = [
-    "training_completion_reward_ksh",
+    TRAINING_REWARD_SETTING_KEY,
     "task_unlock_delay_hours",
     "min_withdrawal_amount_ksh",
     "referral_task_unlock_reduction",
     "training_day_unlock_minutes",
     DAILY_TASK_LIMIT_KEY,
+    WITHDRAWAL_HOLD_DAYS_KEY,
+    WITHDRAWAL_PROCESSING_DAYS_KEY,
   ];
+
+  if (key === WITHDRAWAL_HOLD_DAYS_KEY) {
+    const numValue = Number(value);
+    if (!Number.isInteger(numValue) || numValue < 0 || numValue > 30) {
+      return NextResponse.json(
+        { error: "Withdrawal hold period must be a whole number between 0 and 30" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === WITHDRAWAL_PROCESSING_DAYS_KEY) {
+    const numValue = Number(value);
+    if (!Number.isInteger(numValue) || numValue < 1 || numValue > 14) {
+      return NextResponse.json(
+        { error: "Withdrawal processing time must be a whole number between 1 and 14" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === TRAINING_REWARD_SETTING_KEY) {
+    const numValue = Number(value);
+    if (!Number.isInteger(numValue) || numValue < 0 || numValue > 10000) {
+      return NextResponse.json(
+        { error: "Training completion reward must be a whole number between 0 and 10000" },
+        { status: 422 }
+      );
+    }
+  }
 
   if (key === DAILY_TASK_LIMIT_KEY) {
     const numValue = Number(value);
@@ -105,4 +142,8 @@ export async function PATCH(request: Request) {
   });
 
   return NextResponse.json({ setting: data });
+}
+
+export async function POST(request: Request) {
+  return PATCH(request);
 }

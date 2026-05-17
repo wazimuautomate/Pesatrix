@@ -2,6 +2,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getAccountProgressSnapshot, resolveAccountFlags } from "@/lib/account-progress";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
+import { getWithdrawalHoldDays } from "@/lib/platform-settings";
+import { getWalletSummaryForUser } from "@/lib/wallet";
 import { formatKSh } from "@/lib/utils";
 import { redirect } from "next/navigation";
 import {
@@ -62,15 +64,13 @@ export default async function DashboardPage() {
 
   const walletTxns = (walletTxnRows ?? []) as WalletSummaryTxn[];
 
-  const pendingBalance =
-    walletTxns
-      .filter((t) => t.bucket === "pending")
-      .reduce((sum, t) => sum + (t.direction === "debit" ? -t.amount : t.amount), 0);
+  const [walletSummary, withdrawalHoldDays] = await Promise.all([
+    getWalletSummaryForUser(user!.id),
+    getWithdrawalHoldDays(),
+  ]);
 
-  const availableBalance =
-    walletTxns
-      .filter((t) => t.bucket === "available")
-      .reduce((sum, t) => sum + (t.direction === "debit" ? -t.amount : t.amount), 0);
+  const pendingBalance = walletSummary.pending;
+  const availableBalance = walletSummary.available;
 
   const totalWithdrawn =
     walletTxns
@@ -78,7 +78,7 @@ export default async function DashboardPage() {
       .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
   // Fetch task stats
-  const totalEarned =
+  const taskEarnings =
     walletTxns
       .filter((t) => t.type === "task_earning")
       .reduce((sum, t) => sum + t.amount, 0);
@@ -387,9 +387,9 @@ export default async function DashboardPage() {
                 <div className="flex items-center justify-between rounded-xl bg-white px-4 py-3">
                   <div className="flex items-center gap-3">
                     <ClipboardList className="h-5 w-5 text-primary" />
-                    <span className="text-sm font-medium text-foreground">Task earnings</span>
-                  </div>
-                  <span className="text-sm font-bold tabular-nums text-navy">{formatKSh(totalEarned)}</span>
+                  <span className="text-sm font-medium text-foreground">Task earnings</span>
+                </div>
+                  <span className="text-sm font-bold tabular-nums text-navy">{formatKSh(taskEarnings)}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-xl bg-white px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -436,7 +436,7 @@ export default async function DashboardPage() {
               {formatKSh(availableBalance)}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {formatKSh(pendingBalance)} pending
+              Available (withdrawable)
             </p>
           </CardContent>
         </Card>
@@ -444,16 +444,16 @@ export default async function DashboardPage() {
         <Card className="border-outline-variant/40">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Tasks Completed
+              Pending Balance
             </CardTitle>
-            <ClipboardList className="h-4 w-4 text-teal" />
+            <Clock className="h-4 w-4 text-teal" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold tabular-nums text-navy">
-              {taskCount}
+              {formatKSh(pendingBalance)}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {formatKSh(totalEarned)} earned
+              Pending funds are held for {withdrawalHoldDays} days before becoming withdrawable.
             </p>
           </CardContent>
         </Card>
@@ -478,16 +478,16 @@ export default async function DashboardPage() {
         <Card className="border-outline-variant/40">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Withdrawn
+              Total Earned
             </CardTitle>
             <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold tabular-nums text-navy">
-              {formatKSh(totalWithdrawn)}
+              {formatKSh(walletSummary.totalEarned)}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Lifetime payouts
+              Lifetime earnings
             </p>
           </CardContent>
         </Card>

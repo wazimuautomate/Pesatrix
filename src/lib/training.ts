@@ -147,6 +147,17 @@ function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60 * 1000);
 }
 
+function addHours(date: Date, hours: number) {
+  return new Date(date.getTime() + hours * 60 * 60 * 1000);
+}
+
+function validDate(value: string | null | undefined) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function evaluateTrainingDay(day: number, answers: Record<string, string>): DayPracticeResult {
   const trainingDay = getTrainingDay(day);
   const score = trainingDay.practice.questions.filter(
@@ -334,10 +345,22 @@ export async function getTrainingProgramSnapshotForUser(
   const onboardingComplete = isOnboardingComplete(accountStatus);
   const activated = isActivated(accountStatus) || hasPaidActivation;
   const trainingCompleted = Boolean(trainingProgress.completed_at || trainingProgress.status === "completed");
+  const configuredTaskUnlockDelayHours = await getTaskUnlockDelayHours();
+  const completedAt = validDate(trainingProgress.completed_at);
+  const configuredTaskUnlockAt = trainingCompleted && completedAt
+    ? addHours(completedAt, configuredTaskUnlockDelayHours)
+    : null;
+  const storedTaskUnlockAt = validDate(trainingProgress.task_unlock_at);
+  const effectiveTaskUnlockAt =
+    trainingProgress.task_unlock_accelerated && storedTaskUnlockAt && configuredTaskUnlockAt
+      ? storedTaskUnlockAt.getTime() < configuredTaskUnlockAt.getTime()
+        ? storedTaskUnlockAt
+        : configuredTaskUnlockAt
+      : configuredTaskUnlockAt ?? storedTaskUnlockAt;
+  const effectiveTaskUnlockAtIso = effectiveTaskUnlockAt?.toISOString() ?? null;
 
   const now = new Date();
-  const hasTaskUnlockDelay = trainingProgress.task_unlock_at !== null;
-  const isTaskUnlockInFuture = hasTaskUnlockDelay && new Date(trainingProgress.task_unlock_at!) > now;
+  const isTaskUnlockInFuture = Boolean(effectiveTaskUnlockAt && effectiveTaskUnlockAt > now);
   const tasksLocked = trainingCompleted && isTaskUnlockInFuture;
 
   let gateReason: TrainingProgramSnapshot["gateReason"] = null;
@@ -355,7 +378,7 @@ export async function getTrainingProgramSnapshotForUser(
   } else if (tasksLocked) {
     gateReason = "tasks_locked";
     gateMessage = buildTasksLockedGateMessage(
-      trainingProgress.task_unlock_at!,
+      effectiveTaskUnlockAtIso!,
       trainingProgress.task_unlock_accelerated
     );
   }
@@ -368,9 +391,9 @@ export async function getTrainingProgramSnapshotForUser(
     gateReason,
     gateMessage,
     training: trainingCompleted
-      ? { ...trainingProgress, status: "completed" }
+      ? { ...trainingProgress, status: "completed", task_unlock_at: effectiveTaskUnlockAtIso }
       : trainingProgress,
-    taskUnlockAt: trainingProgress.task_unlock_at,
+    taskUnlockAt: effectiveTaskUnlockAtIso,
     tasksLocked,
   };
 }
@@ -389,20 +412,19 @@ async function ensureTrainingReward(userId: string) {
 
   const rewardAmount = await getTrainingCompletionRewardKsh();
   const now = new Date();
-  const availableAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const { data: rewardRow, error: rewardError } = await (admin.from("wallet_transactions" as never) as any)
     .insert({
       user_id: userId,
-      type: "reward",
+      type: "task_earning",
       direction: "credit",
       amount: rewardAmount,
-      status: "pending",
-      bucket: "pending",
-      description: "Completed the 7-day Pesatrix training program",
+      status: "available",
+      bucket: "available",
+      description: "Training completion reward",
       reference_table: "training_progress",
       reference_id: userId,
-      available_at: availableAt.toISOString(),
+      available_at: now.toISOString(),
     })
     .select("id")
     .single();

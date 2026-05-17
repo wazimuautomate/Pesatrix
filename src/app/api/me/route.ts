@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { buildMeResponse } from "@/lib/user-bootstrap";
+import { getWalletSummaryForUser } from "@/lib/wallet";
 
 export async function GET() {
   try {
@@ -19,7 +20,7 @@ export async function GET() {
       );
     }
 
-    const [profileResult, accountStatusResult, verificationResult, walletResult, trainingSnapshot] =
+    const [profileResult, accountStatusResult, verificationResult, walletSummary, trainingSnapshot] =
       await Promise.all([
         (supabase.from("profiles" as never) as any)
           .select("full_name, phone, email, county, metadata")
@@ -33,9 +34,7 @@ export async function GET() {
           .select("phone_verified, email_verified, kyc_status")
           .eq("user_id", user.id)
           .maybeSingle(),
-        (supabase.from("wallet_transactions" as never) as any)
-          .select("amount, bucket, direction")
-          .eq("user_id", user.id),
+        getWalletSummaryForUser(user.id),
         getTrainingProgramSnapshotForUser(user.id),
       ]);
 
@@ -73,7 +72,8 @@ export async function GET() {
         profile: profileResult.data ?? null,
         accountStatus,
         verification: verificationResult.data ?? null,
-        walletTransactions: walletResult.data ?? [],
+        walletTransactions: [],
+        walletSummary,
         trainingSnapshot,
       })
     );

@@ -72,64 +72,89 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function LockBanner({
   unlockAt,
-  onCompleteTraining,
+  mode = "taskUnlock",
 }: {
   unlockAt?: string;
-  onCompleteTraining: () => void;
+  mode?: "taskUnlock" | "training";
 }) {
-  const [countdown, setCountdown] = useState<string>("");
+  const [timeLeft, setTimeLeft] = useState(0);
 
   useEffect(() => {
-    if (!unlockAt) return;
-
     const updateCountdown = () => {
-      const now = new Date();
-      const unlock = new Date(unlockAt);
-      const diff = unlock.getTime() - now.getTime();
-
-      if (diff <= 0) {
-        setCountdown("");
+      if (!unlockAt) {
+        setTimeLeft(0);
         return;
       }
 
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-      if (days > 0) {
-        setCountdown(`${days}d ${hours}h`);
-      } else if (hours > 0) {
-        setCountdown(`${hours}h ${minutes}m`);
-      } else {
-        setCountdown(`${minutes}m`);
-      }
+      const unlockTime = new Date(unlockAt).getTime();
+      const remainingSeconds = Math.max(0, Math.ceil((unlockTime - Date.now()) / 1000));
+      setTimeLeft(Number.isFinite(remainingSeconds) ? remainingSeconds : 0);
     };
 
     updateCountdown();
-    const interval = setInterval(updateCountdown, 60000);
+    const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
   }, [unlockAt]);
 
+  const hours = Math.floor(timeLeft / 3600);
+  const minutes = Math.floor((timeLeft % 3600) / 60);
+  const seconds = timeLeft % 60;
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  const isTaskUnlock = mode === "taskUnlock";
+
   return (
-    <Card className="border-amber-500/25 bg-amber-50">
-      <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-start gap-3">
-          <Lock className="mt-0.5 h-5 w-5 text-amber-600" />
-          <div>
-            <p className="font-semibold text-amber-900">Task starts are currently locked</p>
-            <p className="mt-1 text-sm text-amber-800">
-              {unlockAt
-                ? `Tasks unlock in ${countdown}. Refer a friend who activates to cut your wait in half.`
-                : "Complete the 7-day training to access tasks."}
-            </p>
+    <div className="mx-auto w-full max-w-2xl">
+      <Card className="relative overflow-hidden border border-outline-variant/50 bg-white shadow-xl shadow-surface-dim/20">
+        <div className="absolute inset-x-0 top-0 h-1.5 bg-amber-500" />
+        <CardContent className="flex flex-col items-center px-6 py-10 text-center sm:px-12 sm:py-12">
+          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 ring-8 ring-amber-50/60">
+            <Lock className="h-8 w-8 text-amber-600" strokeWidth={2.5} />
           </div>
-        </div>
-        <Button onClick={onCompleteTraining}>
-          Go to Training
-          <ChevronRight className="ml-2 h-4 w-4" />
-        </Button>
-      </CardContent>
-    </Card>
+
+          <h2 className="text-2xl font-bold leading-tight text-navy sm:text-3xl">
+            Task starts are currently locked
+          </h2>
+          <p className="mt-3 max-w-sm text-sm leading-relaxed text-on-surface-variant sm:text-base">
+            {isTaskUnlock
+              ? "Refer a friend who activates to cut your wait in half."
+              : "Complete the remaining training steps to unlock live tasks."}
+          </p>
+
+          {isTaskUnlock && (
+            <div className="my-10 flex w-full items-center justify-center gap-2 sm:gap-5">
+              <TimeBlock value={pad(hours)} label="Hours" />
+              <span className="pb-8 text-3xl font-light text-outline-variant sm:text-4xl">:</span>
+              <TimeBlock value={pad(minutes)} label="Mins" />
+              <span className="pb-8 text-3xl font-light text-outline-variant sm:text-4xl">:</span>
+              <TimeBlock value={pad(seconds)} label="Secs" />
+            </div>
+          )}
+
+          <Button asChild size="lg" className="group min-w-[240px] rounded-full px-8 shadow-lg shadow-pesatrix-blue/20">
+            <Link href={isTaskUnlock ? "/dashboard/referrals" : "/dashboard/training"}>
+              {isTaskUnlock ? <Users className="mr-2 h-5 w-5" /> : <Lock className="mr-2 h-5 w-5" />}
+              {isTaskUnlock ? "Go to Referrals" : "Go to Training"}
+              <ChevronRight className="ml-1 h-5 w-5 transition-transform group-hover:translate-x-1" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function TimeBlock({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center sm:flex-none">
+      <div className="flex aspect-square w-full max-w-24 items-center justify-center rounded-lg border border-outline-variant/40 bg-surface text-navy shadow-inner sm:w-24">
+        <span className="font-mono text-3xl font-bold tabular-nums leading-none sm:text-5xl">
+          {value}
+        </span>
+      </div>
+      <span className="mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+    </div>
   );
 }
 
@@ -385,10 +410,7 @@ export function TaskListClient({ userId }: { userId: string }) {
   if (trainingIncomplete) {
     return (
       <div className="space-y-6">
-        <LockBanner
-          unlockAt={undefined}
-          onCompleteTraining={() => (window.location.href = "/dashboard/training")}
-        />
+        <LockBanner mode="training" />
       </div>
     );
   }
@@ -396,10 +418,7 @@ export function TaskListClient({ userId }: { userId: string }) {
   if (tasksLocked) {
     return (
       <div className="space-y-6">
-        <LockBanner
-          unlockAt={unlockAt}
-          onCompleteTraining={() => (window.location.href = "/dashboard/training")}
-        />
+        <LockBanner unlockAt={unlockAt} mode="taskUnlock" />
       </div>
     );
   }

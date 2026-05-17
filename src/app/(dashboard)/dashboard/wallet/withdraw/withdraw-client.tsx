@@ -27,6 +27,8 @@ import {
 type Limits = {
   minWithdrawal: number;
   maxWithdrawal: number;
+  withdrawalHoldDays: number;
+  withdrawalProcessingDays: number;
 };
 
 type FormData = {
@@ -124,8 +126,8 @@ export default function WithdrawClientPage() {
               Withdrawals use your Available balance only.
             </p>
             <p className="mt-0.5">
-              Pending earnings become available after a 7-day hold. Processing
-              typically takes 1-2 business days after approval.
+              Pending earnings become available after a {limits?.withdrawalHoldDays ?? 7}-day hold. Processing
+              typically takes {limits?.withdrawalProcessingDays ?? 3} days after approval.
             </p>
           </div>
         </CardContent>
@@ -214,7 +216,7 @@ export default function WithdrawClientPage() {
                 Reference: {withdrawalId?.slice(0, 8).toUpperCase()}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Our team will process your withdrawal within 1-2 business days.
+                Our team will process your withdrawal within {limits?.withdrawalProcessingDays ?? 3} days.
               </p>
             </div>
             <Button

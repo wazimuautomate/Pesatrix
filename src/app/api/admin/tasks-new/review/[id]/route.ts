@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
+import { getWithdrawalHoldDays } from "@/lib/platform-settings";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -81,33 +82,41 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   if (parsed.data.decision === "approved") {
     const payoutKsh = Number((submission.task as Record<string, unknown>)?.payout_ksh ?? 0);
-    const availableAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const holdDays = await getWithdrawalHoldDays();
+    const availableAt = new Date(Date.now() + holdDays * 24 * 60 * 60 * 1000).toISOString();
+    const walletState = holdDays === 0 ? "available" : "pending";
 
-    await Promise.all([
-      admin
-        .from("task_submissions")
-        .update({
-          ...update,
-          payout_credited: true,
-          payout_credited_at: now,
-        })
-        .eq("id", id),
+    const { error: updateError } = await admin
+      .from("task_submissions")
+      .update({
+        ...update,
+        payout_credited: true,
+        payout_credited_at: now,
+      })
+      .eq("id", id);
 
-      admin
-        .from("wallet_transactions")
-        .insert({
-          user_id: submission.user_id,
-          type: "task_earning",
-          direction: "credit",
-          amount: payoutKsh,
-          status: "pending",
-          bucket: "pending",
-          description: `Task earning (admin approved): ${(submission.task as Record<string, unknown>)?.title}`,
-          reference_table: "task_submissions",
-          reference_id: id,
-          available_at: availableAt,
-        }),
-    ]);
+    if (updateError) {
+      return NextResponse.json({ error: "Failed to update submission" }, { status: 500 });
+    }
+
+    const { error: walletError } = await admin
+      .from("wallet_transactions")
+      .insert({
+        user_id: submission.user_id,
+        type: "task_earning",
+        direction: "credit",
+        amount: Math.round(payoutKsh),
+        status: walletState,
+        bucket: walletState,
+        description: `Task earning (admin approved): ${(submission.task as Record<string, unknown>)?.title}`,
+        reference_table: "task_submissions",
+        reference_id: id,
+        available_at: availableAt,
+      });
+
+    if (walletError) {
+      return NextResponse.json({ error: "Failed to create wallet transaction" }, { status: 500 });
+    }
   } else {
     await admin
       .from("task_submissions")

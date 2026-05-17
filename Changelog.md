@@ -1,5 +1,12 @@
 # Changelog
 
+## [fix] Wallet Display, Training Reward, Admin Hold Settings - 2026-05-18
+- Wallet now shows available, pending, and total earned separately
+- Training completion credits wallet instantly with configurable reward
+- Task approval hold period read from platform_settings not hardcoded
+- Admin can configure hold days, processing days, training reward
+- Cron route for releasing pending credits verified/created
+
 
 ## [feat] User Task Submissions History Page - 2026-05-18
 - New page /submissions showing all user task submissions

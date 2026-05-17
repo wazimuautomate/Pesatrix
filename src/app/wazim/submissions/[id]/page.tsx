@@ -391,7 +391,7 @@ function SubmissionDetail() {
             </DialogTitle>
             <DialogDescription>
               {actionDialog === "approve"
-                ? "This will credit the user's wallet with the task payout. The funds will be available after 7 days."
+                ? "This will credit the user's wallet with the task payout. The configured hold period applies before funds become withdrawable."
                 : "Provide a reason for declining this submission."}
             </DialogDescription>
           </DialogHeader>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
+import { getWithdrawalHoldDays } from "@/lib/platform-settings";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -47,7 +48,9 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const payoutKsh = Math.round(Number(taskData?.payout_ksh ?? 0));
   const now = new Date().toISOString();
-  const availableAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const holdDays = await getWithdrawalHoldDays();
+  const availableAt = new Date(Date.now() + holdDays * 24 * 60 * 60 * 1000).toISOString();
+  const walletState = holdDays === 0 ? "available" : "pending";
 
   const { error: updateError } = await admin
     .from("task_submissions")
@@ -75,8 +78,8 @@ export async function POST(request: Request, { params }: RouteContext) {
       type: "task_earning",
       direction: "credit",
       amount: payoutKsh,
-      status: "pending",
-      bucket: "pending",
+      status: walletState,
+      bucket: walletState,
       description: `Task earning (admin approved): ${taskData?.title ?? "Task"}`,
       reference_table: "task_submissions",
       reference_id: id,

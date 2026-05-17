@@ -1,13 +1,20 @@
 import "server-only";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { DAILY_TASK_LIMIT_KEY } from "@/lib/platform-setting-keys";
+import {
+  DAILY_TASK_LIMIT_KEY,
+  TRAINING_REWARD_SETTING_KEY,
+  WITHDRAWAL_HOLD_DAYS_KEY,
+  WITHDRAWAL_PROCESSING_DAYS_KEY,
+} from "@/lib/platform-setting-keys";
 
 export const TRAINING_UNLOCK_SETTING_KEY = "training_day_unlock_minutes";
 export const DEFAULT_TRAINING_UNLOCK_MINUTES = 1;
 
-export const TRAINING_REWARD_SETTING_KEY = "training_completion_reward_ksh";
-export const DEFAULT_TRAINING_REWARD_KSH = 100;
+export { TRAINING_REWARD_SETTING_KEY, WITHDRAWAL_HOLD_DAYS_KEY, WITHDRAWAL_PROCESSING_DAYS_KEY };
+export const DEFAULT_TRAINING_REWARD_KSH = 50;
+export const DEFAULT_WITHDRAWAL_HOLD_DAYS = 7;
+export const DEFAULT_WITHDRAWAL_PROCESSING_DAYS = 3;
 
 export const TASK_UNLOCK_DELAY_HOURS_KEY = "task_unlock_delay_hours";
 export const DEFAULT_TASK_UNLOCK_DELAY_HOURS = 24;
@@ -43,6 +50,19 @@ function normalizeNonNegativeNumber(value: unknown, fallback: number) {
   return parsed;
 }
 
+function normalizeIntegerInRange(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
+function warnMissingSetting(key: string, fallback: number) {
+  console.warn(`[PlatformSettings] Missing ${key}; using default ${fallback}`);
+}
+
 export async function getPlatformSetting(key: string): Promise<PlatformSetting | null> {
   const admin = createAdminSupabaseClient();
 
@@ -70,7 +90,29 @@ export async function getTrainingDayUnlockMinutes() {
 
 export async function getTrainingCompletionRewardKsh() {
   const setting = await getPlatformSetting(TRAINING_REWARD_SETTING_KEY);
-  return normalizeNonNegativeNumber(setting?.value, DEFAULT_TRAINING_REWARD_KSH);
+  if (!setting) {
+    warnMissingSetting(TRAINING_REWARD_SETTING_KEY, DEFAULT_TRAINING_REWARD_KSH);
+  }
+
+  return normalizeIntegerInRange(setting?.value, DEFAULT_TRAINING_REWARD_KSH, 0, 10000);
+}
+
+export async function getWithdrawalHoldDays() {
+  const setting = await getPlatformSetting(WITHDRAWAL_HOLD_DAYS_KEY);
+  if (!setting) {
+    warnMissingSetting(WITHDRAWAL_HOLD_DAYS_KEY, DEFAULT_WITHDRAWAL_HOLD_DAYS);
+  }
+
+  return normalizeIntegerInRange(setting?.value, DEFAULT_WITHDRAWAL_HOLD_DAYS, 0, 30);
+}
+
+export async function getWithdrawalProcessingDays() {
+  const setting = await getPlatformSetting(WITHDRAWAL_PROCESSING_DAYS_KEY);
+  if (!setting) {
+    warnMissingSetting(WITHDRAWAL_PROCESSING_DAYS_KEY, DEFAULT_WITHDRAWAL_PROCESSING_DAYS);
+  }
+
+  return normalizeIntegerInRange(setting?.value, DEFAULT_WITHDRAWAL_PROCESSING_DAYS, 1, 14);
 }
 
 export async function getTaskUnlockDelayHours() {

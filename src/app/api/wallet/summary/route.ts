@@ -11,5 +11,12 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const summary = await getWalletSummaryForUser(user.id);
-  return NextResponse.json(summary);
+  return NextResponse.json({
+    ...summary,
+    wallet: {
+      available: summary.available,
+      pending: summary.pending,
+      totalEarned: summary.totalEarned,
+    },
+  });
 }

@@ -1,4 +1,6 @@
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getVaultSecret } from "@/lib/ai/provider-secrets";
+import { getWithdrawalHoldDays } from "@/lib/platform-settings";
 
 const SYSTEM_PROMPT = `You are a strict but fair task submission reviewer for Pesatrix, a Kenyan online earning platform. Your job is to evaluate user task submissions and decide if they meet the required quality standard.
 
@@ -204,6 +206,10 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
     return;
   }
 
+  const holdDays = await getWithdrawalHoldDays();
+  const availableAt = new Date(Date.now() + holdDays * 24 * 60 * 60 * 1000).toISOString();
+  const walletState = holdDays === 0 ? "available" : "pending";
+
   const { error: walletError } = await supabaseAdmin
     .from("wallet_transactions")
     .insert({
@@ -211,12 +217,12 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
       type: "task_earning",
       direction: "credit",
       amount: Math.round(Number(task.payout_ksh ?? 0)),
-      status: "pending",
-      bucket: "pending",
+      status: walletState,
+      bucket: walletState,
       description: `Task approved: ${task.title}`,
       reference_table: "task_submissions",
       reference_id: submission.id,
-      available_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      available_at: availableAt,
     });
 
   if (walletError) {
@@ -275,18 +281,17 @@ async function getProviderApiKey(
     return process.env.NVIDIA_API_KEY ?? null;
   }
 
-  const { data: secret, error } = await supabaseAdmin
-    .from("vault.decrypted_secrets")
-    .select("decrypted_secret")
-    .eq("name", providerConfig.api_key_secret_name)
-    .single();
+  const { data: secret, error } = await getVaultSecret(
+    supabaseAdmin,
+    providerConfig.api_key_secret_name
+  );
 
-  if (error || !secret?.decrypted_secret) {
+  if (error || !secret) {
     console.warn("[Grading] Vault secret fetch failed:", providerConfig.api_key_secret_name, error);
     return null;
   }
 
-  return String(secret.decrypted_secret);
+  return secret;
 }
 
 async function flagForManualReview(

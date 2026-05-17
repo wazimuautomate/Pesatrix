@@ -840,7 +840,7 @@ function DetailDrawer() {
               Confirm Approval
             </DialogTitle>
             <DialogDescription>
-              This will approve the submission and credit {detail?.tasks ? money(detail.tasks.payout_ksh) : "the payout"} to the user&apos;s wallet. The funds will be available after 7 days.
+              This will approve the submission and credit {detail?.tasks ? money(detail.tasks.payout_ksh) : "the payout"} to the user&apos;s wallet. The configured hold period applies before funds become withdrawable.
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">

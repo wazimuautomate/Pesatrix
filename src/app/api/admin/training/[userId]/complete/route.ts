@@ -25,36 +25,37 @@ export async function POST(
   }
 
   if (training.status === "completed") {
-    return NextResponse.json({ error: "Training is already completed" }, { status: 409 });
+    return NextResponse.json({ ok: true, walletTransactionId: training.reward_transaction_id ?? null });
   }
 
-  if (training.reward_transaction_id) {
-    return NextResponse.json({ error: "Training reward already credited" }, { status: 409 });
-  }
-
-  const rewardAmount = await getTrainingCompletionRewardKsh();
   const now = new Date();
-  const availableAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  let walletTransactionId = training.reward_transaction_id as string | null;
 
-  const { data: walletTx, error: walletError } = await (admin.from("wallet_transactions" as never) as any)
-    .insert({
-      user_id: userId,
-      type: "reward",
-      direction: "credit",
-      amount: rewardAmount,
-      status: "pending",
-      bucket: "pending",
-      description: "Training completion reward — admin manual credit",
-      reference_table: "training_progress",
-      reference_id: userId,
-      available_at: availableAt.toISOString(),
-      created_by_admin_id: adminAuthId,
-    })
-    .select("id")
-    .single();
+  if (!walletTransactionId) {
+    const rewardAmount = await getTrainingCompletionRewardKsh();
 
-  if (walletError || !walletTx) {
-    return NextResponse.json({ error: "Failed to create wallet transaction" }, { status: 500 });
+    const { data: walletTx, error: walletError } = await (admin.from("wallet_transactions" as never) as any)
+      .insert({
+        user_id: userId,
+        type: "task_earning",
+        direction: "credit",
+        amount: rewardAmount,
+        status: "available",
+        bucket: "available",
+        description: "Training completion reward",
+        reference_table: "training_progress",
+        reference_id: userId,
+        available_at: now.toISOString(),
+        created_by_admin_id: adminAuthId,
+      })
+      .select("id")
+      .single();
+
+    if (walletError || !walletTx) {
+      return NextResponse.json({ error: "Failed to create wallet transaction" }, { status: 500 });
+    }
+
+    walletTransactionId = walletTx.id;
   }
 
   const { error: updateError } = await (admin.from("training_progress" as never) as any)
@@ -63,7 +64,7 @@ export async function POST(
       completed_at: now.toISOString(),
       current_day: 7,
       completed_days: [1, 2, 3, 4, 5, 6, 7],
-      reward_transaction_id: walletTx.id,
+      reward_transaction_id: walletTransactionId,
     })
     .eq("user_id", userId);
 
@@ -87,12 +88,12 @@ export async function POST(
       completed_at: now.toISOString(),
       current_day: 7,
       completed_days: [1, 2, 3, 4, 5, 6, 7],
-      reward_transaction_id: walletTx.id,
+      reward_transaction_id: walletTransactionId,
     },
     reason: "Admin manual completion",
     ip: requestMeta?.ip ?? undefined,
     userAgent: requestMeta?.userAgent ?? undefined,
   });
 
-  return NextResponse.json({ ok: true, walletTransactionId: walletTx.id });
+  return NextResponse.json({ ok: true, walletTransactionId });
 }

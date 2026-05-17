@@ -5,6 +5,7 @@ type WalletSummary = {
   pending: number;
   available: number;
   total: number;
+  totalEarned?: number;
 };
 
 type ProfileRow = {
@@ -60,6 +61,7 @@ export function buildMeResponse(args: {
   accountStatus: AccountStatusRow | null;
   verification: VerificationRow | null;
   walletTransactions: WalletTransactionRow[];
+  walletSummary?: WalletSummary | null;
   trainingSnapshot?: TrainingProgramSnapshot | null;
 }) {
   const {
@@ -70,6 +72,7 @@ export function buildMeResponse(args: {
     accountStatus,
     verification,
     walletTransactions,
+    walletSummary,
     trainingSnapshot,
   } = args;
   const { state } = resolveAccountFlags(accountStatus);
@@ -101,7 +104,7 @@ export function buildMeResponse(args: {
       emailVerified: verification?.email_verified ?? emailConfirmed,
       kycStatus: verification?.kyc_status ?? "not_started",
     },
-    wallet: summarizeWallet(walletTransactions),
+    wallet: walletSummary ?? summarizeWallet(walletTransactions),
     onboarding: progress.onboarding,
     training: {
       ...(trainingSnapshot
