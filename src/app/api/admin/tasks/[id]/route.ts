@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "../../_lib";
+import { normalizeTaskDatetimes } from "@/lib/datetime";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -65,7 +66,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     .maybeSingle();
   if (!before) return NextResponse.json({ error: "Task not found" }, { status: 404 });
 
-  const parsed = updateTaskSchema.safeParse(await request.json());
+  const parsed = updateTaskSchema.safeParse(normalizeTaskDatetimes(await request.json()));
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0]?.message } },

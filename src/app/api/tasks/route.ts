@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-export async function GET(request: Request) {
+export async function GET() {
   const supabase = await createServerSupabaseClient();
 
   const {
@@ -12,88 +12,59 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: trainingProgress, error: trainingError } = await supabase
-    .from("training_progress")
-    .select("status, task_unlock_at")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: accountStatus }, { data: trainingProgress, error: trainingError }] = await Promise.all([
+    (supabase.from("account_status" as never) as any)
+      .select("is_activated")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("training_progress")
+      .select("status, task_unlock_at")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
+
+  const isActivated = Boolean((accountStatus as { is_activated?: boolean } | null)?.is_activated);
+
+  if (!isActivated) {
+    return NextResponse.json({
+      tasks: [],
+      submittedTaskIds: [],
+      total: 0,
+      isActivated: false,
+      trainingStatus: trainingProgress?.status ?? null,
+      taskUnlockAt: trainingProgress?.task_unlock_at ?? null,
+    });
+  }
 
   if (trainingError) {
     return NextResponse.json({ error: "Failed to check training status" }, { status: 500 });
   }
 
-  if (!trainingProgress || trainingProgress.status !== "completed") {
-    return NextResponse.json(
-      {
-        error: {
-          code: "TRAINING_INCOMPLETE",
-          message: "Complete the 7-day training to access tasks.",
-        },
-      },
-      { status: 403 }
-    );
+  const trainingComplete = trainingProgress?.status === "completed";
+  const taskUnlockAt = trainingProgress?.task_unlock_at ?? null;
+  const tasksLocked = Boolean(taskUnlockAt && new Date(taskUnlockAt) > new Date());
+
+  if (!trainingComplete || tasksLocked) {
+    return NextResponse.json({
+      tasks: [],
+      submittedTaskIds: [],
+      total: 0,
+      isActivated: true,
+      trainingStatus: trainingProgress?.status ?? null,
+      taskUnlockAt,
+      tasksLocked,
+    });
   }
 
-  if (trainingProgress.task_unlock_at) {
-    const unlockDate = new Date(trainingProgress.task_unlock_at);
-    const now = new Date();
-    if (unlockDate > now) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "TASKS_LOCKED",
-            message: "Tasks unlock soon.",
-            unlockAt: trainingProgress.task_unlock_at,
-          },
-        },
-        { status: 403 }
-      );
-    }
-  }
-
-  const { searchParams } = new URL(request.url);
-  const category = searchParams.get("category");
-  const difficulty = searchParams.get("difficulty");
-  const sort = searchParams.get("sort") || "newest";
-  const search = searchParams.get("search");
-
-  let query = supabase
+  const { data, error } = await supabase
     .from("tasks")
-    .select(
-      "id, title, category, instructions, payout_ksh, slots_remaining, difficulty, status, expires_at, requires_screenshot, requires_url, min_word_count, created_at"
-    )
+    .select("id, title, category, description, instructions, payout_ksh, slots_remaining, difficulty, expires_at, task_data, requires_screenshot, requires_url, min_word_count")
     .eq("status", "active")
     .gt("slots_remaining", 0)
-    .or("expires_at.is.null,expires_at.gt.now()");
-
-  if (category) {
-    const categories = category.split(",");
-    query = query.in("category", categories);
-  }
-
-  if (difficulty) {
-    const difficulties = difficulty.split(",");
-    query = query.in("difficulty", difficulties);
-  }
-
-  if (search) {
-    query = query.ilike("title", `%${search}%`);
-  }
-
-  switch (sort) {
-    case "payout_high":
-      query = query.order("payout_ksh", { ascending: false });
-      break;
-    case "expiry_soon":
-      query = query.order("expires_at", { ascending: true, nullsFirst: false });
-      break;
-    case "newest":
-    default:
-      query = query.order("created_at", { ascending: false });
-      break;
-  }
-
-  const { data: tasks, error } = await query;
+    .or("publish_at.is.null,publish_at.lte.now()")
+    .or("expires_at.is.null,expires_at.gt.now()")
+    .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 });
@@ -106,25 +77,29 @@ export async function GET(request: Request) {
 
   const submittedTaskIds = (submissions ?? []).map((s: { task_id: string }) => s.task_id);
 
-  const formattedTasks = (tasks ?? []).map((task: Record<string, unknown>) => ({
+  const formattedTasks = (data ?? []).map((task: Record<string, unknown>) => ({
     id: task.id as string,
     title: task.title as string,
     category: task.category as string,
+    description: task.description as string | null,
     instructions: task.instructions as string,
     payoutKsh: task.payout_ksh as number,
     slotsRemaining: task.slots_remaining as number,
     difficulty: task.difficulty as string,
-    status: task.status as string,
     expiresAt: task.expires_at as string | null,
+    taskData: task.task_data as Record<string, unknown>,
     requiresScreenshot: task.requires_screenshot as boolean,
     requiresUrl: task.requires_url as boolean,
     minWordCount: task.min_word_count as number,
-    createdAt: task.created_at as string,
   }));
 
   return NextResponse.json({
     tasks: formattedTasks,
     submittedTaskIds,
     total: formattedTasks.length,
+    isActivated: true,
+    trainingStatus: trainingProgress?.status ?? null,
+    taskUnlockAt,
+    tasksLocked: false,
   });
 }

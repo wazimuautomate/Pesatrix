@@ -25,6 +25,7 @@ import {
   createEmptyTaskData,
   taskInsertSchema,
 } from "@/lib/task-types";
+import { normalizeDatetime } from "@/lib/datetime";
 
 const STEPS = ["Task Meta", "Task Data", "Publishing"] as const;
 type Step = (typeof STEPS)[number];
@@ -105,8 +106,8 @@ export function TaskCreationForm() {
         requires_url: meta.requires_url,
         min_word_count: Number(meta.min_word_count),
         task_data: taskData,
-        publish_at: publishImmediately ? null : (publishAt || null),
-        expires_at: expiresAt || null,
+        publish_at: publishImmediately ? null : normalizeDatetime(publishAt),
+        expires_at: normalizeDatetime(expiresAt),
       };
 
       const parsed = taskInsertSchema.safeParse(payload);
@@ -120,7 +121,7 @@ export function TaskCreationForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...parsed.data,
-          publish_at: publish ? (publishImmediately ? null : publishAt || null) : null,
+          publish_at: publish ? (publishImmediately ? null : normalizeDatetime(publishAt)) : null,
         }),
       });
 

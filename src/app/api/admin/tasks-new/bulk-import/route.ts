@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
 import { bulkImportSchema } from "@/lib/task-types";
+import { normalizeTaskDatetimes } from "@/lib/datetime";
 
 export async function POST(request: Request) {
   const { error, userId, requestMeta } = await requireAdmin({
@@ -12,7 +13,14 @@ export async function POST(request: Request) {
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json();
-  const parsed = bulkImportSchema.safeParse(body);
+  const normalizedBody = Array.isArray(body)
+    ? body.map((task) =>
+        typeof task === "object" && task !== null && !Array.isArray(task)
+          ? normalizeTaskDatetimes(task as Record<string, unknown>)
+          : task
+      )
+    : body;
+  const parsed = bulkImportSchema.safeParse(normalizedBody);
 
   if (!parsed.success) {
     return NextResponse.json(

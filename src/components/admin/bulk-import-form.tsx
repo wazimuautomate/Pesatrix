@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { bulkImportSchema, type BulkImportTask, CATEGORY_LABELS } from "@/lib/task-types";
+import { normalizeDatetime } from "@/lib/datetime";
 
 export function BulkImportForm() {
   const router = useRouter();
@@ -62,7 +63,8 @@ export function BulkImportForm() {
         const t = validatedTasks[i].task;
         return {
           ...t,
-          publish_at: globalPublishAt || t.publish_at || null,
+          publish_at: normalizeDatetime(globalPublishAt) ?? normalizeDatetime(t.publish_at),
+          expires_at: normalizeDatetime(t.expires_at),
         };
       });
 

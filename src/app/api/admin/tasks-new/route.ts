@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
 import { taskInsertSchema } from "@/lib/task-types";
+import { normalizeTaskDatetimes } from "@/lib/datetime";
 
 export async function GET(request: Request) {
   const { error, userId } = await requireAdmin({
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = await request.json();
+  const body = normalizeTaskDatetimes(await request.json());
 
   const parsed = taskInsertSchema.safeParse(body);
   if (!parsed.success) {

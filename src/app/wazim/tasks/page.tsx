@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, FileUp, Search, Loader2, X } from "lucide-react";
+import { AlertCircle, Plus, FileUp, Search, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdminPageShell, MetricCard } from "@/components/admin/admin-native";
@@ -56,9 +56,11 @@ export default function TasksPage() {
   const [showNewTask, setShowNewTask] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
+  const [filterError, setFilterError] = useState<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
+    setFilterError(null);
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
@@ -66,16 +68,20 @@ export default function TasksPage() {
       if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
 
       const res = await fetch(`/api/admin/tasks?${params.toString()}`);
+      const data = await res.json();
       if (!res.ok) {
-        toast.error("Failed to fetch tasks");
+        const message = data?.error ?? "Failed to fetch tasks";
+        setTasks([]);
+        setFilterError(message);
+        if (res.status !== 400) toast.error(message);
         return;
       }
 
-      const data = await res.json();
-      setTasks(data.tasks ?? []);
+      setTasks(data.items ?? data.tasks ?? []);
       setCounts(data.counts ?? { total: 0, draft: 0, active: 0, paused: 0, completed: 0, scheduled: 0 });
     } catch {
-      toast.error("Network error");
+      setTasks([]);
+      setFilterError("Network error");
     } finally {
       setLoading(false);
     }
@@ -243,6 +249,13 @@ export default function TasksPage() {
         )}
       </div>
 
+      {filterError && (
+        <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{filterError}</span>
+        </div>
+      )}
+
       <div className="mt-4 rounded-lg border bg-white">
         <Table>
           <TableHeader>
@@ -268,7 +281,7 @@ export default function TasksPage() {
               <TableRow>
                 <td colSpan={8} className="p-8 text-center text-muted-foreground">
                   {search || (categoryFilter && categoryFilter !== "all") || (statusFilter && statusFilter !== "all")
-                    ? "No tasks match your filters"
+                    ? "No tasks found"
                     : "No tasks yet. Create one or import from JSON."}
                 </td>
               </TableRow>

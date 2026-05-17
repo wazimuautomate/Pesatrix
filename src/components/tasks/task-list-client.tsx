@@ -14,16 +14,16 @@ type Task = {
   id: string;
   title: string;
   category: string;
+  description: string | null;
   instructions: string;
   payoutKsh: number;
   slotsRemaining: number;
   difficulty: string;
-  status: string;
   expiresAt: string | null;
+  taskData: Record<string, unknown>;
   requiresScreenshot: boolean;
   requiresUrl: boolean;
   minWordCount: number;
-  createdAt: string;
 };
 
 const CATEGORIES: TaskCategory[] = [
@@ -41,6 +41,18 @@ const SORT_OPTIONS = [
   { value: "payout_high", label: "Highest Payout" },
   { value: "expiry_soon", label: "Expiring Soon" },
 ];
+
+function formatCategory(category: string): string {
+  return CATEGORY_LABELS[category as TaskCategory] ?? category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function categoryClass(category: string): string {
+  return CATEGORY_COLORS[category as TaskCategory] ?? "bg-slate-100 text-slate-800 border-slate-200";
+}
+
+function difficultyClass(difficulty: string): string {
+  return DIFFICULTY_COLORS[difficulty as keyof typeof DIFFICULTY_COLORS] ?? "bg-slate-100 text-slate-700 border-slate-200";
+}
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
@@ -136,10 +148,11 @@ function TaskCard({
   const isCriticalSlots = task.slotsRemaining <= 3;
   const isExpiringSoon = expiresAt && expiresAt.getTime() - now.getTime() < 24 * 60 * 60 * 1000;
 
-  const truncatedInstructions =
-    task.instructions.length > 120
-      ? task.instructions.slice(0, 120) + "..."
-      : task.instructions;
+  const summary = task.description || task.instructions;
+  const truncatedSummary =
+    summary.length > 120
+      ? `${summary.slice(0, 120)}...`
+      : summary;
 
   return (
     <Card
@@ -152,10 +165,10 @@ function TaskCard({
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold text-navy">{task.title}</h3>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <Badge className={CATEGORY_COLORS[task.category as TaskCategory]}>
-                {CATEGORY_LABELS[task.category as TaskCategory]}
+              <Badge className={categoryClass(task.category)}>
+                {formatCategory(task.category)}
               </Badge>
-              <Badge className={DIFFICULTY_COLORS[task.difficulty as keyof typeof DIFFICULTY_COLORS]}>
+              <Badge className={difficultyClass(task.difficulty)}>
                 {task.difficulty}
               </Badge>
             </div>
@@ -165,7 +178,7 @@ function TaskCard({
           </div>
         </div>
 
-        <p className="mt-3 text-sm text-muted-foreground line-clamp-2">{truncatedInstructions}</p>
+        <p className="mt-3 text-sm text-muted-foreground line-clamp-2">{truncatedSummary}</p>
 
         <div className="mt-3 flex items-center justify-between text-sm">
           <span
@@ -184,6 +197,12 @@ function TaskCard({
             <span className={`flex items-center gap-1 ${isExpiringSoon ? "text-red-600 font-medium" : "text-muted-foreground"}`}>
               <Clock className="h-3.5 w-3.5" />
               Expires {expiresAt.toLocaleDateString()}
+            </span>
+          )}
+          {!expiresAt && (
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              No expiry
             </span>
           )}
         </div>
@@ -233,6 +252,7 @@ export function TaskListClient({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tasksLocked, setTasksLocked] = useState(false);
+  const [isActivated, setIsActivated] = useState(true);
   const [unlockAt, setUnlockAt] = useState<string | undefined>(undefined);
   const [trainingIncomplete, setTrainingIncomplete] = useState(false);
   const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
@@ -249,37 +269,18 @@ export function TaskListClient({ userId }: { userId: string }) {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams();
-        if (category) params.set("category", category);
-        if (difficulty) params.set("difficulty", difficulty);
-        if (sort) params.set("sort", sort);
-        if (search) params.set("search", search);
-
-        const response = await fetch(`/api/tasks?${params.toString()}`);
+        const response = await fetch("/api/tasks");
         const data = await response.json();
 
         if (!response.ok) {
-          if (response.status === 403) {
-            if (data.error?.code === "TRAINING_INCOMPLETE") {
-              setTrainingIncomplete(true);
-              setTasksLocked(true);
-              setTasks([]);
-              return;
-            }
-            if (data.error?.code === "TASKS_LOCKED") {
-              setTasksLocked(true);
-              setUnlockAt(data.error.unlockAt);
-              setTasks([]);
-              return;
-            }
-          }
           setError(data.error || "Failed to fetch tasks");
           return;
         }
 
-        setTasksLocked(false);
-        setUnlockAt(undefined);
-        setTrainingIncomplete(false);
+        setIsActivated(data.isActivated !== false);
+        setTasksLocked(Boolean(data.tasksLocked));
+        setUnlockAt(data.taskUnlockAt ?? undefined);
+        setTrainingIncomplete(data.isActivated !== false && data.trainingStatus !== "completed");
         setTasks(data.tasks ?? []);
         setSubmittedTaskIds(data.submittedTaskIds ?? []);
       } catch {
@@ -320,28 +321,28 @@ export function TaskListClient({ userId }: { userId: string }) {
       filtered = filtered.filter((t) => t.difficulty === selectedDifficulty);
     }
 
-    return filtered;
-  }, [tasks, selectedCategories, selectedDifficulty]);
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      filtered = filtered.filter((t) =>
+        `${t.title} ${t.category} ${t.description ?? ""} ${t.instructions}`
+          .toLowerCase()
+          .includes(query)
+      );
+    }
 
-  const groupedTasks = useMemo(() => {
-    const groups: Record<TaskCategory, Task[]> = {
-      survey: [],
-      data_labeling: [],
-      social_engagement: [],
-      verification: [],
-      content_creation: [],
-      watch_respond: [],
-    };
-
-    filteredTasks.forEach((task) => {
-      const category = task.category as TaskCategory;
-      if (groups[category]) {
-        groups[category].push(task);
+    const sorted = [...filtered];
+    if (sortBy === "payout_high") {
+      sorted.sort((a, b) => b.payoutKsh - a.payoutKsh);
+    } else if (sortBy === "expiry_soon") {
+      sorted.sort((a, b) => {
+        if (!a.expiresAt && !b.expiresAt) return 0;
+        if (!a.expiresAt) return 1;
+        if (!b.expiresAt) return -1;
+        return new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime();
+      });
       }
-    });
-
-    return groups;
-  }, [filteredTasks]);
+    return sorted;
+  }, [tasks, selectedCategories, selectedDifficulty, searchQuery, sortBy]);
 
   const hasActiveFilters = selectedCategories.length > 0 || selectedDifficulty || searchQuery.trim().length > 0;
 
@@ -360,6 +361,20 @@ export function TaskListClient({ userId }: { userId: string }) {
           ))}
         </div>
       </div>
+    );
+  }
+
+  if (!isActivated) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Lock className="mx-auto h-10 w-10 text-amber-600" />
+          <h3 className="mt-4 text-lg font-semibold text-navy">Activate your account to access tasks.</h3>
+          <Button asChild className="mt-4">
+            <Link href="/activate">Activate Account</Link>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -490,30 +505,16 @@ export function TaskListClient({ userId }: { userId: string }) {
           </CardContent>
         </Card>
       ) : (
-        Object.entries(groupedTasks).map(([category, categoryTasks]) => {
-          if (categoryTasks.length === 0) return null;
-
-          return (
-            <div key={category} className="space-y-3">
-              <h2 className="text-lg font-semibold text-navy">
-                {CATEGORY_LABELS[category as TaskCategory]}
-                <Badge variant="secondary" className="ml-2">
-                  {categoryTasks.length}
-                </Badge>
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {categoryTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    isSubmitted={submittedTaskIds.includes(task.id)}
-                    tasksLocked={tasksLocked}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredTasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              isSubmitted={submittedTaskIds.includes(task.id)}
+              tasksLocked={tasksLocked}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

@@ -93,6 +93,11 @@ export function TaskCard({
       <td className="p-4 text-sm">
         <span className="font-medium">{task.slots_remaining}</span>
         <span className="text-muted-foreground">/{task.total_slots}</span>
+        {task.slots_remaining === 0 && (
+          <Badge variant="outline" className="ml-2 border-purple-200 bg-purple-50 text-purple-700">
+            filled
+          </Badge>
+        )}
         {slotsUsed > 0 && (
           <span className="ml-1 text-xs text-muted-foreground">
             ({slotsUsed} taken)

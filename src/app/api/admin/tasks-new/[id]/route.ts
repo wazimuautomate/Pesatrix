@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
 import { taskInsertSchema } from "@/lib/task-types";
+import { normalizeTaskDatetimes } from "@/lib/datetime";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -53,7 +54,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
 
-  const body = await request.json();
+  const body = normalizeTaskDatetimes(await request.json());
   const parsed = updateTaskSchema.safeParse(body);
 
   if (!parsed.success) {

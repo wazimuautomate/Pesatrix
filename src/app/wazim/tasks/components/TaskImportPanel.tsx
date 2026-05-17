@@ -23,6 +23,7 @@ import {
   CATEGORY_LABELS,
   generateQuestionId,
 } from "@/lib/task-types";
+import { normalizeDatetime } from "@/lib/datetime";
 
 type ParsedTask = {
   title: string;
@@ -157,8 +158,8 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
       requires_url: Boolean(raw.requires_url),
       min_word_count: isNaN(Number(raw.min_word_count)) ? 0 : Number(raw.min_word_count),
       task_data: normalizedTaskData,
-      publish_at: raw.publish_at ? String(raw.publish_at) : null,
-      expires_at: raw.expires_at ? String(raw.expires_at) : null,
+      publish_at: normalizeDatetime(raw.publish_at),
+      expires_at: normalizeDatetime(raw.expires_at),
       _error: errors.length > 0 ? errors.join("; ") : undefined,
       _valid: errors.length === 0,
     };
@@ -318,8 +319,8 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
         requires_url: t.requires_url,
         min_word_count: Number(t.min_word_count),
         task_data: t.task_data,
-        publish_at: publish ? (t.publish_at || null) : null,
-        expires_at: t.expires_at || null,
+        publish_at: publish ? normalizeDatetime(t.publish_at) : null,
+        expires_at: normalizeDatetime(t.expires_at),
       }));
 
       const res = await fetch("/api/admin/tasks/import", {

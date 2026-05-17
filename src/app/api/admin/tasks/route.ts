@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
 import { taskInsertSchema } from "@/lib/task-types";
+import { normalizeTaskDatetimes } from "@/lib/datetime";
 
 export async function GET(request: Request) {
   const { error, userId } = await requireAdmin({
@@ -11,21 +12,21 @@ export async function GET(request: Request) {
   if (error) return error;
 
   const { searchParams } = new URL(request.url);
-  const statusFilter = searchParams.get("status");
-  const categoryFilter = searchParams.get("category");
-  const search = searchParams.get("search");
+  const statusFilter = searchParams.get("status")?.trim() ?? "";
+  const categoryFilter = searchParams.get("category")?.trim() ?? "";
+  const search = searchParams.get("search")?.trim() ?? "";
 
   const admin = createAdminSupabaseClient();
   let query = admin.from("tasks").select("*");
 
-  if (statusFilter) query = query.eq("status", statusFilter);
   if (categoryFilter) query = query.eq("category", categoryFilter);
+  if (statusFilter) query = query.eq("status", statusFilter);
   if (search) query = query.ilike("title", `%${search}%`);
 
   const { data: tasks, error: fetchError } = await query.order("created_at", { ascending: false });
 
   if (fetchError) {
-    return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 });
+    return NextResponse.json({ error: fetchError.message, items: [] }, { status: 400 });
   }
 
   const { data: countsData } = await admin
@@ -49,7 +50,12 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ tasks: tasks ?? [], counts });
+  return NextResponse.json({
+    items: tasks ?? [],
+    tasks: tasks ?? [],
+    total: tasks?.length ?? 0,
+    counts,
+  });
 }
 
 export async function POST(request: Request) {
@@ -60,7 +66,7 @@ export async function POST(request: Request) {
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = await request.json();
+  const body = normalizeTaskDatetimes(await request.json());
 
   const parsed = taskInsertSchema.safeParse(body);
   if (!parsed.success) {

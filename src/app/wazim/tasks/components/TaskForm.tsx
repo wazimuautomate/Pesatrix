@@ -27,6 +27,7 @@ import {
   createEmptyTaskData,
   taskInsertSchema,
 } from "@/lib/task-types";
+import { normalizeDatetime } from "@/lib/datetime";
 import type { TaskRow } from "./TaskCard";
 
 type TaskFormProps = {
@@ -129,8 +130,8 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
         requires_url: meta.requires_url,
         min_word_count: Number(meta.min_word_count),
         task_data: taskData,
-        publish_at: publish && publishImmediately ? null : (publishAt || null),
-        expires_at: expiresAt || null,
+        publish_at: publish && publishImmediately ? null : normalizeDatetime(publishAt),
+        expires_at: normalizeDatetime(expiresAt),
       };
 
       if (task) {

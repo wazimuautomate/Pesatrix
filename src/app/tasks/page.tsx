@@ -24,17 +24,8 @@ export default async function TasksPage() {
     getTrainingProgramSnapshotForUser(user.id),
   ]);
 
-  if (!snapshot.canStartTasks) {
-    if (snapshot.gateReason === "onboarding") {
-      redirect("/onboarding");
-    }
-    if (snapshot.gateReason === "activation") {
-      redirect("/activate");
-    }
-    if (snapshot.gateReason === "training") {
-      redirect("/training");
-    }
-    redirect("/");
+  if (!snapshot.canStartTasks && snapshot.gateReason === "onboarding") {
+    redirect("/onboarding");
   }
 
   return (

@@ -10,6 +10,7 @@ import {
   QUESTION_TYPE_RATING,
   QUESTION_TYPE_YES_NO,
 } from "@/lib/task-types";
+import { normalizeTaskDatetimes } from "@/lib/datetime";
 
 const importTaskSchema = z.object({
   title: z.string().trim().min(3).max(200),
@@ -131,7 +132,7 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const taskObj = raw as Record<string, unknown>;
+    const taskObj = normalizeTaskDatetimes(raw as Record<string, unknown>);
 
     const parseResult = importTaskSchema.safeParse(taskObj);
     if (!parseResult.success) {
