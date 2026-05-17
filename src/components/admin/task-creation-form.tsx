@@ -55,6 +55,7 @@ export function TaskCreationForm() {
   const [publishImmediately, setPublishImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [titleError, setTitleError] = useState<string>("");
 
   function handleCategoryChange(category: TaskCategory) {
     setMeta((m) => ({ ...m, category }));
@@ -127,9 +128,14 @@ export function TaskCreationForm() {
 
       const result = await response.json();
       if (!response.ok) {
-        toast.error(result?.error?.message ?? result?.error ?? "Failed to create task");
+        if (response.status === 409) {
+          setTitleError(result?.error ?? "A task with this title and category already exists");
+        } else {
+          toast.error(result?.error?.message ?? result?.error ?? "Failed to create task");
+        }
         return;
       }
+      setTitleError("");
 
       toast.success(publish ? "Task published!" : "Task saved as draft");
       router.push("/wazim/tasks");
@@ -169,7 +175,7 @@ export function TaskCreationForm() {
         </CardHeader>
         <CardContent>
           {currentStep === 0 && (
-            <Step1Meta meta={meta} setMeta={setMeta} onCategoryChange={handleCategoryChange} />
+            <Step1Meta meta={meta} setMeta={setMeta} onCategoryChange={handleCategoryChange} titleError={titleError} setTitleError={setTitleError} />
           )}
           {currentStep === 1 && (
             <Step2TaskData category={meta.category} taskData={taskData} setTaskData={setTaskData} />
@@ -225,10 +231,14 @@ function Step1Meta({
   meta,
   setMeta,
   onCategoryChange,
+  titleError,
+  setTitleError,
 }: {
   meta: typeof emptyMeta;
   setMeta: React.Dispatch<React.SetStateAction<typeof emptyMeta>>;
   onCategoryChange: (category: TaskCategory) => void;
+  titleError: string;
+  setTitleError: (v: string) => void;
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -237,9 +247,12 @@ function Step1Meta({
         <Input
           id="title"
           value={meta.title}
-          onChange={(e) => setMeta((m) => ({ ...m, title: e.target.value }))}
+          onChange={(e) => { setMeta((m) => ({ ...m, title: e.target.value })); setTitleError(""); }}
           placeholder="e.g. How Do You Buy Airtime?"
         />
+        {titleError && (
+          <p className="text-sm text-destructive mt-1">{titleError}</p>
+        )}
       </div>
 
       <div>

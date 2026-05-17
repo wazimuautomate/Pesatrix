@@ -75,6 +75,7 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
   const [expiresAt, setExpiresAt] = useState("");
   const [publishImmediately, setPublishImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [titleError, setTitleError] = useState("");
 
   useEffect(() => {
     if (task) {
@@ -115,6 +116,7 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
 
   async function handleSubmit(publish: boolean) {
     setLoading(true);
+    setTitleError("");
     try {
       const payload: Record<string, unknown> = {
         title: meta.title.trim(),
@@ -144,7 +146,29 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
         return;
       }
 
-      await onSave(parsed.data as Record<string, unknown>, publish);
+      if (task) {
+        await onSave(parsed.data as Record<string, unknown>, publish);
+      } else {
+        const res = await fetch("/api/admin/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...parsed.data,
+            publish_at: publish && publishImmediately ? null : normalizeDatetime(publishAt),
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          if (res.status === 409) {
+            setTitleError(result?.error ?? "A task with this title and category already exists");
+          } else {
+            toast.error(result?.error?.message ?? result?.error ?? "Failed to save task");
+          }
+          return;
+        }
+        toast.success(publish ? "Task published!" : "Task saved as draft");
+        onCancel();
+      }
     } finally {
       setLoading(false);
     }
@@ -167,9 +191,12 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
           <Input
             id="tf-title"
             value={meta.title}
-            onChange={(e) => setMeta((m) => ({ ...m, title: e.target.value }))}
+            onChange={(e) => { setMeta((m) => ({ ...m, title: e.target.value })); setTitleError(""); }}
             placeholder="e.g. How Do You Buy Airtime?"
           />
+          {titleError && (
+            <p className="text-sm text-destructive mt-1">{titleError}</p>
+          )}
         </div>
 
         <div>

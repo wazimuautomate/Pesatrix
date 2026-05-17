@@ -105,6 +105,21 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminSupabaseClient();
+
+  const { data: existing } = await admin
+    .from("tasks")
+    .select("id")
+    .eq("title", title)
+    .eq("category", category)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return NextResponse.json(
+      { error: "A task with this title and category already exists" },
+      { status: 409 }
+    );
+  }
+
   const { data: task, error: insertError } = await admin
     .from("tasks")
     .insert({

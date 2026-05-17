@@ -1,97 +1,125 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "../../_lib";
-import {
-  watchRespondTaskDataSchema,
-  questionSchema,
-  QUESTION_TYPE_OPEN_TEXT,
-  QUESTION_TYPE_MULTIPLE_CHOICE,
-  QUESTION_TYPE_RATING,
-  QUESTION_TYPE_YES_NO,
-} from "@/lib/task-types";
-import { normalizeTaskDatetimes } from "@/lib/datetime";
 
-const importTaskSchema = z.object({
-  title: z.string().trim().min(3).max(200),
-  category: z.enum(["survey", "data_labeling", "social_engagement", "verification", "content_creation", "watch_respond"]),
-  description: z.string().trim().max(1000).optional().nullable(),
-  instructions: z.string().trim().min(10),
-  payout_ksh: z.number().int().min(20).max(50),
-  total_slots: z.number().int().min(100).max(400),
-  difficulty: z.enum(["easy", "medium", "hard"]).default("easy"),
-  publish_at: z.string().datetime().nullable().default(null),
-  expires_at: z.string().datetime().nullable().default(null),
-  ai_grading_enabled: z.boolean().default(true),
-  ai_rubric: z.string().trim().max(2000).optional().nullable(),
-  requires_screenshot: z.boolean().default(false),
-  requires_url: z.boolean().default(false),
-  min_word_count: z.number().int().min(0).default(0),
-  task_data: z.record(z.unknown()),
-});
+const VALID_CATEGORIES = [
+  "survey",
+  "data_labeling",
+  "social_engagement",
+  "verification",
+  "content_creation",
+  "watch_respond",
+] as const;
 
-const importBodySchema = z.object({
-  tasks: z.array(z.unknown()).min(1),
-  publishAll: z.boolean().default(false),
-});
+type ValidationError = {
+  row: number;
+  title: string;
+  errors: string[];
+};
 
-function validateWatchRespondTaskData(taskData: unknown): string | null {
-  const parsed = watchRespondTaskDataSchema.safeParse(taskData);
-  if (!parsed.success) {
-    return parsed.error.errors[0]?.message ?? "Invalid task_data";
+function parseTaskData(raw: unknown): { data: Record<string, unknown>; errors: string[] } {
+  const errors: string[] = [];
+  if (raw === null || raw === undefined) {
+    errors.push("task_data is required");
+    return { data: {}, errors };
   }
-
-  const data = parsed.data;
-  if (!data.video_url || typeof data.video_url !== "string" || data.video_url.trim() === "") {
-    return "task_data.video_url must be a non-empty string";
-  }
-
-  if (data.video_duration_seconds) {
-    if (data.min_watch_seconds >= data.video_duration_seconds) {
-      return "task_data.min_watch_seconds must be less than video_duration_seconds";
-    }
-
-    const minRequired = Math.ceil(data.video_duration_seconds * 0.6);
-    if (data.min_watch_seconds < minRequired) {
-      return `task_data.min_watch_seconds must be >= 60% of video_duration_seconds (${minRequired}s)`;
-    }
-  }
-
-  if (!data.questions || data.questions.length === 0) {
-    return "task_data.questions must be a non-empty array";
-  }
-
-  for (let i = 0; i < data.questions.length; i++) {
-    const q = data.questions[i] as Record<string, unknown>;
-    if (!q.id || !q.text || !q.type) {
-      return `Question at index ${i} must have id, text, and type`;
-    }
-
-    const validTypes = [QUESTION_TYPE_OPEN_TEXT, QUESTION_TYPE_MULTIPLE_CHOICE, QUESTION_TYPE_RATING, QUESTION_TYPE_YES_NO];
-    if (!validTypes.includes(q.type as string)) {
-      return `Question at index ${i} has invalid type "${q.type}". Must be one of: ${validTypes.join(", ")}`;
-    }
-
-    if (q.type === QUESTION_TYPE_MULTIPLE_CHOICE) {
-      if (!q.options || !Array.isArray(q.options) || (q.options as unknown[]).length === 0) {
-        return `Multiple choice question at index ${i} must have a non-empty options array`;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        errors.push("task_data must be a valid JSON object");
+        return { data: {}, errors };
       }
+      return { data: parsed as Record<string, unknown>, errors };
+    } catch {
+      errors.push("task_data must be a valid JSON object");
+      return { data: {}, errors };
     }
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    errors.push("task_data must be a valid JSON object");
+    return { data: {}, errors };
+  }
+  return { data: raw as Record<string, unknown>, errors };
+}
 
-    if (q.type === QUESTION_TYPE_OPEN_TEXT) {
-      if (q.min_words === undefined || q.min_words === null) {
-        return `Open text question at index ${i} should have min_words`;
-      }
-    }
+function validateTaskRow(raw: unknown, rowIndex: number): { valid: true; data: Record<string, unknown> } | { valid: false; error: ValidationError } {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return { valid: false, error: { row: rowIndex + 1, title: "(no title)", errors: ["Row must be a JSON object"] } };
+  }
 
-    if (q.type === QUESTION_TYPE_RATING) {
-      if (q.scale === undefined || q.scale === null) {
-        return `Rating question at index ${i} should have scale`;
-      }
+  const obj = raw as Record<string, unknown>;
+  const errors: string[] = [];
+
+  const title = typeof obj.title === "string" ? obj.title.trim() : "";
+  if (!title) errors.push("title is missing or empty");
+
+  const category = typeof obj.category === "string" ? obj.category.trim() : "";
+  if (!category) errors.push("category is missing or empty");
+  else if (!VALID_CATEGORIES.includes(category as (typeof VALID_CATEGORIES)[number])) {
+    errors.push(`category "${category}" is not valid`);
+  }
+
+  const instructions = typeof obj.instructions === "string" ? obj.instructions.trim() : "";
+  if (!instructions) errors.push("instructions is missing or empty");
+
+  const payoutRaw = obj.payout_ksh;
+  const payout = typeof payoutRaw === "number" ? payoutRaw : Number(payoutRaw);
+  if (isNaN(payout) || payout <= 0) errors.push("payout_ksh must be a number greater than 0");
+
+  const slotsRaw = obj.total_slots;
+  const slots = typeof slotsRaw === "number" ? slotsRaw : Number(slotsRaw);
+  if (isNaN(slots) || !Number.isInteger(slots) || slots <= 0) errors.push("total_slots must be an integer greater than 0");
+
+  const { data: taskData, errors: tdErrors } = parseTaskData(obj.task_data);
+  errors.push(...tdErrors);
+
+  let publishAt: string | null = null;
+  if (obj.publish_at !== undefined && obj.publish_at !== null && obj.publish_at !== "") {
+    const d = new Date(String(obj.publish_at));
+    if (isNaN(d.getTime())) {
+      errors.push("publish_at is not a valid date");
+    } else {
+      publishAt = d.toISOString();
     }
   }
 
-  return null;
+  let expiresAt: string | null = null;
+  if (obj.expires_at !== undefined && obj.expires_at !== null && obj.expires_at !== "") {
+    const d = new Date(String(obj.expires_at));
+    if (isNaN(d.getTime())) {
+      errors.push("expires_at is not a valid date");
+    } else {
+      expiresAt = d.toISOString();
+    }
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, error: { row: rowIndex + 1, title: title || "(no title)", errors } };
+  }
+
+  return {
+    valid: true,
+    data: {
+      title,
+      category,
+      description: typeof obj.description === "string" ? obj.description.trim() || null : null,
+      instructions,
+      payout_ksh: payout,
+      total_slots: slots,
+      difficulty: (["easy", "medium", "hard"] as const).includes(obj.difficulty as "easy" | "medium" | "hard")
+        ? (obj.difficulty as "easy" | "medium" | "hard")
+        : "easy",
+      publish_at: publishAt,
+      expires_at: expiresAt,
+      ai_grading_enabled: typeof obj.ai_grading_enabled === "boolean" ? obj.ai_grading_enabled : true,
+      ai_rubric: typeof obj.ai_rubric === "string" ? obj.ai_rubric.trim() || null : null,
+      requires_screenshot: Boolean(obj.requires_screenshot),
+      requires_url: Boolean(obj.requires_url),
+      min_word_count: typeof obj.min_word_count === "number" ? obj.min_word_count : 0,
+      task_data: taskData,
+    },
+  };
 }
 
 export async function POST(request: Request) {
@@ -106,119 +134,99 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON body" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const parsed = importBodySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: "Body must contain { tasks: [...], publishAll?: boolean }" } },
-      { status: 422 }
-    );
+  if (typeof body !== "object" || body === null || !("tasks" in body)) {
+    return NextResponse.json({ error: "Body must contain { tasks: [...] }" }, { status: 400 });
   }
 
-  const { tasks: rawTasks, publishAll } = parsed.data;
+  const b = body as Record<string, unknown>;
+  const rawTasks = b.tasks;
+  if (!Array.isArray(rawTasks) || rawTasks.length === 0) {
+    return NextResponse.json({ error: "tasks must be a non-empty array" }, { status: 400 });
+  }
+
   const admin = createAdminSupabaseClient();
-  const failed: { index: number; reason: string }[] = [];
-  const validTasks: { data: Record<string, unknown>; index: number }[] = [];
+  const failed: ValidationError[] = [];
+  const validRows: { data: Record<string, unknown>; originalIndex: number }[] = [];
 
   for (let i = 0; i < rawTasks.length; i++) {
-    const raw = rawTasks[i];
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-      failed.push({ index: i, reason: "Task must be a JSON object" });
-      continue;
+    const result = validateTaskRow(rawTasks[i], i);
+    if (result.valid) {
+      validRows.push({ data: result.data, originalIndex: i });
+    } else {
+      failed.push(result.error);
     }
-
-    const taskObj = normalizeTaskDatetimes(raw as Record<string, unknown>);
-
-    const parseResult = importTaskSchema.safeParse(taskObj);
-    if (!parseResult.success) {
-      failed.push({ index: i, reason: parseResult.error.errors[0]?.message ?? "Validation failed" });
-      continue;
-    }
-
-    const task = parseResult.data;
-
-    if (task.category === "watch_respond") {
-      const validationError = validateWatchRespondTaskData(task.task_data);
-      if (validationError) {
-        failed.push({ index: i, reason: validationError });
-        continue;
-      }
-    }
-
-    let status = publishAll ? "active" : "draft";
-    if (publishAll && task.publish_at) {
-      const publishDate = new Date(task.publish_at);
-      status = publishDate <= new Date() ? "active" : "scheduled";
-    } else if (!publishAll && task.publish_at) {
-      const publishDate = new Date(task.publish_at);
-      status = publishDate <= new Date() ? "active" : "scheduled";
-    }
-
-    validTasks.push({
-      index: i,
-      data: {
-        title: task.title,
-        category: task.category,
-        description: task.description ?? null,
-        instructions: task.instructions,
-        payout_ksh: task.payout_ksh,
-        total_slots: task.total_slots,
-        slots_remaining: task.total_slots,
-        difficulty: task.difficulty,
-        status,
-        publish_at: task.publish_at ?? null,
-        expires_at: task.expires_at ?? null,
-        created_by: userId,
-        ai_grading_enabled: task.ai_grading_enabled,
-        ai_rubric: task.ai_rubric ?? null,
-        requires_screenshot: task.requires_screenshot,
-        requires_url: task.requires_url,
-        min_word_count: task.min_word_count,
-        task_data: task.task_data,
-      },
-    });
   }
 
-  const imported: Array<{ id: string }> = [];
-
-  const BATCH_SIZE = 10;
-  for (let batchStart = 0; batchStart < validTasks.length; batchStart += BATCH_SIZE) {
-    const batch = validTasks.slice(batchStart, batchStart + BATCH_SIZE);
-    const batchData = batch.map((t) => t.data);
-
-    const { data, error: insertError } = await admin
+  if (validRows.length > 0) {
+    const titles = validRows.map((r) => r.data.title);
+    const { data: existing } = await admin
       .from("tasks")
-      .insert(batchData)
-      .select("*");
+      .select("title, category")
+      .in("title", titles);
 
-    if (insertError) {
-      for (const t of batch) {
-        failed.push({ index: t.index, reason: `Batch insert error: ${insertError.message}` });
+    const existingSet = new Set(
+      (existing ?? []).map((t: { title: string; category: string }) => `${t.title}|||${t.category}`)
+    );
+
+    const cleanRows: typeof validRows = [];
+    for (const row of validRows) {
+      const key = `${row.data.title}|||${row.data.category}`;
+      if (existingSet.has(key)) {
+        failed.push({
+          row: row.originalIndex + 1,
+          title: row.data.title as string,
+          errors: ["Duplicate: a task with this title and category already exists"],
+        });
+      } else {
+        cleanRows.push(row);
       }
-    } else if (data) {
-      imported.push(...data);
     }
+
+    const imported: Array<{ id: string }> = [];
+    const BATCH_SIZE = 10;
+    for (let batchStart = 0; batchStart < cleanRows.length; batchStart += BATCH_SIZE) {
+      const batch = cleanRows.slice(batchStart, batchStart + BATCH_SIZE);
+      const batchData = batch.map((r) => ({
+        ...r.data,
+        slots_remaining: r.data.total_slots,
+        status: "draft",
+        created_by: userId,
+      }));
+
+      const { data, error: insertError } = await admin
+        .from("tasks")
+        .insert(batchData)
+        .select("*");
+
+      if (insertError) {
+        for (const r of batch) {
+          failed.push({
+            row: r.originalIndex + 1,
+            title: r.data.title as string,
+            errors: [`Insert error: ${insertError.message}`],
+          });
+        }
+      } else if (data) {
+        imported.push(...data);
+      }
+    }
+
+    await auditLog({
+      adminId: userId,
+      action: "task_bulk_import",
+      entityType: "tasks",
+      entityId: imported[0]?.id ?? "unknown",
+      after: { imported: imported.length, failed: failed.length },
+      reason: `Bulk imported ${imported.length} tasks, ${failed.length} failed`,
+      ip: requestMeta?.ip ?? undefined,
+      userAgent: requestMeta?.userAgent ?? undefined,
+    });
+
+    return NextResponse.json({ saved: imported.length, failed });
   }
 
-  await auditLog({
-    adminId: userId,
-    action: "task_bulk_import",
-    entityType: "tasks",
-    entityId: imported[0]?.id ?? "unknown",
-    after: { imported: imported.length, failed: failed.length },
-    reason: `Bulk imported ${imported.length} tasks, ${failed.length} failed`,
-    ip: requestMeta?.ip ?? undefined,
-    userAgent: requestMeta?.userAgent ?? undefined,
-  });
-
-  return NextResponse.json({
-    imported: imported.length,
-    failed,
-    tasks: imported,
-  });
+  return NextResponse.json({ saved: 0, failed });
 }
