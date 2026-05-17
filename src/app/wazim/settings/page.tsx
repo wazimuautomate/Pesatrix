@@ -1,16 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AdminPageShell, MetricCard } from "@/components/admin/admin-native";
+import { AiProviderManager } from "@/components/admin/ai-provider-manager";
 import { TrainingSettingsForm } from "@/components/admin/training-settings-form";
 import { PlatformSettingsForm } from "@/components/admin/platform-settings-form";
+import { TaskLimitsSettingsForm } from "@/components/admin/task-limits-settings-form";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { DEFAULT_DAILY_TASK_LIMIT, DAILY_TASK_LIMIT_KEY } from "@/lib/platform-settings";
 import { requireWazimAdmin } from "@/lib/wazim-admin";
 
 async function getPlatformSettings() {
   const admin = createAdminSupabaseClient();
 
   const { data, error } = await (admin.from("platform_settings" as never) as any)
-    .select("key, value, description, updated_by, updated_at")
+    .select("key, value, description, updated_by_admin_id, updated_at")
     .order("key", { ascending: true });
 
   if (error) {
@@ -21,9 +24,26 @@ async function getPlatformSettings() {
   return data ?? [];
 }
 
+async function getAiProviderConfigs() {
+  const admin = createAdminSupabaseClient();
+
+  const { data, error } = await admin
+    .from("ai_provider_configs")
+    .select("id, provider, model_id, display_name, api_key_secret_name, is_active, is_grading_model, base_url, max_tokens, temperature, created_by, created_at, updated_at")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Failed to fetch AI provider configs:", error);
+    return [];
+  }
+
+  return data ?? [];
+}
+
 export default async function AdminSettingsPage() {
   const adminSession = await requireWazimAdmin();
   const settings = await getPlatformSettings();
+  const aiProviders = await getAiProviderConfigs();
 
   const numericSettings = settings.filter((s: { key: string; value: string }) => {
     const num = Number(s.value);
@@ -32,6 +52,10 @@ export default async function AdminSettingsPage() {
 
   const trainingRewardSetting = settings.find((s: { key: string }) => s.key === "training_completion_reward_ksh");
   const taskUnlockSetting = settings.find((s: { key: string }) => s.key === "task_unlock_delay_hours");
+  const dailyTaskLimitSetting = settings.find((s: { key: string }) => s.key === DAILY_TASK_LIMIT_KEY);
+  const dailyTaskLimit = Number.isInteger(Number(dailyTaskLimitSetting?.value))
+    ? Number(dailyTaskLimitSetting?.value)
+    : DEFAULT_DAILY_TASK_LIMIT;
 
   const environmentSettings = [
     { label: "Supabase URL", configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) },
@@ -39,6 +63,8 @@ export default async function AdminSettingsPage() {
     { label: "M-Pesa shortcode", configured: Boolean(process.env.MPESA_SHORTCODE) },
     { label: "CPX app id", configured: Boolean(process.env.CPX_APP_ID) },
     { label: "CPX secure hash", configured: Boolean(process.env.CPX_SECURE_HASH) },
+    { label: "NVIDIA API key fallback", configured: Boolean(process.env.NVIDIA_API_KEY) },
+    { label: "Cron secret", configured: Boolean(process.env.CRON_SECRET) },
   ];
 
   return (
@@ -68,6 +94,15 @@ export default async function AdminSettingsPage() {
       </section>
 
       <PlatformSettingsForm initialSettings={settings} />
+
+      <AiProviderManager initialProviders={aiProviders} />
+
+      <Card className="mt-6 border border-outline-variant/40 shadow-sm">
+        <CardHeader><CardTitle className="text-lg text-navy">Task Limits</CardTitle></CardHeader>
+        <CardContent>
+          <TaskLimitsSettingsForm initialDailyLimit={dailyTaskLimit} />
+        </CardContent>
+      </Card>
 
       <Card className="mt-6 border border-outline-variant/40 shadow-sm">
         <CardHeader><CardTitle className="text-lg text-navy">Training Time Limit</CardTitle></CardHeader>

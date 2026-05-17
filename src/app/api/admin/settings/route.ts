@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { requireAdmin, auditLog, getRequestMeta } from "../_lib";
+import { DAILY_TASK_LIMIT_KEY } from "@/lib/platform-setting-keys";
 
 export async function GET(request: Request) {
   const { error, adminUser, userId: adminAuthId, requestMeta } = await requireAdmin({});
@@ -9,7 +10,7 @@ export async function GET(request: Request) {
   const admin = createAdminSupabaseClient();
 
   const { data, error: fetchError } = await (admin.from("platform_settings" as never) as any)
-    .select("key, value, description, updated_by, updated_at")
+    .select("key, value, description, updated_by_admin_id, updated_at")
     .order("key", { ascending: true });
 
   if (fetchError) {
@@ -41,7 +42,18 @@ export async function PATCH(request: Request) {
     "min_withdrawal_amount_ksh",
     "referral_task_unlock_reduction",
     "training_day_unlock_minutes",
+    DAILY_TASK_LIMIT_KEY,
   ];
+
+  if (key === DAILY_TASK_LIMIT_KEY) {
+    const numValue = Number(value);
+    if (!Number.isInteger(numValue) || numValue < 1 || numValue > 100) {
+      return NextResponse.json(
+        { error: "Daily task limit must be a whole number between 1 and 100" },
+        { status: 422 }
+      );
+    }
+  }
 
   if (numericSettings.includes(key)) {
     const numValue = Number(value);
@@ -67,12 +79,12 @@ export async function PATCH(request: Request) {
       {
         key,
         value: String(value),
-        updated_by: adminAuthId,
+        updated_by_admin_id: adminAuthId,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "key" }
     )
-    .select("key, value, description, updated_by, updated_at")
+    .select("key, value, description, updated_by_admin_id, updated_at")
     .single();
 
   if (updateError) {

@@ -13,7 +13,7 @@ type PlatformSetting = {
   key: string;
   value: string;
   description: string | null;
-  updated_by: string | null;
+  updated_by_admin_id: string | null;
   updated_at: string | null;
 };
 

@@ -256,6 +256,8 @@ export function TaskListClient({ userId }: { userId: string }) {
   const [unlockAt, setUnlockAt] = useState<string | undefined>(undefined);
   const [trainingIncomplete, setTrainingIncomplete] = useState(false);
   const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
+  const [dailySubmissionCount, setDailySubmissionCount] = useState<number | null>(null);
+  const [dailyTaskLimit, setDailyTaskLimit] = useState<number | null>(null);
 
   const [selectedCategories, setSelectedCategories] = useState<TaskCategory[]>([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
@@ -283,6 +285,8 @@ export function TaskListClient({ userId }: { userId: string }) {
         setTrainingIncomplete(data.isActivated !== false && data.trainingStatus !== "completed");
         setTasks(data.tasks ?? []);
         setSubmittedTaskIds(data.submittedTaskIds ?? []);
+        setDailySubmissionCount(data.dailySubmissionCount ?? 0);
+        setDailyTaskLimit(data.dailyTaskLimit ?? null);
       } catch {
         setError("Failed to fetch tasks");
       } finally {
@@ -419,6 +423,18 @@ export function TaskListClient({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
+      {dailySubmissionCount !== null && dailyTaskLimit !== null && (
+        <div className="flex items-center justify-between rounded-lg border border-pesatrix-blue/20 bg-pesatrix-blue/5 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-navy">Tasks today</p>
+            <p className="text-xs text-muted-foreground">Daily submission limit resets at midnight UTC.</p>
+          </div>
+          <Badge variant={dailySubmissionCount >= dailyTaskLimit ? "warning" : "success"}>
+            {dailySubmissionCount} / {dailyTaskLimit}
+          </Badge>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

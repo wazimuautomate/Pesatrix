@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { DAILY_TASK_LIMIT_KEY } from "@/lib/platform-setting-keys";
 
 export const TRAINING_UNLOCK_SETTING_KEY = "training_day_unlock_minutes";
 export const DEFAULT_TRAINING_UNLOCK_MINUTES = 1;
@@ -13,6 +14,9 @@ export const DEFAULT_TASK_UNLOCK_DELAY_HOURS = 24;
 
 export const REFERRAL_TASK_UNLOCK_REDUCTION_KEY = "referral_task_unlock_reduction";
 export const DEFAULT_REFERRAL_TASK_UNLOCK_REDUCTION = 0.5;
+
+export const DEFAULT_DAILY_TASK_LIMIT = 3;
+export { DAILY_TASK_LIMIT_KEY };
 
 export type PlatformSetting = {
   key: string;
@@ -77,6 +81,12 @@ export async function getTaskUnlockDelayHours() {
 export async function getReferralTaskUnlockReduction() {
   const setting = await getPlatformSetting(REFERRAL_TASK_UNLOCK_REDUCTION_KEY);
   return normalizeNonNegativeNumber(setting?.value, DEFAULT_REFERRAL_TASK_UNLOCK_REDUCTION);
+}
+
+export async function getDailyTaskLimit() {
+  const setting = await getPlatformSetting(DAILY_TASK_LIMIT_KEY);
+  const limit = normalizePositiveInteger(setting?.value, DEFAULT_DAILY_TASK_LIMIT);
+  return Math.min(limit, 100);
 }
 
 export async function upsertPlatformSetting({

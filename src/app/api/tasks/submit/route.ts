@@ -3,6 +3,8 @@ import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
+import { gradeSubmission } from "@/lib/ai/grading";
+import { getDailyTaskLimit } from "@/lib/platform-settings";
 
 const submissionSchema = z.object({
   taskId: z.string().uuid(),
@@ -52,16 +54,14 @@ export async function POST(request: Request) {
 
   const { data: task } = await admin
     .from("tasks")
-    .select("*")
+    .select("slots_remaining, status, ai_grading_enabled")
     .eq("id", taskId)
-    .eq("status", "active")
-    .gt("slots_remaining", 0)
-    .maybeSingle();
+    .single();
 
-  if (!task) {
+  if (!task || task.slots_remaining <= 0 || task.status !== "active") {
     return NextResponse.json(
-      { error: "Task not available" },
-      { status: 404 }
+      { error: "This task is no longer available" },
+      { status: 409 }
     );
   }
 
@@ -79,7 +79,32 @@ export async function POST(request: Request) {
     );
   }
 
-  const initialStatus = task.ai_grading_enabled ? "ai_reviewing" : "flagged";
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  const dailyLimit = await getDailyTaskLimit();
+  const { count: todaySubmissionCount, error: countError } = await admin
+    .from("task_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .gte("submitted_at", todayStart.toISOString());
+
+  if (countError) {
+    console.error("[Submission] Daily limit count failed:", countError);
+    return NextResponse.json(
+      { error: "Unable to check your daily task limit. Please try again." },
+      { status: 500 }
+    );
+  }
+
+  if (todaySubmissionCount !== null && todaySubmissionCount >= dailyLimit) {
+    return NextResponse.json(
+      { error: `You have reached your daily limit of ${dailyLimit} tasks. Come back tomorrow.` },
+      { status: 429 }
+    );
+  }
+
+  const initialStatus = task.ai_grading_enabled ? "ai_reviewing" : "pending";
 
   const { data: submission, error: insertError } = await admin
     .from("task_submissions")
@@ -101,23 +126,26 @@ export async function POST(request: Request) {
     );
   }
 
+  const { data: decremented, error: slotError } = await admin
+    .rpc("decrement_task_slot", { p_task_id: taskId });
+
+  if (slotError) {
+    console.error("[Submission] Slot decrement failed:", slotError);
+  }
+
+  if (decremented === false) {
+    console.warn("[Submission] Slot was 0 at decrement time for task:", taskId);
+  }
+
   if (task.ai_grading_enabled) {
-    try {
-      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/tasks/grade`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId: submission.id,
-          taskId,
-          userId: user.id,
-        }),
-      });
-    } catch {
-      await admin
-        .from("task_submissions")
-        .update({ status: "flagged" })
-        .eq("id", submission.id);
-    }
+    await admin
+      .from("task_submissions")
+      .update({ status: "ai_reviewing" })
+      .eq("id", submission.id);
+
+    gradeSubmission(submission.id).catch((err) => {
+      console.error("[Grading] Failed for submission:", submission.id, err);
+    });
   }
 
   return NextResponse.json({

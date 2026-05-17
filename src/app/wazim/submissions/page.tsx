@@ -69,22 +69,27 @@ type SubmissionItem = {
   submitted_at: string;
   answers: Record<string, unknown>;
   screenshot_url: string | null;
+  submitted_url: string | null;
   status: string;
   ai_score: number | null;
   ai_reasoning: string | null;
+  ai_reviewed_at: string | null;
   admin_decision: string | null;
   admin_note: string | null;
+  admin_reviewed_at: string | null;
   payout_credited: boolean;
   tasks: {
     id: string;
     title: string;
     category: string;
     payout_ksh: number;
-    ai_grading_enabled: boolean;
-    ai_rubric: string | null;
+    ai_grading_enabled?: boolean;
+    ai_rubric?: string | null;
   } | null;
   profiles: {
+    id?: string;
     full_name: string | null;
+    email?: string | null;
     phone: string | null;
   } | null;
 };
@@ -155,6 +160,7 @@ function SubmissionsContent() {
     payout_credited: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
@@ -164,6 +170,7 @@ function SubmissionsContent() {
 
   const fetchSubmissions = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams();
       params.set("page", String(page));
@@ -174,7 +181,11 @@ function SubmissionsContent() {
 
       const res = await fetch(`/api/admin/submissions?${params}`);
       if (!res.ok) {
-        toast.error("Failed to load submissions");
+        const payload = await res.json().catch(() => null);
+        const message = payload?.error ?? "Failed to load submissions";
+        const displayMessage = payload?.code ? `${message} (${payload.code})` : message;
+        setLoadError(displayMessage);
+        toast.error(message);
         return;
       }
       const data = await res.json();
@@ -182,7 +193,9 @@ function SubmissionsContent() {
       setCounts(data.counts ?? counts);
       setTotal(data.total ?? 0);
     } catch {
-      toast.error("Network error loading submissions");
+      const message = "Network error loading submissions";
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -258,6 +271,13 @@ function SubmissionsContent() {
         </CardHeader>
 
         <CardContent>
+          {loadError && (
+            <div className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{loadError}</span>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -390,12 +410,12 @@ function SubmissionRow({ sub, onView }: { sub: SubmissionItem; onView: () => voi
   return (
     <TableRow className="hover:bg-muted/50">
       <TableCell>
-        <span className="font-medium text-navy">{profile?.full_name ?? "Unknown"}</span>
+        <span className="font-medium text-navy">{profile?.full_name ?? "(deleted)"}</span>
         <p className="text-xs text-muted-foreground">{profile?.phone ?? ""}</p>
       </TableCell>
-      <TableCell className="font-medium">{task?.title ?? "—"}</TableCell>
+      <TableCell className="font-medium">{task?.title ?? "(deleted)"}</TableCell>
       <TableCell>
-        <Badge variant="outline" className="text-[10px]">{task?.category ?? "—"}</Badge>
+        <Badge variant="outline" className="text-[10px]">{task?.category ?? "(deleted)"}</Badge>
       </TableCell>
       <TableCell className="text-sm text-muted-foreground">{shortDate(sub.submitted_at)}</TableCell>
       <TableCell><StatusBadge status={sub.status} /></TableCell>
@@ -465,7 +485,8 @@ function DetailDrawer() {
     try {
       const res = await fetch(`/api/admin/submissions/${id}`);
       if (!res.ok) {
-        toast.error("Failed to load submission detail");
+        const payload = await res.json().catch(() => null);
+        toast.error(payload?.error ?? "Failed to load submission detail");
         return;
       }
       const data = await res.json();
@@ -611,11 +632,11 @@ function DetailDrawer() {
                 <div className="grid gap-2 sm:grid-cols-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Title</span>
-                    <p className="font-medium">{task?.title ?? "—"}</p>
+                    <p className="font-medium">{task?.title ?? "(deleted)"}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Category</span>
-                    <p className="font-medium">{task?.category ?? "—"}</p>
+                    <p className="font-medium">{task?.category ?? "(deleted)"}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Payout</span>
@@ -640,7 +661,7 @@ function DetailDrawer() {
                 <div className="grid gap-2 sm:grid-cols-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Name</span>
-                    <p className="font-medium">{profile?.full_name ?? "Unknown"}</p>
+                    <p className="font-medium">{profile?.full_name ?? "(deleted)"}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Phone</span>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
+import { getDailyTaskLimit } from "@/lib/platform-settings";
 
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -15,11 +16,22 @@ export async function GET() {
   }
 
   const access = await getTrainingProgramSnapshotForUser(user.id);
+  const admin = createAdminSupabaseClient();
+  const dailyLimit = await getDailyTaskLimit();
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const { count: todaySubmissionCount } = await admin
+    .from("task_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .gte("submitted_at", todayStart.toISOString());
 
   if (!access.activated) {
     return NextResponse.json({
       tasks: [],
       submittedTaskIds: [],
+      dailySubmissionCount: todaySubmissionCount ?? 0,
+      dailyTaskLimit: dailyLimit,
       total: 0,
       isActivated: false,
       trainingStatus: access.training.status,
@@ -32,6 +44,8 @@ export async function GET() {
     return NextResponse.json({
       tasks: [],
       submittedTaskIds: [],
+      dailySubmissionCount: todaySubmissionCount ?? 0,
+      dailyTaskLimit: dailyLimit,
       total: 0,
       isActivated: true,
       trainingStatus: access.training.status,
@@ -40,7 +54,6 @@ export async function GET() {
     });
   }
 
-  const admin = createAdminSupabaseClient();
   const { data, error } = await admin
     .from("tasks")
     .select("id, title, category, description, instructions, payout_ksh, slots_remaining, difficulty, status, publish_at, expires_at, task_data, requires_screenshot, requires_url, min_word_count")
@@ -87,6 +100,8 @@ export async function GET() {
   return NextResponse.json({
     tasks: formattedTasks,
     submittedTaskIds,
+    dailySubmissionCount: todaySubmissionCount ?? 0,
+    dailyTaskLimit: dailyLimit,
     total: formattedTasks.length,
     isActivated: true,
     trainingStatus: access.training.status,

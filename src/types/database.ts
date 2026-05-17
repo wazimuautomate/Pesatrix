@@ -54,6 +54,8 @@ export type RewardSpinOutcome =
   | "double"
   | "jackpot";
 
+export type AiProvider = "nvidia" | "openrouter" | "groq" | "ollama";
+
 export type NotificationStatus = "pending" | "sent" | "failed";
 
 export interface Database {
@@ -364,6 +366,32 @@ export interface Database {
         };
         Insert: Omit<Database["public"]["Tables"]["task_submissions"]["Row"], "id" | "submitted_at" | "status" | "payout_credited">;
         Update: Partial<Database["public"]["Tables"]["task_submissions"]["Insert"]>;
+      };
+      ai_provider_configs: {
+        Row: {
+          id: string;
+          provider: AiProvider;
+          model_id: string;
+          display_name: string;
+          api_key_secret_name: string;
+          is_active: boolean;
+          is_grading_model: boolean;
+          base_url: string;
+          max_tokens: number;
+          temperature: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["ai_provider_configs"]["Row"],
+          "id" | "created_at" | "updated_at"
+        > & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_provider_configs"]["Insert"]>;
       };
     };
     Views: Record<string, never>;

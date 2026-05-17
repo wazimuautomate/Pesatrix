@@ -1,6 +1,22 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+
+## [feat] AI Grading Pipeline + Admin AI Provider Management - 2026-05-17
+- Built AI grading service with OpenAI-compatible provider support
+- Admin can configure NVIDIA, OpenRouter, Groq, Ollama providers
+- API keys stored securely in Supabase vault
+- Grading runs async after submission, does not block user
+- Auto-credits wallet on AI approval with 7-day hold
+- Cron retry route for stuck ai_reviewing submissions
+- Environment variable fallback for NVIDIA_API_KEY
+
+
+## [fix] Task Submission Flow — Redirect, Slots, Daily Limit, Submissions Page - 2026-05-17
+- Redirect users back to `/tasks` after confirmed task submission success and keep errors on the task page.
+- Added UTC daily task submission limit enforcement from `platform_settings.daily_task_limit`.
+- Added visible "Tasks today" usage on the tasks page and Wazim setting controls for the daily task limit.
+- Added pre-submit task availability checks and post-insert atomic slot decrement via `decrement_task_slot`.
+- Fixed Wazim submissions loading by avoiding the invalid profiles join and returning exact Supabase errors.
 
 ## [fix] Onboarding Flow and Activation Persistence - 2026-05-17
 - Removed onboarding modal, replaced with page/inline section gated server-side

@@ -156,7 +156,7 @@ export function TaskSubmissionForm({
     setWatchTimer(timer);
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     setLoading(true);
     try {
       const payload: Record<string, unknown> = {
@@ -170,19 +170,22 @@ export function TaskSubmissionForm({
         (payload as Record<string, unknown>).username = username;
       }
 
-      return fetch("/api/tasks/submit", {
+      const res = await fetch("/api/tasks/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }).then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) {
-          toast.error(data?.error?.message ?? data?.error ?? "Submission failed");
-          return;
-        }
-        setSubmitted(true);
-        toast.success("Task submitted successfully!");
       });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data?.error?.message ?? data?.error ?? "Submission failed");
+        return;
+      }
+
+      setSubmitted(true);
+      toast.success("Task submitted successfully!");
+      router.push("/tasks");
     } finally {
       setLoading(false);
     }
