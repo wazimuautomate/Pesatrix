@@ -30,9 +30,7 @@ type OnboardingGateProps = {
   userId: string;
 };
 
-function buildOnboardingStorageKey(userId: string) {
-  return `pesatrix:onboarding-complete:${userId}`;
-}
+
 
 const TOUR_STEPS = [
   {
@@ -117,7 +115,7 @@ export function DashboardOnboardingGate({
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [completedLocally, setCompletedLocally] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
 
   const totalSteps = TOUR_STEPS.length;
   const progress = ((step + 1) / totalSteps) * 100;
@@ -134,27 +132,7 @@ export function DashboardOnboardingGate({
     [email, initialCounty, initialFullName, phone]
   );
 
-  useEffect(() => {
-    if (isSetupComplete) {
-      setCompletedLocally(true);
-      try {
-        window.localStorage.setItem(buildOnboardingStorageKey(userId), "1");
-      } catch {
-        // Ignore storage failures.
-      }
-      return;
-    }
-
-    try {
-      if (window.localStorage.getItem(buildOnboardingStorageKey(userId)) === "1") {
-        setCompletedLocally(true);
-      }
-    } catch {
-      // Ignore storage failures.
-    }
-  }, [isSetupComplete, userId]);
-
-  if (isSetupComplete || completedLocally) {
+  if (isSetupComplete || !isOpen) {
     return null;
   }
 
@@ -184,12 +162,7 @@ export function DashboardOnboardingGate({
         return;
       }
 
-      setCompletedLocally(true);
-      try {
-        window.localStorage.setItem(buildOnboardingStorageKey(userId), "1");
-      } catch {
-        // Ignore storage failures.
-      }
+      setIsOpen(false);
       toast.success("Onboarding completed. Activate your account next.");
       startTransition(() => {
         router.refresh();
@@ -239,7 +212,7 @@ export function DashboardOnboardingGate({
             <div className="p-8">
               <button
                 type="button"
-                onClick={() => setCompletedLocally(true)}
+                onClick={() => setIsOpen(false)}
                 className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-muted/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <X className="h-4 w-4" />
