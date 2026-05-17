@@ -1,7 +1,5 @@
-import type { Config } from "tailwindcss";
-import forms from "@tailwindcss/forms";
-
-const config: Config = {
+/** @type {import('tailwindcss').Config} */
+const config = {
   darkMode: ["class"],
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -11,7 +9,6 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        /* --- Pesatrix Design Tokens (from Stitch UI screens) --- */
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -45,7 +42,6 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        /* --- Extended Pesatrix palette --- */
         navy: "#0B1F3B",
         "pesatrix-blue": "#1463FF",
         surface: {
@@ -98,7 +94,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [forms],
+  plugins: [require("@tailwindcss/forms")],
 };
 
-export default config;
+module.exports = config;
