@@ -20,3 +20,7 @@ All notable changes to this project will be documented in this file.
 - Fixed /api/me endpoint to create account_status row if it doesn't exist (bootstrap on read)
 - Fixed frontend activation client to use hard navigation (window.location.href) instead of soft router.refresh() to ensure fresh server read
 - Account status now uses `status: 'active'` instead of `'activated'` for consistency
+- Updated /api/tasks, /api/tasks/submit, /api/rewards/spin routes to check activation_payments table for 'paid' status in addition to account_status.is_activated
+- Updated training.ts getTrainingProgramSnapshotForUser to check activation_payments
+- Updated referral.ts hasActivated function to check both account_status and activation_payments
+- Users with paid activation payments now correctly bypass the activation modal on task page

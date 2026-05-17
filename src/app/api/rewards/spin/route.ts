@@ -153,7 +153,7 @@ export async function GET() {
     const admin = createAdminSupabaseClient();
     const todayStart = startOfUtcDayIso();
 
-    const [{ data: profile }, { data: accountStatus }, { data: rewardRows }, walletSummary] =
+    const [{ data: profile }, { data: accountStatus }, { data: activationPayment }, { data: rewardRows }, walletSummary] =
       await Promise.all([
         (admin.from("profiles" as never) as any)
           .select("metadata")
@@ -162,6 +162,11 @@ export async function GET() {
         (admin.from("account_status" as never) as any)
           .select("state, status, is_activated, is_setup_complete")
           .eq("user_id", user.id)
+          .maybeSingle(),
+        (admin.from("activation_payments" as never) as any)
+          .select("id, status")
+          .eq("user_id", user.id)
+          .eq("status", "paid")
           .maybeSingle(),
         (admin.from("wallet_transactions" as never) as any)
           .select("id, amount, created_at, description, reference_table, direction")
@@ -173,15 +178,17 @@ export async function GET() {
       ]);
 
     const accountFlags = resolveAccountFlags(accountStatus);
+    const hasPaidActivation = Boolean(activationPayment?.status === "paid");
+    const activated = accountFlags.activated || hasPaidActivation;
     const progress = getAccountProgressSnapshot(profile?.metadata);
     const today = summarizeDailyTransactions((rewardRows ?? []) as RewardTransactionRow[]);
 
     return NextResponse.json({
-      activated: accountFlags.activated,
+      activated: activated,
       wallet: walletSummary,
       rewardState: progress.rewards,
       free: {
-        canSpin: accountFlags.activated && today.freeSpinsUsed < MAX_FREE_SPINS_PER_DAY,
+        canSpin: activated && today.freeSpinsUsed < MAX_FREE_SPINS_PER_DAY,
         spinsUsed: today.freeSpinsUsed,
         spinsRemaining: Math.max(0, MAX_FREE_SPINS_PER_DAY - today.freeSpinsUsed),
         nextSpinAt: today.freeSpinsUsed >= MAX_FREE_SPINS_PER_DAY ? nextUtcDayIso() : null,
@@ -191,7 +198,7 @@ export async function GET() {
         enabled: true,
         cost: PAID_SPIN_COST,
         canSpin:
-          accountFlags.activated &&
+          activated &&
           walletSummary.available >= PAID_SPIN_COST &&
           today.paidSpinsUsed < MAX_PAID_SPINS_PER_DAY,
         spinsUsed: today.paidSpinsUsed,

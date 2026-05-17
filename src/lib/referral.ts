@@ -34,14 +34,36 @@ type ReleasableTransactionRow = {
   reference_id: string | null;
 };
 
-function hasActivated(status: AccountStatusRow | null) {
-  if (!status) return false;
-  return Boolean(
-    status.is_activated ||
-      status.activated_at ||
-      status.state === "activated" ||
-      status.state === "active"
+async function hasActivated(userId: string) {
+  const supabase = createAdminSupabaseClient();
+
+  const [{ data: accountStatus, error: accountStatusError }, { data: activationPayment }] = await Promise.all([
+    supabase
+      .from("account_status")
+      .select("state, is_activated, activated_at")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    (supabase.from("activation_payments" as never) as any)
+      .select("id, status")
+      .eq("user_id", userId)
+      .eq("status", "paid")
+      .maybeSingle(),
+  ]);
+
+  if (accountStatusError) {
+    throw accountStatusError;
+  }
+
+  const accountActivated = Boolean(
+    accountStatus?.is_activated ||
+      accountStatus?.activated_at ||
+      accountStatus?.state === "activated" ||
+      accountStatus?.state === "active"
   );
+
+  const paymentActivated = Boolean(activationPayment?.status === "paid");
+
+  return accountActivated || paymentActivated;
 }
 
 async function queueReferralActivationNotification(args: {
@@ -122,17 +144,7 @@ async function queueReferralActivationNotification(args: {
 export async function creditReferralChain(activatedUserId: string): Promise<void> {
   const supabase = createAdminSupabaseClient();
 
-  const { data: accountStatus, error: accountStatusError } = await supabase
-    .from("account_status")
-    .select("state, is_activated, activated_at")
-    .eq("user_id", activatedUserId)
-    .maybeSingle();
-
-  if (accountStatusError) {
-    throw accountStatusError;
-  }
-
-  if (!hasActivated(accountStatus as AccountStatusRow | null)) {
+  if (!await hasActivated(activatedUserId)) {
     return;
   }
 

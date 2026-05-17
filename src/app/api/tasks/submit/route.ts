@@ -21,13 +21,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: accountStatus } = await supabase
-    .from("account_status")
-    .select("is_activated")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: accountStatus }, { data: activationPayment }] = await Promise.all([
+    supabase
+      .from("account_status")
+      .select("is_activated")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    (supabase.from("activation_payments" as never) as any)
+      .select("id, status")
+      .eq("user_id", user.id)
+      .eq("status", "paid")
+      .maybeSingle(),
+  ]);
 
-  if (!accountStatus?.is_activated) {
+  const isActivated = Boolean(accountStatus?.is_activated) || Boolean(activationPayment?.status === "paid");
+
+  if (!isActivated) {
     return NextResponse.json(
       { error: "Account not activated" },
       { status: 403 }

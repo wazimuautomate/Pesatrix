@@ -12,10 +12,15 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [{ data: accountStatus }, { data: trainingProgress, error: trainingError }] = await Promise.all([
+  const [{ data: accountStatus }, { data: activationPayment }, { data: trainingProgress, error: trainingError }] = await Promise.all([
     (supabase.from("account_status" as never) as any)
       .select("is_activated")
       .eq("user_id", user.id)
+      .maybeSingle(),
+    (supabase.from("activation_payments" as never) as any)
+      .select("id, status, paid_at")
+      .eq("user_id", user.id)
+      .eq("status", "paid")
       .maybeSingle(),
     supabase
       .from("training_progress")
@@ -24,7 +29,9 @@ export async function GET() {
       .maybeSingle(),
   ]);
 
-  const isActivated = Boolean((accountStatus as { is_activated?: boolean } | null)?.is_activated);
+  const accountActivated = Boolean((accountStatus as { is_activated?: boolean } | null)?.is_activated);
+  const paymentActivated = Boolean(activationPayment?.status === "paid");
+  const isActivated = accountActivated || paymentActivated;
 
   if (!isActivated) {
     return NextResponse.json({

@@ -297,7 +297,7 @@ function isMissingTrainingProgressRelation(error: PostgrestLikeError | null | un
 async function loadTrainingContext(userId: string) {
   const admin = createAdminSupabaseClient();
 
-  const [{ data: statusRow, error: statusError }, { data: trainingRow, error: trainingError }] =
+  const [{ data: statusRow, error: statusError }, { data: trainingRow, error: trainingError }, { data: activationPayment }] =
     await Promise.all([
       admin
         .from("account_status")
@@ -305,6 +305,11 @@ async function loadTrainingContext(userId: string) {
         .eq("user_id", userId)
         .maybeSingle(),
       admin.from("training_progress").select("*").eq("user_id", userId).maybeSingle(),
+      (admin.from("activation_payments" as never) as any)
+        .select("id, status")
+        .eq("user_id", userId)
+        .eq("status", "paid")
+        .maybeSingle(),
     ]);
 
   if (statusError) {
@@ -316,6 +321,7 @@ async function loadTrainingContext(userId: string) {
       return {
         accountStatus: (statusRow ?? null) as AccountStatusRow | null,
         trainingProgress: normalizeTrainingProgress(userId, null),
+        hasPaidActivation: Boolean(activationPayment?.status === "paid"),
       };
     }
 
@@ -325,15 +331,16 @@ async function loadTrainingContext(userId: string) {
   return {
     accountStatus: (statusRow ?? null) as AccountStatusRow | null,
     trainingProgress: normalizeTrainingProgress(userId, trainingRow as TrainingProgressDbRow | null),
+    hasPaidActivation: Boolean(activationPayment?.status === "paid"),
   };
 }
 
 export async function getTrainingProgramSnapshotForUser(
   userId: string
 ): Promise<TrainingProgramSnapshot> {
-  const { accountStatus, trainingProgress } = await loadTrainingContext(userId);
+  const { accountStatus, trainingProgress, hasPaidActivation } = await loadTrainingContext(userId);
   const onboardingComplete = isOnboardingComplete(accountStatus);
-  const activated = isActivated(accountStatus);
+  const activated = isActivated(accountStatus) || hasPaidActivation;
   const trainingCompleted = Boolean(trainingProgress.completed_at || trainingProgress.status === "completed");
 
   const now = new Date();
