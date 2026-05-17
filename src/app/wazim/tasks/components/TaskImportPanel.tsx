@@ -760,9 +760,12 @@ function ImportTaskCard({
         isValid ? "border-green-200" : "border-destructive/40"
       }`}
     >
-      <button
-        className="w-full flex items-center gap-3 p-4 text-left"
+      <div
+        className="w-full flex items-center gap-3 p-4 text-left cursor-pointer hover:bg-muted/50 rounded-t-lg"
         onClick={() => setExpanded(!expanded)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === "Enter" && setExpanded(!expanded)}
       >
         {expanded ? (
           <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -803,7 +806,7 @@ function ImportTaskCard({
         >
           <X className="h-3.5 w-3.5" />
         </Button>
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t px-4 py-4 space-y-4">
