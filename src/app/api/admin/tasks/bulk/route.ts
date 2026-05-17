@@ -38,8 +38,8 @@ export async function POST(request: Request) {
       adminId: userId,
       action: "task_bulk_delete",
       entityType: "tasks",
-      entityIds: taskIds,
-      reason: `Bulk deleted ${taskIds.length} draft tasks`,
+      entityId: taskIds[0],
+      reason: `Bulk deleted ${taskIds.length} draft tasks (IDs: ${taskIds.slice(0, 3).join(", ")}${taskIds.length > 3 ? "..." : ""})`,
       ip: requestMeta?.ip ?? undefined,
       userAgent: requestMeta?.userAgent ?? undefined,
     });
@@ -62,8 +62,8 @@ export async function POST(request: Request) {
       adminId: userId,
       action: "task_bulk_publish",
       entityType: "tasks",
-      entityIds: taskIds,
-      reason: `Bulk published ${taskIds.length} tasks`,
+      entityId: taskIds[0],
+      reason: `Bulk published ${taskIds.length} tasks (IDs: ${taskIds.slice(0, 3).join(", ")}${taskIds.length > 3 ? "..." : ""})`,
       ip: requestMeta?.ip ?? undefined,
       userAgent: requestMeta?.userAgent ?? undefined,
     });
@@ -86,8 +86,8 @@ export async function POST(request: Request) {
       adminId: userId,
       action: "task_bulk_draft",
       entityType: "tasks",
-      entityIds: taskIds,
-      reason: `Bulk reverted ${taskIds.length} tasks to draft`,
+      entityId: taskIds[0],
+      reason: `Bulk reverted ${taskIds.length} tasks to draft (IDs: ${taskIds.slice(0, 3).join(", ")}${taskIds.length > 3 ? "..." : ""})`,
       ip: requestMeta?.ip ?? undefined,
       userAgent: requestMeta?.userAgent ?? undefined,
     });

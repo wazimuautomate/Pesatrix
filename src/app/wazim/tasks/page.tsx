@@ -416,7 +416,7 @@ export default function TasksPage() {
                   onDelete={handleDelete}
                   canDelete={task.status === "draft"}
                   selected={selectedTasks.has(task.id)}
-                  onToggleSelect={() => toggleSelect(task.id)}}
+                  onToggleSelect={() => toggleSelect(task.id)}
                 />
               ))
             )}

@@ -109,7 +109,7 @@ function validateRow(raw: Record<string, unknown>, index: number): { errors: str
   } else if (typeof tdRaw !== "object" || Array.isArray(tdRaw)) {
     errors.push("task_data must be a valid JSON object");
   } else {
-    taskData = tdRaw;
+    taskData = tdRaw as Record<string, unknown>;
   }
 
   let publishAt: string | null = null;
@@ -200,8 +200,8 @@ function validateRow(raw: Record<string, unknown>, index: number): { errors: str
     requires_url: Boolean(raw.requires_url),
     min_word_count: isNaN(Number(raw.min_word_count)) ? 0 : Number(raw.min_word_count),
     task_data: normalizedTaskData,
-    publish_at,
-    expires_at,
+    publish_at: publishAt,
+    expires_at: expiresAt,
     _errors: errors,
     _originalIndex: index,
   };
