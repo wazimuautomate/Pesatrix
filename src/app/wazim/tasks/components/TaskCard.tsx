@@ -60,17 +60,29 @@ export function TaskCard({
   onStatusChange,
   onDelete,
   canDelete,
+  selected,
+  onToggleSelect,
 }: {
   task: TaskRow;
   onEdit: (task: TaskRow) => void;
   onStatusChange: (id: string, newStatus: TaskStatus) => void;
   onDelete: (id: string) => void;
   canDelete: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const slotsUsed = task.total_slots - task.slots_remaining;
 
   return (
     <tr className="group">
+      <td className="p-4">
+        <input
+          type="checkbox"
+          checked={selected ?? false}
+          onChange={onToggleSelect}
+          className="h-4 w-4 rounded border-gray-300"
+        />
+      </td>
       <td className="p-4">
         <button
           onClick={() => onEdit(task)}

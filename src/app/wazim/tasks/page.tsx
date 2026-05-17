@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Plus, FileUp, Search, Loader2, X } from "lucide-react";
+import { AlertCircle, Plus, FileUp, Search, Loader2, X, Trash2, Send, FileEdit } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdminPageShell, MetricCard } from "@/components/admin/admin-native";
@@ -57,6 +57,8 @@ export default function TasksPage() {
   const [showImport, setShowImport] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
   const [filterError, setFilterError] = useState<string | null>(null);
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -105,7 +107,11 @@ export default function TasksPage() {
 
     const result = await res.json();
     if (!res.ok) {
-      toast.error(result?.error?.message ?? result?.error ?? "Failed to save task");
+      if (res.status === 409) {
+        toast.error(result?.error ?? "A task with this title and category already exists");
+      } else {
+        toast.error(result?.error?.message ?? result?.error ?? "Failed to save task");
+      }
       return;
     }
 
@@ -147,6 +153,67 @@ export default function TasksPage() {
 
     toast.success("Task deleted");
     fetchTasks();
+  }
+
+  async function handleBulkAction(action: "delete" | "publish" | "draft") {
+    if (selectedTasks.size === 0) return;
+
+    const count = selectedTasks.size;
+    const confirmMessages = {
+      delete: `Delete ${count} draft task(s)? This cannot be undone.`,
+      publish: `Publish ${count} task(s)? They will become active immediately.`,
+      draft: `Revert ${count} task(s) to draft?`,
+    };
+
+    if (!confirm(confirmMessages[action])) return;
+
+    setBulkActionLoading(true);
+    try {
+      const res = await fetch("/api/admin/tasks/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, taskIds: Array.from(selectedTasks) }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error(result?.error ?? `Failed to ${action} tasks`);
+        return;
+      }
+
+      toast.success(
+        action === "delete"
+          ? `Deleted ${result.deleted} task(s)`
+          : action === "publish"
+            ? `Published ${result.published} task(s)`
+            : `Reverted ${result.reverted} task(s) to draft`
+      );
+
+      setSelectedTasks(new Set());
+      fetchTasks();
+    } catch {
+      toast.error("Failed to perform bulk action");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }
+
+  function toggleSelectAll() {
+    if (selectedTasks.size === tasks.length) {
+      setSelectedTasks(new Set());
+    } else {
+      setSelectedTasks(new Set(tasks.map((t) => t.id)));
+    }
+  }
+
+  function toggleSelect(id: string) {
+    const newSelected = new Set(selectedTasks);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedTasks(newSelected);
   }
 
   return (
@@ -249,6 +316,52 @@ export default function TasksPage() {
         )}
       </div>
 
+      {selectedTasks.size > 0 && (
+        <div className="mt-4 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2">
+          <span className="text-sm font-medium text-primary">
+            {selectedTasks.size} selected
+          </span>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleBulkAction("publish")}
+              disabled={bulkActionLoading}
+            >
+              <Send className="mr-1 h-3.5 w-3.5" />
+              Publish
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleBulkAction("draft")}
+              disabled={bulkActionLoading}
+            >
+              <FileEdit className="mr-1 h-3.5 w-3.5" />
+              Draft
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => handleBulkAction("delete")}
+              disabled={bulkActionLoading}
+            >
+              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              Delete
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setSelectedTasks(new Set())}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
       {filterError && (
         <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -260,6 +373,14 @@ export default function TasksPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[40px]">
+                <input
+                  type="checkbox"
+                  checked={tasks.length > 0 && selectedTasks.size === tasks.length}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+              </TableHead>
               <TableHead>Title</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Payout (KSh)</TableHead>
@@ -273,13 +394,13 @@ export default function TasksPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                <td colSpan={9} className="p-8 text-center text-muted-foreground">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin" />
                 </td>
               </TableRow>
             ) : tasks.length === 0 ? (
               <TableRow>
-                <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                <td colSpan={9} className="p-8 text-center text-muted-foreground">
                   {search || (categoryFilter && categoryFilter !== "all") || (statusFilter && statusFilter !== "all")
                     ? "No tasks found"
                     : "No tasks yet. Create one or import from JSON."}
@@ -294,6 +415,8 @@ export default function TasksPage() {
                   onStatusChange={handleStatusChange}
                   onDelete={handleDelete}
                   canDelete={task.status === "draft"}
+                  selected={selectedTasks.has(task.id)}
+                  onToggleSelect={() => toggleSelect(task.id)}}
                 />
               ))
             )}
