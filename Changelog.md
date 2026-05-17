@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [fix] Onboarding Flow and Activation Persistence - 2026-05-17
+- Removed onboarding modal, replaced with page/inline section gated server-side
+- Fixed onboarding completion writing is_setup_complete to account_status
+- Fixed mock activation writing is_activated and activation_payments correctly
+- Fixed dashboard reading activation state from server, not stale client cache
+- Added idempotency check to prevent double activation
+- Fixed GET /api/me to return correct activation and setup state
+
 ## [fix] Onboarding Modal Shows Once and Persists Completion
 
 ### Fixed

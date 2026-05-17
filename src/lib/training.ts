@@ -109,15 +109,7 @@ function isActivated(status: AccountStatusRow | null) {
 function isOnboardingComplete(status: AccountStatusRow | null) {
   if (!status) return false;
 
-  return Boolean(
-    status.is_setup_complete ||
-      status.setup_completed_at ||
-      status.state === "setup_complete" ||
-      status.state === "activated" ||
-      status.status === "setup_complete" ||
-      status.status === "activated" ||
-      status.status === "active"
-  );
+  return status.is_setup_complete === true;
 }
 
 function normalizeCompletedDays(value: unknown) {

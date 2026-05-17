@@ -72,7 +72,7 @@ export function buildMeResponse(args: {
     walletTransactions,
     trainingSnapshot,
   } = args;
-  const { setupComplete, activated, state } = resolveAccountFlags(accountStatus);
+  const { state } = resolveAccountFlags(accountStatus);
   const progress = getAccountProgressSnapshot(profile?.metadata);
   const metadataFullName =
     typeof authMetadata?.full_name === "string" ? authMetadata.full_name : "";
@@ -80,8 +80,8 @@ export function buildMeResponse(args: {
     typeof authMetadata?.phone === "string" ? authMetadata.phone : "";
   const metadataCounty =
     typeof authMetadata?.county === "string" ? authMetadata.county : null;
-  const onboardingComplete =
-    trainingSnapshot?.onboardingComplete ?? (setupComplete || progress.onboarding.completed);
+  const setupComplete = accountStatus?.is_setup_complete === true;
+  const activated = accountStatus?.is_activated === true;
 
   return {
     profile: {
@@ -91,10 +91,10 @@ export function buildMeResponse(args: {
       county: profile?.county ?? metadataCounty,
     },
     status: {
-      setupComplete: onboardingComplete,
-      activated: trainingSnapshot?.activated ?? activated,
-      accountState: state,
-      needsOnboarding: !onboardingComplete,
+      setupComplete,
+      activated,
+      accountState: accountStatus?.status ?? state,
+      needsOnboarding: !setupComplete,
     },
     verification: {
       phoneVerified: verification?.phone_verified ?? false,

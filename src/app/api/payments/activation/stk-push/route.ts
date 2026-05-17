@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { creditReferralChain } from "@/lib/referral";
@@ -39,20 +38,13 @@ export async function POST(request: Request) {
     const userId = user.id;
     console.log("[Activation] Starting activation flow for user:", userId);
 
-    const { data: existingStatus } = await admin
+    const { data: currentStatus } = await admin
       .from("account_status")
-      .select("is_activated, state, status")
+      .select("is_activated")
       .eq("user_id", userId)
       .maybeSingle();
 
-    const isAlreadyActivated =
-      existingStatus?.is_activated === true ||
-      existingStatus?.state === "activated" ||
-      existingStatus?.state === "active" ||
-      existingStatus?.status === "activated" ||
-      existingStatus?.status === "active";
-
-    if (isAlreadyActivated) {
+    if (currentStatus?.is_activated === true) {
       console.log("[Activation] User already activated:", userId);
       return NextResponse.json({
         ok: true,
@@ -64,85 +56,121 @@ export async function POST(request: Request) {
     const phone = normalizePesaPhone(parsed.data.phone);
     const activatedAt = new Date().toISOString();
     const mockReceipt = `MOCK-${Date.now()}`;
-    const paymentId = randomUUID();
 
     console.log("[Activation] Writing activation for user:", userId);
-
-    const { error: statusError } = await admin
-      .from("account_status")
-      .upsert(
-        {
-          user_id: userId,
-          is_setup_complete: true,
-          setup_completed_at: activatedAt,
-          is_activated: true,
-          activated_at: activatedAt,
-          state: "activated",
-          status: "active",
-        },
-        { onConflict: "user_id" }
-      );
-
-    if (statusError) {
-      console.error("[Activation] Failed to update account_status:", statusError);
-      throw statusError;
-    }
-
-    console.log("[Activation] account_status updated for user:", userId);
 
     const { data: existingPayment } = await admin
       .from("activation_payments")
       .select("id")
       .eq("user_id", userId)
       .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
+    let paymentId: string | null = null;
+
     if (existingPayment) {
-      const { error: paymentUpdateError } = await admin
+      const { data: paidPayment, error: paymentUpdateError } = await admin
         .from("activation_payments")
         .update({
           status: "paid",
           mpesa_receipt: mockReceipt,
           paid_at: activatedAt,
-          merchant_request_id: `mock-merchant-${Date.now()}`,
-          checkout_request_id: `mock-checkout-${Date.now()}`,
+          merchant_request_id: `MOCK-MID-${Date.now()}`,
+          checkout_request_id: `MOCK-CID-${Date.now()}`,
           callback_raw: {
-            mocked: true,
-            reason: "Development activation bypass",
+            mock: true,
+            timestamp: Date.now(),
           },
         })
-        .eq("id", existingPayment.id);
+        .eq("id", existingPayment.id)
+        .select("id")
+        .single();
 
       if (paymentUpdateError) {
-        console.warn("[Activation] activation_payments update failed:", paymentUpdateError);
+        console.error("[Activation] Payment record failed:", paymentUpdateError);
+        return NextResponse.json(
+          { error: "Payment record failed", detail: paymentUpdateError.message },
+          { status: 500 }
+        );
       }
+
+      paymentId = paidPayment.id;
     } else {
-      const { error: paymentInsertError } = await admin
+      const { data: paidPayment, error: paymentInsertError } = await admin
         .from("activation_payments")
         .insert({
-          id: paymentId,
           user_id: userId,
           amount: MPESA_STK_AMOUNT,
           phone,
           status: "paid",
           mpesa_receipt: mockReceipt,
           paid_at: activatedAt,
-          merchant_request_id: `mock-merchant-${Date.now()}`,
-          checkout_request_id: `mock-checkout-${Date.now()}`,
+          merchant_request_id: `MOCK-MID-${Date.now()}`,
+          checkout_request_id: `MOCK-CID-${Date.now()}`,
           callback_raw: {
-            mocked: true,
-            reason: "Development activation bypass",
+            mock: true,
+            timestamp: Date.now(),
           },
         })
         .select("id")
-        .maybeSingle();
+        .single();
 
       if (paymentInsertError) {
-        console.warn("[Activation] activation_payments insert failed:", paymentInsertError);
+        console.error("[Activation] Payment record failed:", paymentInsertError);
+        return NextResponse.json(
+          { error: "Payment record failed", detail: paymentInsertError.message },
+          { status: 500 }
+        );
       }
+
+      paymentId = paidPayment.id;
     }
 
     console.log("[Activation] activation_payments updated for user:", userId);
+
+    const activationPatch = {
+      is_activated: true,
+      activated_at: activatedAt,
+      status: "active",
+      state: "activated",
+    };
+
+    const { data: updatedStatus, error: statusError } = await admin
+      .from("account_status")
+      .update(activationPatch)
+      .eq("user_id", userId)
+      .select("user_id")
+      .maybeSingle();
+
+    if (statusError) {
+      console.error("[Activation] Status update failed:", statusError);
+      return NextResponse.json(
+        { error: "Status update failed", detail: statusError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!updatedStatus) {
+      const { error: statusInsertError } = await admin
+        .from("account_status")
+        .insert({
+          user_id: userId,
+          is_setup_complete: false,
+          ...activationPatch,
+        });
+
+      if (statusInsertError) {
+        console.error("[Activation] Status update failed:", statusInsertError);
+        return NextResponse.json(
+          { error: "Status update failed", detail: statusInsertError.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    console.log("[Activation] account_status updated for user:", userId);
 
     const { error: walletError } = await admin.from("wallet_transactions").insert({
       user_id: userId,
@@ -163,10 +191,11 @@ export async function POST(request: Request) {
 
     await creditReferralChain(userId);
 
-    console.log("[Activation] Success for user:", userId);
+    console.log("[Activation] Successfully activated user:", userId);
 
     return NextResponse.json({
       ok: true,
+      activated: true,
       paymentId,
       status: "paid",
       receipt: mockReceipt,

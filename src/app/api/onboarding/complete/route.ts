@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { buildOnboardingMetadataPatch, mergeAccountMetadata } from "@/lib/account-progress";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -44,16 +43,10 @@ export async function POST(request: Request) {
         .eq("user_id", user.id)
         .maybeSingle(),
       (admin.from("profiles" as never) as any)
-        .select("full_name, county, phone, email, metadata")
+        .select("full_name, county")
         .eq("id", user.id)
         .maybeSingle(),
     ]);
-
-    const nextStatus =
-      currentStatus?.is_activated || currentStatus?.state === "activated"
-        ? "activated"
-        : "setup_complete";
-    const nextState = nextStatus;
 
     const userMeta =
       user.user_metadata && typeof user.user_metadata === "object"
@@ -87,49 +80,88 @@ export async function POST(request: Request) {
       );
     }
 
-    const mergedMetadata = mergeAccountMetadata(
-      currentProfile?.metadata,
-      buildOnboardingMetadataPatch()
-    );
-
-    const profilePayload = {
-      id: user.id,
-      full_name: fullName,
-      county,
-      phone:
-        currentProfile?.phone ??
-        (typeof user.user_metadata.phone === "string" ? user.user_metadata.phone : null),
-      email: currentProfile?.email ?? user.email ?? null,
-      email_verified: Boolean(user.email_confirmed_at),
-      metadata: mergedMetadata,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error: profileError } = await (admin.from("profiles" as never) as any).upsert(profilePayload, {
-      onConflict: "id",
-    });
+    const { error: profileError } = await (admin.from("profiles" as never) as any)
+      .update({
+        full_name: fullName,
+        county,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id);
 
     if (profileError) {
-      throw profileError;
+      console.error("[POST /api/onboarding/complete] Profile update failed:", profileError);
+      return NextResponse.json(
+        {
+          error: {
+            code: "PROFILE_UPDATE_FAILED",
+            message: "Profile update failed",
+            detail: profileError.message,
+          },
+        },
+        { status: 500 }
+      );
     }
 
-    const accountStatusPayload = {
-      user_id: user.id,
-      is_setup_complete: true,
-      setup_completed_at: new Date().toISOString(),
-      is_activated: currentStatus?.is_activated ?? false,
-      activated_at: currentStatus?.activated_at ?? null,
-      status: nextStatus,
-      state: nextState,
-    };
-
-    const { error: accountStatusError } = await (admin.from("account_status" as never) as any).upsert(
-      accountStatusPayload,
-      { onConflict: "user_id" }
+    const activated = Boolean(
+      currentStatus?.is_activated ||
+        currentStatus?.state === "activated" ||
+        currentStatus?.status === "active"
     );
+    const statusPatch = activated
+      ? {
+          is_setup_complete: true,
+          setup_completed_at: new Date().toISOString(),
+          status: "active",
+          state: "activated",
+        }
+      : {
+          is_setup_complete: true,
+          setup_completed_at: new Date().toISOString(),
+          status: "setup_complete",
+          state: "setup_complete",
+        };
+
+    const { data: updatedStatus, error: accountStatusError } = await (admin.from("account_status" as never) as any)
+      .update(statusPatch)
+      .eq("user_id", user.id)
+      .select("user_id")
+      .maybeSingle();
 
     if (accountStatusError) {
-      throw accountStatusError;
+      console.error("[POST /api/onboarding/complete] Status update failed:", accountStatusError);
+      return NextResponse.json(
+        {
+          error: {
+            code: "STATUS_UPDATE_FAILED",
+            message: "Status update failed",
+            detail: accountStatusError.message,
+          },
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!updatedStatus) {
+      const { error: insertStatusError } = await (admin.from("account_status" as never) as any).insert({
+        user_id: user.id,
+        ...statusPatch,
+        is_activated: activated,
+        activated_at: currentStatus?.activated_at ?? null,
+      });
+
+      if (insertStatusError) {
+        console.error("[POST /api/onboarding/complete] Status insert failed:", insertStatusError);
+        return NextResponse.json(
+          {
+            error: {
+              code: "STATUS_INSERT_FAILED",
+              message: "Status insert failed",
+              detail: insertStatusError.message,
+            },
+          },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({ ok: true, setupComplete: true });

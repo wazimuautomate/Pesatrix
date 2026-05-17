@@ -6,7 +6,6 @@ import {
   parseStkCallbackMetadata,
   phonesMatch,
 } from "@/lib/mpesa";
-import { getReferralTaskUnlockReduction } from "@/lib/platform-settings";
 
 /**
  * Daraja callback webhook — must be publicly reachable (no auth middleware).
@@ -50,7 +49,7 @@ export async function POST(request: Request) {
       status: "pending" | "paid" | "failed" | "reversed",
       extras?: Record<string, unknown>
     ) => {
-      await admin
+      const { error } = await admin
         .from("activation_payments")
         .update({
           status,
@@ -59,6 +58,10 @@ export async function POST(request: Request) {
           ...extras,
         })
         .eq("id", payment.id);
+
+      if (error) {
+        throw error;
+      }
     };
 
     if (payment.status === "paid") {
@@ -119,7 +122,7 @@ export async function POST(request: Request) {
       activated_at: activatedAt,
       is_activated: true,
       state: "activated",
-      status: "activated",
+      status: "active",
     };
 
     let activationError: Error | null = null;
@@ -135,7 +138,7 @@ export async function POST(request: Request) {
           activated_at: activatedAt,
           is_activated: true,
           state: "activated",
-          status: "activated",
+          status: "active",
         })
         .eq("user_id", payment.user_id);
 

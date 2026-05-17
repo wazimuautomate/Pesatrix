@@ -426,11 +426,7 @@ export function resolveAccountFlags(accountStatus: {
   is_setup_complete?: boolean | null;
 } | null) {
   const state = accountStatus?.state ?? accountStatus?.status ?? "registered";
-  const setupComplete =
-    accountStatus?.is_setup_complete === true ||
-    state === "setup_complete" ||
-    state === "activated" ||
-    state === "active";
+  const setupComplete = accountStatus?.is_setup_complete === true;
   const activated =
     accountStatus?.is_activated === true ||
     state === "activated" ||

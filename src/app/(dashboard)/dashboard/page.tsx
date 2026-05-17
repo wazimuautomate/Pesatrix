@@ -100,11 +100,11 @@ export default async function DashboardPage() {
       .eq("referrer_id", user!.id),
   ]);
 
-  const [{ data: accountStatusRow }, { data: profileRow }, trainingSnapshot] = await Promise.all([
+  const [accountStatusResult, { data: profileRow }, trainingSnapshot] = await Promise.all([
     (supabase.from("account_status" as never) as any)
-      .select("state, status, is_activated, is_setup_complete")
+      .select("is_activated, is_setup_complete, status, state")
       .eq("user_id", user!.id)
-      .maybeSingle(),
+      .single(),
     (supabase.from("profiles" as never) as any)
       .select("metadata")
       .eq("id", user!.id)
@@ -112,7 +112,29 @@ export default async function DashboardPage() {
     getTrainingProgramSnapshotForUser(user!.id),
   ]);
 
-  const accountStatus = resolveAccountFlags(accountStatusRow as any);
+  if (accountStatusResult.error || !accountStatusResult.data) {
+    console.error("[DashboardPage] Failed to read account_status:", accountStatusResult.error);
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-navy">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage your tasks, wallet, and referrals
+          </p>
+        </div>
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="p-4">
+            <p className="font-medium text-foreground">Account status unavailable</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              We could not load your account state. Refresh the page or try again shortly.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const accountStatus = resolveAccountFlags(accountStatusResult.data as any);
   const progressSnapshot = getAccountProgressSnapshot(profileRow?.metadata);
   const rewardState = progressSnapshot.rewards;
   const canStartTasks = trainingSnapshot.canStartTasks;
