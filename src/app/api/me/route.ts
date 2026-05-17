@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { buildMeResponse } from "@/lib/user-bootstrap";
 
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();
+    const admin = createAdminSupabaseClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -37,13 +39,39 @@ export async function GET() {
         getTrainingProgramSnapshotForUser(user.id),
       ]);
 
+    let accountStatus = accountStatusResult.data;
+
+    if (!accountStatus) {
+      console.log("[GET /api/me] No account_status row found, creating one for user:", user.id);
+      const { error: insertError } = await admin
+        .from("account_status")
+        .insert({
+          user_id: user.id,
+          is_activated: false,
+          is_setup_complete: false,
+          status: "registered",
+          state: "registered",
+        });
+
+      if (insertError) {
+        console.error("[GET /api/me] Failed to create account_status:", insertError);
+      } else {
+        accountStatus = {
+          is_activated: false,
+          is_setup_complete: false,
+          status: "registered",
+          state: "registered",
+        };
+      }
+    }
+
     return NextResponse.json(
       buildMeResponse({
         authEmail: user.email ?? null,
         authMetadata: user.user_metadata ?? null,
         emailConfirmed: Boolean(user.email_confirmed_at),
         profile: profileResult.data ?? null,
-        accountStatus: accountStatusResult.data ?? null,
+        accountStatus,
         verification: verificationResult.data ?? null,
         walletTransactions: walletResult.data ?? [],
         trainingSnapshot,

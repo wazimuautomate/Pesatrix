@@ -1,7 +1,6 @@
 "use client";
 
-import { startTransition, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -30,7 +29,6 @@ type FormData = z.infer<typeof schema>;
 type Step = "form" | "pending" | "success" | "failed";
 
 export default function ActivateClientPage() {
-  const router = useRouter();
   const [step, setStep] = useState<Step>("form");
 
   const {
@@ -50,6 +48,11 @@ export default function ActivateClientPage() {
       const json = await res.json();
 
       if (!res.ok) {
+        if (json.alreadyActivated) {
+          toast.success("Account is already activated");
+          window.location.href = "/dashboard";
+          return;
+        }
         toast.error(json.error?.message || "Failed to initiate payment");
         return;
       }
@@ -57,10 +60,7 @@ export default function ActivateClientPage() {
       setStep("success");
       toast.success("Activation completed successfully.");
       window.setTimeout(() => {
-        startTransition(() => {
-          router.push("/dashboard");
-          router.refresh();
-        });
+        window.location.href = "/dashboard";
       }, 1800);
     } catch {
       toast.error("Something went wrong. Please try again.");
