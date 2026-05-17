@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 
 const submissionSchema = z.object({
   taskId: z.string().uuid(),
@@ -21,24 +22,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [{ data: accountStatus }, { data: activationPayment }] = await Promise.all([
-    supabase
-      .from("account_status")
-      .select("is_activated")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    (supabase.from("activation_payments" as never) as any)
-      .select("id, status")
-      .eq("user_id", user.id)
-      .eq("status", "paid")
-      .maybeSingle(),
-  ]);
+  const access = await getTrainingProgramSnapshotForUser(user.id);
 
-  const isActivated = Boolean(accountStatus?.is_activated) || Boolean(activationPayment?.status === "paid");
-
-  if (!isActivated) {
+  if (!access.activated) {
     return NextResponse.json(
       { error: "Account not activated" },
+      { status: 403 }
+    );
+  }
+
+  if (!access.canStartTasks) {
+    return NextResponse.json(
+      { error: access.gateMessage ?? "Task access is locked" },
       { status: 403 }
     );
   }

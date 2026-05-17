@@ -371,7 +371,7 @@ export function TaskListClient({ userId }: { userId: string }) {
           <Lock className="mx-auto h-10 w-10 text-amber-600" />
           <h3 className="mt-4 text-lg font-semibold text-navy">Activate your account to access tasks.</h3>
           <Button asChild className="mt-4">
-            <Link href="/activate">Activate Account</Link>
+            <Link href="/dashboard/activate">Activate Account</Link>
           </Button>
         </CardContent>
       </Card>
@@ -383,7 +383,7 @@ export function TaskListClient({ userId }: { userId: string }) {
       <div className="space-y-6">
         <LockBanner
           unlockAt={undefined}
-          onCompleteTraining={() => (window.location.href = "/training")}
+          onCompleteTraining={() => (window.location.href = "/dashboard/training")}
         />
       </div>
     );
@@ -394,7 +394,7 @@ export function TaskListClient({ userId }: { userId: string }) {
       <div className="space-y-6">
         <LockBanner
           unlockAt={unlockAt}
-          onCompleteTraining={() => (window.location.href = "/training")}
+          onCompleteTraining={() => (window.location.href = "/dashboard/training")}
         />
       </div>
     );

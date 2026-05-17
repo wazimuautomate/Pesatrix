@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { TaskSubmissionForm } from "@/components/tasks/task-submission-form";
+import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 
 export const metadata = {
   title: "Task Detail",
@@ -23,10 +24,19 @@ export default async function TaskDetailPage({ params }: RouteContext) {
     redirect("/login");
   }
 
-  const [{ data: profile }, { data: task }] = await Promise.all([
+  const [{ data: profile }, { data: task }, access] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
     supabase.from("tasks").select("*").eq("id", id).maybeSingle(),
+    getTrainingProgramSnapshotForUser(user.id),
   ]);
+
+  if (!access.canStartTasks) {
+    if (access.gateReason === "onboarding") {
+      redirect("/onboarding");
+    }
+
+    redirect("/tasks");
+  }
 
   if (!task) {
     redirect("/tasks");

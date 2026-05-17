@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -12,55 +13,29 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [{ data: accountStatus }, { data: activationPayment }, { data: trainingProgress, error: trainingError }] = await Promise.all([
-    (supabase.from("account_status" as never) as any)
-      .select("is_activated")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    (supabase.from("activation_payments" as never) as any)
-      .select("id, status, paid_at")
-      .eq("user_id", user.id)
-      .eq("status", "paid")
-      .maybeSingle(),
-    supabase
-      .from("training_progress")
-      .select("status, task_unlock_at")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-  ]);
+  const access = await getTrainingProgramSnapshotForUser(user.id);
 
-  const accountActivated = Boolean((accountStatus as { is_activated?: boolean } | null)?.is_activated);
-  const paymentActivated = Boolean(activationPayment?.status === "paid");
-  const isActivated = accountActivated || paymentActivated;
-
-  if (!isActivated) {
+  if (!access.activated) {
     return NextResponse.json({
       tasks: [],
       submittedTaskIds: [],
       total: 0,
       isActivated: false,
-      trainingStatus: trainingProgress?.status ?? null,
-      taskUnlockAt: trainingProgress?.task_unlock_at ?? null,
+      trainingStatus: access.training.status,
+      taskUnlockAt: access.taskUnlockAt,
+      tasksLocked: true,
     });
   }
 
-  if (trainingError) {
-    return NextResponse.json({ error: "Failed to check training status" }, { status: 500 });
-  }
-
-  const trainingComplete = trainingProgress?.status === "completed";
-  const taskUnlockAt = trainingProgress?.task_unlock_at ?? null;
-  const tasksLocked = Boolean(taskUnlockAt && new Date(taskUnlockAt) > new Date());
-
-  if (!trainingComplete || tasksLocked) {
+  if (!access.trainingCompleted || access.tasksLocked) {
     return NextResponse.json({
       tasks: [],
       submittedTaskIds: [],
       total: 0,
       isActivated: true,
-      trainingStatus: trainingProgress?.status ?? null,
-      taskUnlockAt,
-      tasksLocked,
+      trainingStatus: access.training.status,
+      taskUnlockAt: access.taskUnlockAt,
+      tasksLocked: !access.trainingCompleted || access.tasksLocked,
     });
   }
 
@@ -105,8 +80,8 @@ export async function GET() {
     submittedTaskIds,
     total: formattedTasks.length,
     isActivated: true,
-    trainingStatus: trainingProgress?.status ?? null,
-    taskUnlockAt,
+    trainingStatus: access.training.status,
+    taskUnlockAt: access.taskUnlockAt,
     tasksLocked: false,
   });
 }
