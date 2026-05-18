@@ -60,8 +60,22 @@ type GradingResult = {
 
 const FALLBACK_NVIDIA_MODEL = "minimaxai/minimax-m2.7";
 const FALLBACK_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
-const ANTHROPIC_VISION_MODEL = "claude-sonnet-4-20250514";
 const TASK_SCREENSHOT_BUCKET = "task-screenshots";
+
+type VisionModelConfig = {
+  modelId: string;
+  provider: string;
+  supportsVision: boolean;
+};
+
+const VISION_MODELS: VisionModelConfig[] = [
+  { modelId: "mistralai/mistral-large-3-675b-instruct-2512", provider: "nvidia", supportsVision: false },
+  { modelId: "meta/llama-4-maverick-17b-128e-instruct", provider: "nvidia", supportsVision: false },
+  { modelId: "google/paligemma-3b-pt-224", provider: "nvidia", supportsVision: true },
+];
+
+const VISION_MODEL_TIMEOUT_MS = 30000;
+const VISION_MODEL_MAX_TOKENS = 1024;
 
 export async function gradeSubmission(submissionId: string): Promise<void> {
   const supabaseAdmin = createAdminSupabaseClient();
@@ -373,121 +387,98 @@ async function gradeSocialEngagementSubmission(
     aiCriteria: taskData.ai_check_criteria,
   });
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) {
     return {
       score: 50,
       decision: "flagged",
       reasoning: "AI vision unavailable - manual review required.",
       criteria_scores: {},
-      grading_detail: { social_ai_error: "missing_anthropic_api_key" },
+      grading_detail: { social_ai_error: "missing_nvidia_api_key" },
     };
   }
 
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_VISION_MODEL,
-        max_tokens: 500,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: image.mediaType,
-                  data: image.base64,
-                },
-              },
-              {
-                type: "text",
-                text: prompt,
-              },
-            ],
-          },
-        ],
-      }),
+  const visionResult = await callVisionModelWithFallback(apiKey, image, prompt, submission.id);
+
+  if (!visionResult.success) {
+    console.error("[Social Grading] All vision models failed:", {
+      submissionId: submission.id,
+      errors: visionResult.errors,
     });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.error("[Social Grading] Anthropic API error:", response.status, errorText);
-      return {
-        score: 50,
-        decision: "flagged",
-        reasoning: "AI vision unavailable - manual review required.",
-        criteria_scores: {},
-        grading_detail: { social_ai_error: "anthropic_api_error", status: response.status },
-      };
-    }
-
-    const payload = await response.json();
-    const content = payload?.content?.[0]?.text;
-    let parsed: ReturnType<typeof parseSocialVisionResult>;
-    try {
-      parsed = parseSocialVisionResult(typeof content === "string" ? content : "");
-    } catch (parseError) {
-      console.error("[Social Grading] Malformed AI JSON:", {
-        submissionId: submission.id,
-        rawResponse: typeof content === "string" ? content.slice(0, 2000) : content,
-        error: parseError,
-      });
-      return {
-        score: 50,
-        decision: "flagged",
-        reasoning: "AI response could not be parsed. Manual review required.",
-        criteria_scores: {},
-        grading_detail: {
-          social_ai_error: "malformed_json",
-          raw_response: typeof content === "string" ? content.slice(0, 2000) : null,
-        },
-      };
-    }
-    const checks = parsed.checks;
-    const autoFlag = submission.grading_detail?.social_auto_flag_reason === "risk_score_above_50";
-    const decision = autoFlag ? "flagged" : parsed.decision;
-    const reasoning = autoFlag
-      ? `${parsed.reasoning} Account risk score requires manual review.`
-      : parsed.reasoning;
-
-    return {
-      score: parsed.score,
-      decision,
-      reasoning,
-      criteria_scores: {
-        correct_platform: checks.correct_platform ? 100 : 0,
-        target_visible: checks.target_visible ? 100 : 0,
-        action_completed: checks.action_completed ? 100 : 0,
-        looks_authentic: checks.looks_authentic ? 100 : 0,
-      },
-      grading_detail: {
-        type: "social_engagement",
-        checks,
-        issues: parsed.issues,
-        raw_decision: parsed.decision,
-        auto_flag_reason: autoFlag ? "risk_score_above_50" : null,
-      },
-    };
-  } catch (error) {
-    console.error("[Social Grading] AI request or parse failed:", submission.id, error);
     return {
       score: 50,
       decision: "flagged",
       reasoning: "AI vision unavailable - manual review required.",
       criteria_scores: {},
       grading_detail: {
-        social_ai_error: error instanceof Error ? error.message : "unknown_error",
+        social_ai_error: "all_vision_models_failed",
+        errors: visionResult.errors,
       },
     };
   }
+
+  const content = visionResult.response;
+  if (!content) {
+    return {
+      score: 50,
+      decision: "flagged",
+      reasoning: "AI vision returned empty response - manual review required.",
+      criteria_scores: {},
+      grading_detail: {
+        social_ai_error: "empty_response",
+        model_used: visionResult.modelUsed,
+      },
+    };
+  }
+
+  let parsed: ReturnType<typeof parseSocialVisionResult>;
+  try {
+    parsed = parseSocialVisionResult(content);
+  } catch (parseError) {
+    console.error("[Social Grading] Malformed AI JSON:", {
+      submissionId: submission.id,
+      rawResponse: content.slice(0, 2000),
+      error: parseError,
+    });
+    return {
+      score: 50,
+      decision: "flagged",
+      reasoning: "AI response could not be parsed. Manual review required.",
+      criteria_scores: {},
+      grading_detail: {
+        social_ai_error: "malformed_json",
+        raw_response: content.slice(0, 2000),
+        model_used: visionResult.modelUsed,
+      },
+    };
+  }
+
+  const checks = parsed.checks;
+  const autoFlag = submission.grading_detail?.social_auto_flag_reason === "risk_score_above_50";
+  const decision = autoFlag ? "flagged" : parsed.decision;
+  const reasoning = autoFlag
+    ? `${parsed.reasoning} Account risk score requires manual review.`
+    : parsed.reasoning;
+
+  return {
+    score: parsed.score,
+    decision,
+    reasoning,
+    criteria_scores: {
+      correct_platform: checks.correct_platform ? 100 : 0,
+      target_visible: checks.target_visible ? 100 : 0,
+      action_completed: checks.action_completed ? 100 : 0,
+      looks_authentic: checks.looks_authentic ? 100 : 0,
+    },
+    grading_detail: {
+      type: "social_engagement",
+      checks,
+      issues: parsed.issues,
+      raw_decision: parsed.decision,
+      auto_flag_reason: autoFlag ? "risk_score_above_50" : null,
+      vision_model_used: visionResult.modelUsed,
+    },
+  };
 }
 
 function gradeDataLabelingSubmission(
@@ -680,6 +671,178 @@ function parseSocialVisionResult(content: string) {
     },
     issues: Array.isArray(parsed.issues) ? parsed.issues.map(String) : [],
   };
+}
+
+type VisionModelResult = {
+  success: boolean;
+  response?: string;
+  modelUsed?: string;
+  errors: Array<{ model: string; error: string; isTimeout?: boolean; isRateLimit?: boolean; isInvalidResponse?: boolean }>;
+};
+
+async function callVisionModelWithFallback(
+  apiKey: string,
+  image: { base64: string; mediaType: string },
+  prompt: string,
+  submissionId: string
+): Promise<VisionModelResult> {
+  const errors: VisionModelResult["errors"] = [];
+
+  for (let i = 0; i < VISION_MODELS.length; i++) {
+    const modelConfig = VISION_MODELS[i];
+    console.log(`[Social Grading] Attempting model: ${modelConfig.modelId} (${i + 1}/${VISION_MODELS.length})`);
+
+    try {
+      const result = await callVisionModel(apiKey, modelConfig, image, prompt, submissionId);
+
+      if (result.success && result.response) {
+        console.log(`[Social Grading] Successfully used model: ${modelConfig.modelId}`);
+        return {
+          success: true,
+          response: result.response,
+          modelUsed: modelConfig.modelId,
+          errors: [],
+        };
+      }
+
+      errors.push({
+        model: modelConfig.modelId,
+        error: result.error || "Unknown error",
+        isTimeout: result.isTimeout,
+        isRateLimit: result.isRateLimit,
+        isInvalidResponse: result.isInvalidResponse,
+      });
+
+      console.warn(`[Social Grading] Model ${modelConfig.modelId} failed:`, result.error);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      errors.push({
+        model: modelConfig.modelId,
+        error: errorMessage,
+      });
+      console.error(`[Social Grading] Model ${modelConfig.modelId} exception:`, errorMessage);
+    }
+  }
+
+  console.error(`[Social Grading] All ${VISION_MODELS.length} models failed for submission:`, submissionId);
+  return { success: false, errors };
+}
+
+type SingleModelResult = {
+  success: boolean;
+  response?: string;
+  error?: string;
+  isTimeout?: boolean;
+  isRateLimit?: boolean;
+  isInvalidResponse?: boolean;
+};
+
+async function callVisionModel(
+  apiKey: string,
+  modelConfig: VisionModelConfig,
+  image: { base64: string; mediaType: string },
+  prompt: string,
+  submissionId: string
+): Promise<SingleModelResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), VISION_MODEL_TIMEOUT_MS);
+
+  try {
+    const messages = modelConfig.supportsVision
+      ? [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${image.mediaType};base64,${image.base64}`,
+                },
+              },
+              {
+                type: "text",
+                text: prompt,
+              },
+            ],
+          },
+        ]
+      : [
+          {
+            role: "user",
+            content: `[Image analysis required] ${prompt}\n\nNote: This model does not support direct image input. Please respond with: {"decision": "flagged", "score": 50, "checks": {"correct_platform": false, "target_visible": false, "action_completed": false, "looks_authentic": false}, "reasoning": "Model does not support vision - manual review required", "issues": ["vision_not_supported"]}`,
+          },
+        ];
+
+    const response = await fetch(`${FALLBACK_NVIDIA_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelConfig.modelId,
+        messages,
+        temperature: 0.3,
+        max_tokens: VISION_MODEL_MAX_TOKENS,
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.status === 429) {
+      return {
+        success: false,
+        error: "Rate limited",
+        isRateLimit: true,
+      };
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      return {
+        success: false,
+        error: `API error: ${response.status} - ${errorText.slice(0, 200)}`,
+      };
+    }
+
+    const payload = await response.json();
+    const content = payload?.choices?.[0]?.message?.content;
+
+    if (!content || typeof content !== "string" || content.trim().length === 0) {
+      return {
+        success: false,
+        error: "Empty response from model",
+        isInvalidResponse: true,
+      };
+    }
+
+    try {
+      JSON.parse(content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim());
+    } catch {
+      return {
+        success: false,
+        error: "Response is not valid JSON",
+        isInvalidResponse: true,
+      };
+    }
+
+    return {
+      success: true,
+      response: content,
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === "AbortError") {
+      return {
+        success: false,
+        error: "Request timeout",
+        isTimeout: true,
+      };
+    }
+    throw error;
+  }
 }
 
 async function fetchImageAsBase64(

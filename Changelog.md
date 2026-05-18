@@ -1,5 +1,24 @@
 # Changelog
 
+## [migrate] Screenshot Analysis - Claude Sonnet to NVIDIA Vision Models - 2026-05-18
+- Removed Claude Sonnet 4 (Anthropic) image analysis dependency for social engagement task screenshot validation
+- Migrated to free NVIDIA-hosted vision models with automatic fallback handling
+- New vision models in priority order:
+  1. mistralai/mistral-large-3-675b-instruct-2512
+  2. meta/llama-4-maverick-17b-128e-instruct  
+  3. google/paligemma-3b-pt-224 (primary vision-capable model)
+- Implemented automatic fallback: if first model fails, times out, rate-limits, or returns invalid output, system automatically tries next model
+- Added comprehensive error logging for:
+  - Model failures (with specific error details)
+  - Invalid responses (malformed JSON, empty responses)
+  - Timeout issues (30-second timeout per model)
+  - Fallback switches (logs which model was used)
+- Response parsing remains standardized across all fallback models
+- Implementation is modular - additional models can easily be added to VISION_MODELS array
+- Removed all ANTHROPIC_API_KEY environment variable references
+- Screenshot validation logic remains fully functional after migration
+- Task submission workflow and database behavior preserved
+
 ## [update] Data Labeling Builder Tabs - 2026-05-18
 - Reworked the Wazim data labeling builder into Manual Entry and Bulk JSON Import tabs that share the same items array.
 - Added label-first item creation, inline JSON paste/import validation, imported item editing in Manual Entry, and drag-handle row reordering.
