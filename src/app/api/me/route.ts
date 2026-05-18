@@ -41,26 +41,36 @@ export async function GET() {
     let accountStatus = accountStatusResult.data;
 
     if (!accountStatus) {
-      console.log("[GET /api/me] No account_status row found, creating one for user:", user.id);
-      const { error: insertError } = await admin
+      const { data: upserted, error: upsertError } = await admin
         .from("account_status")
-        .insert({
-          user_id: user.id,
-          is_activated: false,
-          is_setup_complete: false,
-          status: "registered",
-          state: "registered",
-        });
+        .upsert(
+          {
+            user_id: user.id,
+            is_activated: false,
+            is_setup_complete: false,
+            status: "registered",
+            state: "registered",
+          },
+          { onConflict: "user_id", ignoreDuplicates: true }
+        )
+        .select("is_setup_complete, is_activated, state, status")
+        .maybeSingle();
 
-      if (insertError) {
-        console.error("[GET /api/me] Failed to create account_status:", insertError);
-      } else {
-        accountStatus = {
+      if (upsertError) {
+        console.warn("[GET /api/me] Upsert account_status failed, fetching existing:", upsertError.message);
+        const { data: existing } = await admin
+          .from("account_status")
+          .select("is_setup_complete, is_activated, state, status")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        accountStatus = existing ?? {
           is_activated: false,
           is_setup_complete: false,
           status: "registered",
           state: "registered",
         };
+      } else if (upserted) {
+        accountStatus = upserted;
       }
     }
 

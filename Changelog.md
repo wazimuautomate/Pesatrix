@@ -1,5 +1,19 @@
 # Changelog
 
+## [fix] Auth Callback & Account Status Race Condition - 2026-05-18
+- Fixed auth callback showing "confirmation link invalid/already used" error
+  - Added logic to check if user already has valid session when code exchange fails
+  - Gracefully handles already-confirmed accounts instead of showing error
+  - Added helper to detect confirmation link errors vs other auth errors
+- Fixed duplicate account_status creation in /api/me endpoint
+  - Replaced insert with upsert using onConflict to handle race conditions
+  - Added fallback fetch if upsert fails to handle concurrent requests
+  - Cleaned up logging - no more false "failure" logs for successful cases
+- Added Coming Soon page to Daily Rewards route
+  - Replaced rewards UI with centered message explaining requirements
+  - Shows icon and step-by-step account activation sequence
+  - Route preserved for future development
+
 ## [feat] Onboarding Carousel - 2026-05-18
 - Converted static card-based onboarding to interactive carousel with smooth animations
 - Added step-by-step navigation with previous/next buttons

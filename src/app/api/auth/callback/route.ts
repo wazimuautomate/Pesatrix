@@ -11,6 +11,17 @@ function buildRedirectUrl(origin: string, pathname: string, params?: Record<stri
   return url;
 }
 
+function isConfirmationAlreadyUsedError(error: { message?: string }) {
+  const msg = error?.message?.toLowerCase() ?? "";
+  return (
+    msg.includes("already been used") ||
+    msg.includes("invalid") ||
+    msg.includes("expired") ||
+    msg.includes("code") ||
+    msg.includes("token")
+  );
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
@@ -27,8 +38,9 @@ export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
 
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
+    const { error, data } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (!error && data?.session) {
       if (authType === "signup") {
         await supabase.auth.signOut();
         return NextResponse.redirect(
@@ -42,12 +54,39 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL(next, origin));
     }
 
-    return NextResponse.redirect(
-      buildRedirectUrl(origin, "/login", {
-        error: "auth_callback_failed",
-        message: "The confirmation link is invalid or has already been used.",
-      })
-    );
+    if (error) {
+      console.warn("[Auth callback] Code exchange failed:", error.message);
+
+      if (isConfirmationAlreadyUsedError(error)) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session) {
+          if (authType === "signup") {
+            await supabase.auth.signOut();
+            return NextResponse.redirect(
+              buildRedirectUrl(origin, "/login", {
+                tab: "email",
+                confirmed: "1",
+              })
+            );
+          }
+          return NextResponse.redirect(new URL(next, origin));
+        }
+
+        return NextResponse.redirect(
+          buildRedirectUrl(origin, "/login", {
+            error: "auth_callback_failed",
+            message: "This confirmation link has already been used. Please try logging in.",
+          })
+        );
+      }
+
+      return NextResponse.redirect(
+        buildRedirectUrl(origin, "/login", {
+          error: "auth_callback_failed",
+          message: "The confirmation link is invalid or has expired.",
+        })
+      );
+    }
   }
 
   if (tokenHash && authType) {
@@ -67,6 +106,20 @@ export async function GET(request: Request) {
         );
       }
 
+      return NextResponse.redirect(new URL(next, origin));
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session) {
+      if (authType === "signup") {
+        await supabase.auth.signOut();
+        return NextResponse.redirect(
+          buildRedirectUrl(origin, "/login", {
+            tab: "email",
+            confirmed: "1",
+          })
+        );
+      }
       return NextResponse.redirect(new URL(next, origin));
     }
 
