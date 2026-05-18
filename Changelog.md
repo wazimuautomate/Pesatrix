@@ -1,5 +1,10 @@
 # Changelog
 
+## [update] Data Labeling Builder Tabs - 2026-05-18
+- Reworked the Wazim data labeling builder into Manual Entry and Bulk JSON Import tabs that share the same items array.
+- Added label-first item creation, inline JSON paste/import validation, imported item editing in Manual Entry, and drag-handle row reordering.
+- Moved data labeling preview below both tabs and kept preview payload free of `correct_label`.
+
 ## [feat] Data Labeling Task Category - 2026-05-18
 - Added user-facing data labeling card stack with draft restore, image fallback, progress, back navigation, and one-label-per-item selection.
 - Sanitized data labeling task payloads so `correct_label` never reaches user-facing task APIs or client task detail rendering.

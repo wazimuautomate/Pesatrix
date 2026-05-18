@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Eye, Loader2, Plus, Trash2, X } from "lucide-react";
+import { Eye, GripVertical, Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   type TaskCategory,
   type TaskDifficulty,
@@ -848,12 +849,14 @@ function DataLabelingEditor({
   setTaskData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
 }) {
   const [newLabel, setNewLabel] = useState("");
-  const [importOpen, setImportOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState("");
+  const [activeTab, setActiveTab] = useState("manual");
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const labelOptions = ((taskData.label_options as string[]) ?? []);
   const items = ((taskData.items as Array<Record<string, unknown>>) ?? []);
+  const canEditItems = labelOptions.length >= 2;
   const allSameCorrectLabel =
     items.length >= 2 &&
     new Set(items.map((item) => String(item.correct_label ?? ""))).size === 1 &&
@@ -897,6 +900,10 @@ function DataLabelingEditor({
   }
 
   function addItem() {
+    if (!canEditItems) {
+      toast.error("Set at least 2 label options before adding items");
+      return;
+    }
     if (items.length >= 15) {
       toast.error("Maximum 15 items allowed");
       return;
@@ -928,8 +935,20 @@ function DataLabelingEditor({
     });
   }
 
+  function moveItem(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex || toIndex < 0 || toIndex >= items.length) return;
+    const reordered = [...items];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    updateTaskData({ items: reordered });
+  }
+
   function importItems() {
     setImportError("");
+    if (!canEditItems) {
+      setImportError("Set at least 2 label options before importing items");
+      return;
+    }
     try {
       const parsed = JSON.parse(importText) as unknown;
       if (!Array.isArray(parsed)) {
@@ -949,12 +968,15 @@ function DataLabelingEditor({
         const content = String(item.content ?? "").trim();
         const contentType = String(item.content_type ?? "text");
         const correctLabel = String(item.correct_label ?? "").trim();
-        if (!content) throw new Error(`Item ${index + 1} is missing content`);
+        if (!("content" in item)) throw new Error(`Item ${index + 1}: content is required`);
+        if (!("content_type" in item)) throw new Error(`Item ${index + 1}: content_type is required`);
+        if (!("correct_label" in item)) throw new Error(`Item ${index + 1}: correct_label is required`);
+        if (!content) throw new Error(`Item ${index + 1}: content cannot be empty`);
         if (!["text", "image_url"].includes(contentType)) {
-          throw new Error(`Item ${index + 1} has an invalid content_type`);
+          throw new Error(`Item ${index + 1}: content_type must be "text" or "image_url"`);
         }
         if (!labelOptions.includes(correctLabel)) {
-          throw new Error(`Item ${index + 1} correct_label must match an existing label option`);
+          throw new Error(`Item ${index + 1}: correct_label "${correctLabel}" is not in your label options`);
         }
         return {
           id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : generateItemId(),
@@ -965,8 +987,7 @@ function DataLabelingEditor({
       });
 
       updateTaskData({ items: imported });
-      setImportText("");
-      setImportOpen(false);
+      setActiveTab("manual");
       toast.success("Items imported");
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Invalid JSON");
@@ -1041,101 +1062,139 @@ function DataLabelingEditor({
         <p className="text-xs text-muted-foreground">Minimum 2 labels, maximum 6. Duplicates are blocked.</p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" onClick={addItem} disabled={items.length >= 15}>
-          <Plus className="mr-1 h-3 w-3" /> Add Item
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
-          Import from JSON
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)} disabled={items.length === 0}>
-          <Eye className="mr-1 h-3 w-3" /> Preview
-        </Button>
-        <span className="text-xs text-muted-foreground">{items.length}/15 items</span>
-      </div>
+      {!canEditItems && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Add at least 2 label options before adding or importing items.
+        </p>
+      )}
       {items.length > 0 && items.length < 5 && (
         <p className="text-sm text-amber-700">Minimum 5 items required before saving.</p>
       )}
       {allSameCorrectLabel && (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          All correct labels are the same. Review this task before publishing.
+          Warning: all items have the same label. This makes grading meaningless. Add variety.
         </p>
       )}
-      {items.length === 0 && (
-        <p className="text-sm text-muted-foreground">No items yet.</p>
-      )}
-      {items.map((item, i) => (
-        <div
-          key={String(item.id ?? i)}
-          className="rounded-lg border p-4 space-y-2"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <Badge variant="muted">Item {i + 1}</Badge>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => removeItem(i)}
-            >
-              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-            </Button>
-          </div>
-          <Textarea
-            value={String(item.content ?? "")}
-            onChange={(e) => updateItem(i, { content: e.target.value })}
-            placeholder="Sentence, description, or image URL"
-            rows={2}
-          />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div>
-              <Label className="text-xs">Content Type</Label>
-              <Select
-                value={String(item.content_type ?? "text")}
-                onValueChange={(value) => updateItem(i, { content_type: value })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="text">Text</SelectItem>
-                  <SelectItem value="image_url">Image URL</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Correct Label</Label>
-              <Select
-                value={String(item.correct_label ?? "")}
-                onValueChange={(value) => updateItem(i, { correct_label: value })}
-              >
-                <SelectTrigger><SelectValue placeholder="Select label" /></SelectTrigger>
-                <SelectContent>
-                  {labelOptions.map((label) => (
-                    <SelectItem key={label} value={label}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-      ))}
 
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Import Data Labeling Items</DialogTitle>
-          </DialogHeader>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+          <TabsTrigger value="bulk">Bulk JSON Import</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="manual" className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={addItem} disabled={!canEditItems || items.length >= 15}>
+              <Plus className="mr-1 h-3 w-3" /> Add Item
+            </Button>
+            <span className="text-xs text-muted-foreground">{items.length}/15 items</span>
+          </div>
+          {items.length === 0 && (
+            <p className="text-sm text-muted-foreground">No items yet. Add rows manually or import JSON.</p>
+          )}
+          {items.map((item, i) => (
+            <div
+              key={String(item.id ?? i)}
+              className="rounded-lg border p-4 space-y-2"
+              draggable
+              onDragStart={() => setDraggedIndex(i)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                if (draggedIndex !== null) moveItem(draggedIndex, i);
+                setDraggedIndex(null);
+              }}
+              onDragEnd={() => setDraggedIndex(null)}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground" />
+                  <Badge variant="muted">Item {i + 1}</Badge>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeItem(i)}
+                  aria-label={`Delete item ${i + 1}`}
+                >
+                  <X className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              </div>
+              <Textarea
+                value={String(item.content ?? "")}
+                onChange={(e) => updateItem(i, { content: e.target.value })}
+                placeholder="Sentence, description, or image URL"
+                rows={2}
+                required
+              />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs">Content Type</Label>
+                  <Select
+                    value={String(item.content_type ?? "text")}
+                    onValueChange={(value) => updateItem(i, { content_type: value })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="text">Text</SelectItem>
+                      <SelectItem value="image_url">Image URL</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Correct Label</Label>
+                  <Select
+                    value={String(item.correct_label ?? "")}
+                    onValueChange={(value) => updateItem(i, { correct_label: value })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select label" /></SelectTrigger>
+                    <SelectContent>
+                      {labelOptions.map((label) => (
+                        <SelectItem key={label} value={label}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          ))}
+        </TabsContent>
+
+        <TabsContent value="bulk" className="space-y-3">
           <Textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
-            rows={10}
-            placeholder='[{"content":"...","content_type":"text","correct_label":"Positive"}]'
+            rows={12}
+            placeholder={`[
+  {
+    "content": "The food arrived cold and the packaging was damaged.",
+    "content_type": "text",
+    "correct_label": "Negative"
+  },
+  {
+    "content": "Excellent service, will definitely order again!",
+    "content_type": "text",
+    "correct_label": "Positive"
+  }
+]`}
             className="font-mono text-xs"
           />
           {importError && <p className="text-sm text-destructive">{importError}</p>}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
-            <Button onClick={importItems}>Import</Button>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Import replaces the shared item list. Existing manual rows stay intact until parsing succeeds.
+            </p>
+            <Button onClick={importItems} disabled={!canEditItems}>
+              Parse & Import
+            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </TabsContent>
+      </Tabs>
+
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)} disabled={items.length === 0}>
+          <Eye className="mr-1 h-3 w-3" /> Preview
+        </Button>
+      </div>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-2xl">
