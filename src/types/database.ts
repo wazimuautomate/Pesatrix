@@ -352,6 +352,9 @@ export interface Database {
           submitted_at: string;
           answers: Record<string, unknown>;
           screenshot_url: string | null;
+          screenshot_hash: string | null;
+          ip: string | null;
+          user_task_banned: boolean;
           submitted_url: string | null;
           status: string;
           ai_score: number | null;

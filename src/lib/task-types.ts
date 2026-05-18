@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PROOF_REQUIREMENT_DEFAULTS } from "./social-engagement";
 
 export type TaskCategory =
   | "survey"
@@ -85,12 +86,24 @@ export const dataLabelingTaskDataSchema = z.object({
 
 export const socialEngagementTaskDataSchema = z.object({
   type: z.literal("social_engagement"),
-  platform: z.string().min(1),
-  action: z.string().min(1),
+  platform: z.enum(["facebook", "instagram", "youtube", "tiktok", "whatsapp", "twitter", "google", "playstore", "appstore", "other"]),
+  action: z.enum(["follow", "subscribe", "like", "comment", "share", "join", "review", "rate", "download", "purchase"]),
   target_url: z.string().url(),
   target_name: z.string().min(1),
-  requires_screenshot: z.boolean().default(true),
-  requires_username: z.boolean().default(false),
+  target_identifier: z.string().min(1),
+  proof_requirements: z.object({
+    requires_screenshot: z.literal(true),
+    requires_username: z.boolean(),
+    requires_text_input: z.boolean(),
+    text_input_label: z.string().nullable(),
+    text_input_placeholder: z.string().nullable(),
+  }),
+  screenshot_instructions: z.string().min(1),
+  ai_check_criteria: z.string().min(1),
+  hold_days: z.number().int().min(1).max(30).default(7),
+  comment_prompt: z.string().nullable().default(null),
+  verification_notes: z.string().nullable().default(null),
+  reverification_enabled: z.boolean().default(false),
 });
 
 export const verificationQuestionSchema = z.object({
@@ -238,12 +251,21 @@ export function createEmptyDataLabelingTaskData(): DataLabelingTaskData {
 export function createEmptySocialEngagementTaskData(): SocialEngagementTaskData {
   return {
     type: "social_engagement",
-    platform: "",
-    action: "",
+    platform: "instagram",
+    action: "follow",
     target_url: "",
     target_name: "",
-    requires_screenshot: true,
-    requires_username: false,
+    target_identifier: "",
+    proof_requirements: {
+      ...PROOF_REQUIREMENT_DEFAULTS.follow,
+      requires_screenshot: true,
+    },
+    screenshot_instructions: "Screenshot must show the target page and the completed action state.",
+    ai_check_criteria: "Verify the correct platform, target, completed action state, and screenshot authenticity.",
+    hold_days: 7,
+    comment_prompt: null,
+    verification_notes: null,
+    reverification_enabled: false,
   };
 }
 

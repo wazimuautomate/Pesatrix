@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ACTION_LABELS, PLATFORM_COLORS, PLATFORM_LABELS, normalizeSocialAction, normalizeSocialPlatform } from "@/lib/social-engagement";
 
 type Submission = {
   id: string;
@@ -35,6 +36,8 @@ type Submission = {
   ai_score: number | null;
   ai_reasoning: string | null;
   grading_detail: Record<string, unknown> | null;
+  screenshot_url: string | null;
+  screenshot_signed_url: string | null;
   task: {
     title: string;
     category: string;
@@ -47,6 +50,13 @@ type Submission = {
     email: string | null;
     phone: string | null;
   };
+  user_verification?: {
+    risk_score: number | null;
+    flags?: Record<string, unknown> | null;
+  } | null;
+  account_status?: {
+    activated_at: string | null;
+  } | null;
 };
 
 export function ReviewQueue() {
@@ -56,6 +66,7 @@ export function ReviewQueue() {
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   const [reviewing, setReviewing] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchSubmissions();
@@ -68,6 +79,7 @@ export function ReviewQueue() {
       const data = await response.json();
       if (response.ok) {
         setSubmissions(data.submissions ?? []);
+        setSelectedIds(new Set());
       }
     } finally {
       setLoading(false);
@@ -75,6 +87,10 @@ export function ReviewQueue() {
   }
 
   async function handleDecision(submissionId: string, decision: "approved" | "declined") {
+    if (decision === "declined" && !reviewNote.trim()) {
+      toast.error("Decline reason is required");
+      return;
+    }
     setReviewing(true);
     try {
       const response = await fetch(`/api/admin/tasks-new/review/${submissionId}`, {
@@ -97,6 +113,67 @@ export function ReviewQueue() {
     }
   }
 
+  async function handleBulkDecision(decision: "approved" | "declined") {
+    if (selectedIds.size === 0) return;
+    if (decision === "declined" && !reviewNote.trim()) {
+      toast.error("Decline reason is required for bulk decline");
+      return;
+    }
+
+    setReviewing(true);
+    try {
+      for (const submissionId of selectedIds) {
+        const response = await fetch(`/api/admin/tasks-new/review/${submissionId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision, note: reviewNote || null }),
+        });
+        if (!response.ok) {
+          toast.error(`Failed to process ${submissionId}`);
+          return;
+        }
+      }
+      toast.success(decision === "approved" ? "Selected submissions approved" : "Selected submissions declined");
+      setReviewNote("");
+      setSelectedIds(new Set());
+      fetchSubmissions();
+    } finally {
+      setReviewing(false);
+    }
+  }
+
+  async function handleReviewAction(submissionId: string, action: "ban_task" | "flag_fraud") {
+    setReviewing(true);
+    try {
+      const response = await fetch(`/api/admin/tasks-new/review/${submissionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, note: reviewNote || null }),
+      });
+
+      if (!response.ok) {
+        toast.error(action === "ban_task" ? "Failed to ban user from task" : "Failed to flag account");
+        return;
+      }
+
+      toast.success(action === "ban_task" ? "User banned from task" : "Account flagged for fraud review");
+      setReviewNote("");
+      setSelectedSubmission(null);
+      fetchSubmissions();
+    } finally {
+      setReviewing(false);
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
@@ -115,6 +192,25 @@ export function ReviewQueue() {
         </span>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 p-3">
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <Button size="sm" onClick={() => handleBulkDecision("approved")} disabled={reviewing}>
+            Approve All
+          </Button>
+          <Button size="sm" variant="destructive" onClick={() => handleBulkDecision("declined")} disabled={reviewing}>
+            Decline All
+          </Button>
+          <Textarea
+            value={reviewNote}
+            onChange={(event) => setReviewNote(event.target.value)}
+            placeholder="Decline reason for selected submissions"
+            rows={1}
+            className="min-w-[240px] flex-1"
+          />
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-pesatrix-blue" />
@@ -130,9 +226,11 @@ export function ReviewQueue() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10"></TableHead>
                 <TableHead>User</TableHead>
                 <TableHead>Task</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Proof</TableHead>
                 <TableHead>AI Score</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Submitted</TableHead>
@@ -143,14 +241,41 @@ export function ReviewQueue() {
               {submissions.map((sub) => (
                 <TableRow key={sub.id}>
                   <TableCell>
+                    {sub.status === "flagged" && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(sub.id)}
+                        onChange={() => toggleSelected(sub.id)}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <div>
                       <p className="font-medium">{sub.profile?.full_name ?? "Unknown"}</p>
                       <p className="text-xs text-muted-foreground">{sub.profile?.email ?? ""}</p>
+                      <p className="text-xs text-muted-foreground">Risk: {sub.user_verification?.risk_score ?? 0}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium">{sub.task?.title}</TableCell>
+                  <TableCell className="font-medium">
+                    {sub.task?.title}
+                    {sub.task?.category === "social_engagement" && <SocialSubmissionBadges taskData={sub.task.task_data} />}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="muted">{sub.task?.category}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {sub.screenshot_signed_url ? (
+                      <button type="button" onClick={() => setSelectedSubmission(sub)}>
+                        <img
+                          src={sub.screenshot_signed_url}
+                          alt="Proof"
+                          className="h-12 w-12 rounded border object-cover"
+                        />
+                      </button>
+                    ) : (
+                      <span className="text-muted-foreground">None</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {sub.ai_score != null ? (
@@ -262,6 +387,10 @@ export function ReviewQueue() {
                 </div>
               )}
 
+              {selectedSubmission.task?.category === "social_engagement" && (
+                <SocialEngagementReviewDetails submission={selectedSubmission} />
+              )}
+
               <div>
                 <Label className="text-muted-foreground">Answers</Label>
                 <pre className="mt-2 rounded-lg bg-muted p-4 text-sm overflow-x-auto">
@@ -280,7 +409,7 @@ export function ReviewQueue() {
                     id="note"
                     value={reviewNote}
                     onChange={(e) => setReviewNote(e.target.value)}
-                    placeholder="Optional note to user"
+                    placeholder="Required when declining"
                     rows={2}
                   />
                   <div className="flex gap-2">
@@ -298,6 +427,24 @@ export function ReviewQueue() {
                       <X className="mr-2 h-4 w-4" /> Decline
                     </Button>
                   </div>
+                  {selectedSubmission.task?.category === "social_engagement" && (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => handleReviewAction(selectedSubmission.id, "ban_task")}
+                        disabled={reviewing}
+                      >
+                        Ban from Task
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleReviewAction(selectedSubmission.id, "flag_fraud")}
+                        disabled={reviewing}
+                      >
+                        Flag Account
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -353,4 +500,128 @@ function DataLabelingReviewBreakdown({ submission }: { submission: Submission })
       </div>
     </div>
   );
+}
+
+function SocialSubmissionBadges({ taskData }: { taskData?: Record<string, unknown> | null }) {
+  const platform = normalizeSocialPlatform(taskData?.platform);
+  const action = normalizeSocialAction(taskData?.action);
+
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      <Badge
+        style={{
+          backgroundColor: PLATFORM_COLORS[platform],
+          borderColor: PLATFORM_COLORS[platform],
+          color: "white",
+        }}
+      >
+        {PLATFORM_LABELS[platform]}
+      </Badge>
+      <Badge variant="outline">{ACTION_LABELS[action]}</Badge>
+    </div>
+  );
+}
+
+function SocialEngagementReviewDetails({ submission }: { submission: Submission }) {
+  const taskData = submission.task?.task_data ?? {};
+  const platform = normalizeSocialPlatform(taskData.platform);
+  const action = normalizeSocialAction(taskData.action);
+  const detail = submission.grading_detail ?? {};
+  const checks = isRecord(detail.checks) ? detail.checks : {};
+  const issues = Array.isArray(detail.issues) ? detail.issues.map(String) : [];
+
+  return (
+    <div className="space-y-4 rounded-lg border p-4">
+      <div className="flex flex-wrap gap-2">
+        <Badge
+          style={{
+            backgroundColor: PLATFORM_COLORS[platform],
+            borderColor: PLATFORM_COLORS[platform],
+            color: "white",
+          }}
+        >
+          {PLATFORM_LABELS[platform]}
+        </Badge>
+        <Badge variant="outline">{ACTION_LABELS[action]}</Badge>
+      </div>
+
+      {submission.screenshot_signed_url && (
+        <div>
+          <Label className="text-muted-foreground">Screenshot</Label>
+          <a href={submission.screenshot_signed_url} target="_blank" rel="noopener noreferrer">
+            <img
+              src={submission.screenshot_signed_url}
+              alt="Submitted proof screenshot"
+              className="mt-2 max-h-[520px] w-full rounded-lg border object-contain"
+            />
+          </a>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ReviewField label="Username" value={String(submission.answers?.username ?? "Not provided")} />
+        <ReviewField label="Comment / Review Text" value={String(submission.answers?.text_input ?? "Not provided")} />
+        <ReviewField
+          label="Activated"
+          value={
+            submission.account_status?.activated_at
+              ? new Date(submission.account_status.activated_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" })
+              : "Unknown"
+          }
+        />
+        <ReviewField label="Risk Score" value={String(submission.user_verification?.risk_score ?? 0)} />
+      </div>
+
+      <div>
+        <Label className="text-muted-foreground">AI Checks</Label>
+        <div className="mt-2 overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Check</TableHead>
+                <TableHead>Result</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[
+                ["Correct platform", checks.correct_platform],
+                ["Target visible", checks.target_visible],
+                ["Action completed", checks.action_completed],
+                ["Looks authentic", checks.looks_authentic],
+              ].map(([label, value]) => (
+                <TableRow key={String(label)}>
+                  <TableCell>{String(label)}</TableCell>
+                  <TableCell>{value === true ? "Pass" : value === false ? "Fail" : "Unknown"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {issues.length > 0 && (
+        <div>
+          <Label className="text-muted-foreground">AI Issues</Label>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+            {issues.map((issue) => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <Label className="text-muted-foreground">{label}</Label>
+      <p className="text-sm">{value}</p>
+    </div>
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

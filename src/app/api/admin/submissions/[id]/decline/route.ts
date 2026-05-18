@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
+import { normalizeSocialTaskData } from "@/lib/social-engagement";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -44,7 +45,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const { data: submission, error: fetchError } = await admin
     .from("task_submissions")
-    .select("*")
+    .select("*, tasks!task_submissions_task_id_fkey(task_data)")
     .eq("id", id)
     .maybeSingle();
 
@@ -79,6 +80,22 @@ export async function POST(request: Request, { params }: RouteContext) {
       { error: "Failed to update submission" },
       { status: 500 }
     );
+  }
+
+  const taskData = (sub.tasks as Record<string, unknown> | null)?.task_data;
+  if (normalizeSocialTaskData(taskData) && sub.status === "flagged") {
+    const { data: verification } = await admin
+      .from("user_verification")
+      .select("risk_score")
+      .eq("user_id", sub.user_id)
+      .maybeSingle();
+    await admin
+      .from("user_verification")
+      .upsert({
+        user_id: sub.user_id,
+        risk_score: Math.max(0, Number(verification?.risk_score ?? 0) + 8),
+        updated_at: now,
+      });
   }
 
   await auditLog({

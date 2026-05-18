@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, CheckCircle, AlertCircle } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/task-types";
 import { DataLabelingTask } from "@/components/tasks/DataLabelingTask";
+import { SocialEngagementTask } from "@/components/tasks/SocialEngagementTask";
 
 type Task = {
   id: string;
@@ -54,7 +55,6 @@ export function TaskSubmissionForm({
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [screenshotUrl, setScreenshotUrl] = useState("");
   const [submittedUrl, setSubmittedUrl] = useState("");
-  const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [watchSeconds, setWatchSeconds] = useState(0);
@@ -166,10 +166,6 @@ export function TaskSubmissionForm({
         screenshotUrl: task.requires_screenshot ? (screenshotUrl || null) : null,
         submittedUrl: task.requires_url ? (submittedUrl || null) : null,
       };
-
-      if (taskType === "social_engagement" && (taskData as Record<string, unknown>).requires_username) {
-        (payload as Record<string, unknown>).username = username;
-      }
 
       const res = await fetch("/api/tasks/submit", {
         method: "POST",
@@ -290,14 +286,30 @@ export function TaskSubmissionForm({
             />
           )}
           {taskType === "social_engagement" && (
-            <SocialEngagementForm
-              taskData={taskData}
-              screenshotUrl={screenshotUrl}
-              setScreenshotUrl={setScreenshotUrl}
-              submittedUrl={submittedUrl}
-              setSubmittedUrl={setSubmittedUrl}
-              username={username}
-              setUsername={setUsername}
+            <SocialEngagementTask
+              taskId={task.id}
+              taskData={taskData as {
+                type: "social_engagement";
+                platform: string;
+                action: string;
+                target_url: string;
+                target_name: string;
+                target_identifier: string;
+                proof_requirements: {
+                  requires_screenshot: boolean;
+                  requires_username: boolean;
+                  requires_text_input: boolean;
+                  text_input_label: string | null;
+                  text_input_placeholder: string | null;
+                };
+                screenshot_instructions: string;
+                comment_prompt: string | null;
+                hold_days: number;
+              }}
+              payoutKsh={task.payout_ksh}
+              onSubmitSuccess={() => {
+                setSubmitted(true);
+              }}
             />
           )}
           {taskType === "verification" && (
@@ -498,67 +510,6 @@ function DataLabelingForm({
           </CardContent>
         </Card>
       ))}
-    </div>
-  );
-}
-
-function SocialEngagementForm({
-  taskData,
-  screenshotUrl,
-  setScreenshotUrl,
-  submittedUrl,
-  setSubmittedUrl,
-  username,
-  setUsername,
-}: {
-  taskData: Record<string, unknown>;
-  screenshotUrl: string;
-  setScreenshotUrl: (v: string) => void;
-  submittedUrl: string;
-  setSubmittedUrl: (v: string) => void;
-  username: string;
-  setUsername: (v: string) => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-muted p-4">
-        <p className="text-sm">
-          <strong>Action:</strong> {String(taskData.action)} on {String(taskData.platform)}
-        </p>
-        <p className="text-sm">
-          <strong>Target:</strong> {String(taskData.target_name)}
-        </p>
-        <a
-          href={String(taskData.target_url)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-block text-sm text-pesatrix-blue underline"
-        >
-          Open {String(taskData.target_url)}
-        </a>
-      </div>
-      {(taskData.requires_username as boolean) && (
-        <div>
-          <Label htmlFor="username">Your Username</Label>
-          <Input
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="@username"
-          />
-        </div>
-      )}
-      {(taskData.requires_screenshot as boolean) && (
-        <div>
-          <Label htmlFor="screenshot">Screenshot URL</Label>
-          <Input
-            id="screenshot"
-            value={screenshotUrl}
-            onChange={(e) => setScreenshotUrl(e.target.value)}
-            placeholder="https://..."
-          />
-        </div>
-      )}
     </div>
   );
 }

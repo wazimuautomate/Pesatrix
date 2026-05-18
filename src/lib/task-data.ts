@@ -15,7 +15,18 @@ export type DataLabelingTaskData = {
   items?: DataLabelingItem[];
 };
 
+export type SocialEngagementTaskData = {
+  type: "social_engagement";
+  [key: string]: unknown;
+};
+
 export function sanitizeTaskDataForClient(taskData: unknown): unknown {
+  if (isRecord(taskData) && taskData.type === "social_engagement") {
+    const cloned = structuredClone(taskData) as Record<string, unknown>;
+    const { ai_check_criteria: _aiCriteria, verification_notes: _verificationNotes, ...clientSafe } = cloned;
+    return clientSafe;
+  }
+
   if (!isRecord(taskData) || taskData.type !== "data_labeling") {
     return taskData;
   }
@@ -41,6 +52,10 @@ export function sanitizeTaskForClient<T extends { task_data?: unknown }>(task: T
 
 export function isDataLabelingTaskData(value: unknown): value is DataLabelingTaskData {
   return isRecord(value) && value.type === "data_labeling";
+}
+
+export function isSocialEngagementTaskData(value: unknown): value is SocialEngagementTaskData {
+  return isRecord(value) && value.type === "social_engagement";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

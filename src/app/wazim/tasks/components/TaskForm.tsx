@@ -32,6 +32,18 @@ import {
 } from "@/lib/task-types";
 import { DataLabelingTask } from "@/components/tasks/DataLabelingTask";
 import { normalizeDatetime } from "@/lib/datetime";
+import {
+  ACTION_LABELS,
+  PLATFORM_ACTIONS,
+  PLATFORM_COLORS,
+  PLATFORM_LABELS,
+  SOCIAL_PLATFORMS,
+  normalizeSocialAction,
+  normalizeSocialPlatform,
+  proofDefaultsForAction,
+  suggestAiCriteria,
+  suggestScreenshotInstructions,
+} from "@/lib/social-engagement";
 import type { TaskRow } from "./TaskCard";
 
 type TaskFormProps = {
@@ -105,7 +117,12 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
   }, [task]);
 
   function handleCategoryChange(category: TaskCategory) {
-    setMeta((m) => ({ ...m, category }));
+    setMeta((m) => ({
+      ...m,
+      category,
+      requires_screenshot: category === "social_engagement" ? true : m.requires_screenshot,
+      ai_grading_enabled: category === "social_engagement" ? true : m.ai_grading_enabled,
+    }));
     setTaskData(createEmptyTaskData(category) as Record<string, unknown>);
   }
 
@@ -1221,49 +1238,249 @@ function SocialEngagementEditor({
   taskData: Record<string, unknown>;
   setTaskData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
 }) {
+  const platform = normalizeSocialPlatform(taskData.platform);
+  const action = normalizeSocialAction(taskData.action);
+  const proofRequirements = taskData.proof_requirements && typeof taskData.proof_requirements === "object"
+    ? taskData.proof_requirements as Record<string, unknown>
+    : proofDefaultsForAction(action);
+  const availableActions = PLATFORM_ACTIONS[platform];
+  const targetIdentifier = String(taskData.target_identifier ?? "");
+
+  function update(updates: Record<string, unknown>) {
+    setTaskData((current) => ({ ...current, ...updates }));
+  }
+
+  function updateAction(nextAction: string) {
+    const normalizedAction = normalizeSocialAction(nextAction);
+    const nextProof = proofDefaultsForAction(normalizedAction);
+    update({
+      action: normalizedAction,
+      proof_requirements: nextProof,
+      screenshot_instructions: suggestScreenshotInstructions(platform, normalizedAction, targetIdentifier),
+      ai_check_criteria: suggestAiCriteria(platform, normalizedAction),
+      comment_prompt: ["comment", "review"].includes(normalizedAction)
+        ? String(taskData.comment_prompt ?? "")
+        : null,
+    });
+  }
+
+  function updatePlatform(nextPlatform: string) {
+    const normalizedPlatform = normalizeSocialPlatform(nextPlatform);
+    const nextActions = PLATFORM_ACTIONS[normalizedPlatform];
+    const nextAction = nextActions.includes(action) ? action : nextActions[0];
+    update({
+      platform: normalizedPlatform,
+      action: nextAction,
+      screenshot_instructions: suggestScreenshotInstructions(normalizedPlatform, nextAction, targetIdentifier),
+      ai_check_criteria: suggestAiCriteria(normalizedPlatform, nextAction),
+    });
+  }
+
+  function updateProof(updates: Record<string, unknown>) {
+    update({
+      proof_requirements: {
+        ...proofRequirements,
+        ...updates,
+        requires_screenshot: true,
+      },
+    });
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="space-y-4">
       <h3 className="font-medium text-navy">Social Engagement Settings</h3>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label>Platform</Label>
-          <Input
-            value={String(taskData.platform ?? "")}
-            onChange={(e) =>
-              setTaskData((d) => ({ ...d, platform: e.target.value }))
-            }
-            placeholder="facebook, twitter, tiktok"
-          />
+          <Select value={platform} onValueChange={updatePlatform}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {SOCIAL_PLATFORMS.map((item) => (
+                <SelectItem key={item} value={item}>{PLATFORM_LABELS[item]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>Action</Label>
-          <Input
-            value={String(taskData.action ?? "")}
-            onChange={(e) =>
-              setTaskData((d) => ({ ...d, action: e.target.value }))
-            }
-            placeholder="follow, like, share, comment"
-          />
+          <Select value={action} onValueChange={updateAction}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {availableActions.map((item) => (
+                <SelectItem key={item} value={item}>{ACTION_LABELS[item]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="sm:col-span-2">
           <Label>Target URL</Label>
           <Input
             value={String(taskData.target_url ?? "")}
-            onChange={(e) =>
-              setTaskData((d) => ({ ...d, target_url: e.target.value }))
-            }
+            onChange={(e) => update({ target_url: e.target.value })}
             placeholder="https://facebook.com/pagename"
           />
+          {String(taskData.target_url ?? "").startsWith("http") && (
+            <Button type="button" variant="ghost" size="sm" className="mt-1" asChild>
+              <a href={String(taskData.target_url)} target="_blank" rel="noopener noreferrer">Test Link</a>
+            </Button>
+          )}
         </div>
-        <div className="sm:col-span-2">
+        <div>
           <Label>Target Name</Label>
           <Input
             value={String(taskData.target_name ?? "")}
-            onChange={(e) =>
-              setTaskData((d) => ({ ...d, target_name: e.target.value }))
-            }
+            onChange={(e) => update({ target_name: e.target.value })}
             placeholder="Page or account name"
           />
+        </div>
+        <div>
+          <Label>Target Identifier</Label>
+          <Input
+            value={targetIdentifier}
+            onChange={(e) => {
+              const value = e.target.value;
+              update({
+                target_identifier: value,
+                screenshot_instructions: suggestScreenshotInstructions(platform, action, value),
+              });
+            }}
+            placeholder="@pesatrix_ke or channel ID"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Screenshot Instructions</Label>
+          <Textarea
+            value={String(taskData.screenshot_instructions ?? "")}
+            onChange={(e) => update({ screenshot_instructions: e.target.value })}
+            rows={3}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>AI Check Criteria</Label>
+          <Textarea
+            value={String(taskData.ai_check_criteria ?? "")}
+            onChange={(e) => update({ ai_check_criteria: e.target.value })}
+            rows={3}
+          />
+        </div>
+        {["comment", "review"].includes(action) && (
+          <div className="sm:col-span-2">
+            <Label>Comment Prompt</Label>
+            <Textarea
+              value={String(taskData.comment_prompt ?? "")}
+              onChange={(e) => update({ comment_prompt: e.target.value })}
+              placeholder="What exactly should the user write?"
+              rows={2}
+            />
+          </div>
+        )}
+        <div>
+          <Label>Hold Days</Label>
+          <Input
+            type="number"
+            min="1"
+            max="30"
+            value={String(taskData.hold_days ?? 7)}
+            onChange={(e) => update({ hold_days: Math.max(1, Number(e.target.value) || 1) })}
+          />
+        </div>
+        <div className="flex items-center gap-3 pt-6">
+          <Switch
+            checked={Boolean(taskData.reverification_enabled)}
+            onCheckedChange={(value) => update({ reverification_enabled: value })}
+          />
+          <Label>Reverification enabled</Label>
+        </div>
+        <div className="sm:col-span-2 rounded-lg border p-4">
+          <h4 className="text-sm font-semibold text-navy">Proof Requirements</h4>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="flex items-center gap-3">
+              <Switch checked disabled />
+              <Label>Requires Screenshot</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={Boolean(proofRequirements.requires_username)}
+                onCheckedChange={(value) => updateProof({ requires_username: value })}
+              />
+              <Label>Requires Username</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={Boolean(proofRequirements.requires_text_input)}
+                onCheckedChange={(value) => updateProof({ requires_text_input: value })}
+              />
+              <Label>Requires Text Input</Label>
+            </div>
+            {Boolean(proofRequirements.requires_text_input) && (
+              <>
+                <Input
+                  value={String(proofRequirements.text_input_label ?? "")}
+                  onChange={(e) => updateProof({ text_input_label: e.target.value })}
+                  placeholder="Text input label"
+                />
+                <Input
+                  value={String(proofRequirements.text_input_placeholder ?? "")}
+                  onChange={(e) => updateProof({ text_input_placeholder: e.target.value })}
+                  placeholder="Placeholder"
+                />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      </div>
+      <div className="space-y-3">
+        <h3 className="font-medium text-navy">User Preview</h3>
+        <div className="flex flex-wrap gap-2">
+          <Badge
+            style={{
+              backgroundColor: PLATFORM_COLORS[platform],
+              borderColor: PLATFORM_COLORS[platform],
+              color: "white",
+            }}
+          >
+            {PLATFORM_LABELS[platform]}
+          </Badge>
+          <Badge variant="outline">{ACTION_LABELS[action]}</Badge>
+        </div>
+        <div className="space-y-4 rounded-lg border bg-white p-4 text-sm">
+          <div>
+            <p className="text-lg font-semibold text-navy">
+              {ACTION_LABELS[action]} {String(taskData.target_name || "Target Name")}
+            </p>
+            <p className="text-muted-foreground">
+              Target: {targetIdentifier || String(taskData.target_name || "Target")}
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="font-semibold uppercase text-muted-foreground">Instructions</p>
+            <ol className="mt-2 space-y-1">
+              <li>1. Open the target link.</li>
+              <li>2. Complete the {ACTION_LABELS[action].toLowerCase()} action.</li>
+              <li>3. {String(taskData.screenshot_instructions || "Take a screenshot showing proof.")}</li>
+              <li>4. Upload below.</li>
+            </ol>
+          </div>
+          <Button type="button" className="w-full" disabled>
+            Open {PLATFORM_LABELS[platform]}
+          </Button>
+          <div className="rounded-lg border border-dashed bg-muted/40 p-6 text-center text-muted-foreground">
+            Tap to upload screenshot
+          </div>
+          {Boolean(proofRequirements.requires_username) && (
+            <div>
+              <Label>Your {PLATFORM_LABELS[platform]} username</Label>
+              <Input disabled placeholder="@username" />
+            </div>
+          )}
+          {Boolean(proofRequirements.requires_text_input) && (
+            <div>
+              <Label>{String(proofRequirements.text_input_label || "Text proof")}</Label>
+              <Textarea disabled rows={2} />
+            </div>
+          )}
         </div>
       </div>
     </div>

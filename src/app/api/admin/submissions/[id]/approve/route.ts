@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
 import { getWithdrawalHoldDays } from "@/lib/platform-settings";
+import { normalizeSocialTaskData } from "@/lib/social-engagement";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -21,7 +22,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const { data: submission, error: fetchError } = await admin
     .from("task_submissions")
-    .select("*, tasks!task_submissions_task_id_fkey(id, title, payout_ksh)")
+    .select("*, tasks!task_submissions_task_id_fkey(id, title, payout_ksh, task_data)")
     .eq("id", id)
     .maybeSingle();
 
@@ -48,9 +49,10 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const payoutKsh = Math.round(Number(taskData?.payout_ksh ?? 0));
   const now = new Date().toISOString();
-  const holdDays = await getWithdrawalHoldDays();
+  const socialTaskData = normalizeSocialTaskData(taskData?.task_data);
+  const holdDays = socialTaskData?.hold_days ?? await getWithdrawalHoldDays();
   const availableAt = new Date(Date.now() + holdDays * 24 * 60 * 60 * 1000).toISOString();
-  const walletState = holdDays === 0 ? "available" : "pending";
+  const walletState = holdDays === 0 && !socialTaskData ? "available" : "pending";
 
   const { error: updateError } = await admin
     .from("task_submissions")

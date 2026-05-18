@@ -9,6 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CATEGORY_LABELS, CATEGORY_COLORS, DIFFICULTY_COLORS, type TaskCategory } from "@/lib/task-types";
+import {
+  ACTION_LABELS,
+  PLATFORM_COLORS,
+  PLATFORM_LABELS,
+  normalizeSocialAction,
+  normalizeSocialPlatform,
+  socialEstimatedTime,
+} from "@/lib/social-engagement";
 
 type Task = {
   id: string;
@@ -184,9 +192,14 @@ function TaskCard({
   const isCriticalSlots = task.slotsRemaining <= 3;
   const isExpiringSoon = expiresAt && expiresAt.getTime() - now.getTime() < 24 * 60 * 60 * 1000;
   const isDataLabeling = task.category === "data_labeling";
+  const isSocialEngagement = task.category === "social_engagement";
   const batchSize = Number(task.taskData?.batch_size ?? ((task.taskData?.items as unknown[]) ?? []).length ?? 0);
+  const socialPlatform = normalizeSocialPlatform(task.taskData?.platform);
+  const socialAction = normalizeSocialAction(task.taskData?.action);
 
-  const summary = task.description || task.instructions;
+  const summary = isSocialEngagement
+    ? `${ACTION_LABELS[socialAction]} ${String(task.taskData?.target_identifier || task.taskData?.target_name || task.title)} on ${PLATFORM_LABELS[socialPlatform]}`
+    : task.description || task.instructions;
   const truncatedSummary =
     summary.length > 120
       ? `${summary.slice(0, 120)}...`
@@ -207,10 +220,30 @@ function TaskCard({
                 {formatSubtype(task.taskData?.subtype)} - {batchSize} items
               </p>
             )}
+            {isSocialEngagement && (
+              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                {ACTION_LABELS[socialAction]} {String(task.taskData?.target_identifier || task.taskData?.target_name)} on {PLATFORM_LABELS[socialPlatform]}
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <Badge className={categoryClass(task.category)}>
-                {formatCategory(task.category)}
-              </Badge>
+              {isSocialEngagement ? (
+                <>
+                  <Badge
+                    style={{
+                      backgroundColor: PLATFORM_COLORS[socialPlatform],
+                      borderColor: PLATFORM_COLORS[socialPlatform],
+                      color: "white",
+                    }}
+                  >
+                    {PLATFORM_LABELS[socialPlatform]}
+                  </Badge>
+                  <Badge variant="outline">{ACTION_LABELS[socialAction]}</Badge>
+                </>
+              ) : (
+                <Badge className={categoryClass(task.category)}>
+                  {formatCategory(task.category)}
+                </Badge>
+              )}
               <Badge className={difficultyClass(task.difficulty)}>
                 {task.difficulty}
               </Badge>
@@ -245,7 +278,7 @@ function TaskCard({
           {!expiresAt && (
             <span className="flex items-center gap-1 text-muted-foreground">
               <Clock className="h-3.5 w-3.5" />
-              {isDataLabeling ? formatEstimatedTime(batchSize) : "No expiry"}
+              {isDataLabeling ? formatEstimatedTime(batchSize) : isSocialEngagement ? socialEstimatedTime(socialAction) : "No expiry"}
             </span>
           )}
         </div>

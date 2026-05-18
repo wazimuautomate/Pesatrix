@@ -51,12 +51,26 @@ export default async function TaskDetailPage({ params }: RouteContext) {
     redirect("/tasks");
   }
 
-  const { data: existingSubmission } = await admin
+  const { data: existingSubmissions } = await admin
     .from("task_submissions")
     .select("*")
     .eq("task_id", id)
     .eq("user_id", user.id)
-    .maybeSingle();
+    .order("submitted_at", { ascending: false })
+    .limit(3);
+
+  const submissions = existingSubmissions ?? [];
+  const latestSubmission = submissions[0] ?? null;
+  const declineCount = submissions.filter((submission: Record<string, unknown>) => submission.status === "declined").length;
+  const latestSubmittedAt = latestSubmission?.submitted_at
+    ? new Date(latestSubmission.submitted_at as string).getTime()
+    : 0;
+  const socialRetryOpen =
+    task?.category === "social_engagement" &&
+    latestSubmission?.status === "declined" &&
+    declineCount < 2 &&
+    latestSubmittedAt > Date.now() - 24 * 60 * 60 * 1000 &&
+    Number(task?.slots_remaining ?? 0) > 0;
 
   return (
     <DashboardShell
@@ -65,7 +79,7 @@ export default async function TaskDetailPage({ params }: RouteContext) {
       <div className="mx-auto w-full max-w-3xl px-4 py-6">
         <TaskSubmissionForm
           task={sanitizeTaskForClient(task)}
-          existingSubmission={existingSubmission}
+          existingSubmission={socialRetryOpen ? null : latestSubmission}
         />
       </div>
     </DashboardShell>
