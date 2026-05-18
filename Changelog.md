@@ -1,5 +1,13 @@
 # Changelog
 
+## [feat] Onboarding Carousel - 2026-05-18
+- Converted static card-based onboarding to interactive carousel with smooth animations
+- Added step-by-step navigation with previous/next buttons
+- Implemented progress indicator showing current step
+- Added final confirmation screen with checkbox agreement
+- Kept existing form submission logic and API integration intact
+- Using framer-motion for animations matching design reference
+
 ## [migrate] Screenshot Analysis - Claude Sonnet to NVIDIA Vision Models - 2026-05-18
 - Removed Claude Sonnet 4 (Anthropic) image analysis dependency for social engagement task screenshot validation
 - Migrated to free NVIDIA-hosted vision models with automatic fallback handling
