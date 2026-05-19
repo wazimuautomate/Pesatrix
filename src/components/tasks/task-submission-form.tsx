@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, CheckCircle } from "lucide-react";
+import Link from "next/link";
+import { Loader2, ArrowLeft, CheckCircle, Clock, FileText, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -412,6 +413,107 @@ export function TaskSubmissionForm({
               )}
             </>
           )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export function TaskDetailsPreview({ task }: { task: Task }) {
+  const router = useRouter();
+  const taskData = task.task_data;
+  const hasDescription = typeof task.description === "string" && task.description.trim().length > 0;
+  const requirementItems = [
+    task.requires_screenshot ? "Screenshot proof required" : null,
+    task.requires_url ? "Submitted link required" : null,
+    task.min_word_count > 0 ? `Minimum ${task.min_word_count} words` : null,
+  ].filter(Boolean) as string[];
+
+  return (
+    <div className="space-y-6">
+      <Button variant="ghost" onClick={() => router.back()}>
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Tasks
+      </Button>
+
+      <Card>
+        <CardHeader className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className={CATEGORY_COLORS[task.category as keyof typeof CATEGORY_COLORS] ?? "bg-slate-100 text-slate-800"}>
+              {CATEGORY_LABELS[task.category as keyof typeof CATEGORY_LABELS] ?? task.category}
+            </Badge>
+            <Badge variant="outline">{task.difficulty}</Badge>
+          </div>
+          <CardTitle className="text-2xl text-navy">{task.title}</CardTitle>
+          <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-3">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              KSh {task.payout_ksh}
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              {task.slots_remaining} spots remaining
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              {task.expires_at ? `Expires ${new Date(task.expires_at).toLocaleString()}` : "No expiry set"}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {hasDescription && (
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Overview</h3>
+              <p className="text-sm leading-6 text-foreground">{task.description}</p>
+            </section>
+          )}
+
+          <Separator />
+
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Instructions</h3>
+            <div className="whitespace-pre-wrap text-sm leading-6 text-foreground">{task.instructions}</div>
+          </section>
+
+          {requirementItems.length > 0 && (
+            <>
+              <Separator />
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Submission Requirements</h3>
+                <div className="flex flex-wrap gap-2">
+                  {requirementItems.map((item) => (
+                    <Badge key={item} variant="secondary">
+                      {item}
+                    </Badge>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+
+          {task.category === "data_labeling" && (
+            <>
+              <Separator />
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Task Scope</h3>
+                <p className="text-sm leading-6 text-foreground">
+                  This labeling task contains {Number(taskData.batch_size ?? ((taskData.items as unknown[]) ?? []).length ?? 0)} items. You can review the requirements here before opening the labeling interface.
+                </p>
+              </section>
+            </>
+          )}
+
+          <div className="rounded-2xl border border-outline-variant/40 bg-surface-container-low p-4 text-sm text-muted-foreground">
+            The preview shows what this task involves and how to complete it. Questions and answer inputs only appear after you choose <span className="font-medium text-foreground">Start Task</span>.
+          </div>
+
+          <div className="flex gap-3">
+            <Button asChild className="flex-1">
+              <Link href={`/tasks/${task.id}`}>Start Task</Link>
+            </Button>
+            <Button asChild variant="outline" className="flex-1">
+              <Link href="/tasks">Back to task list</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

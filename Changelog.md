@@ -1,5 +1,9 @@
 # Changelog
 
+## [feat] Task Cards Now Include A Preview Action - 2026-05-20
+- Added a `View` button on user task cards so users can open a task preview before starting work
+- Added a preview-only task details mode that shows overview, instructions, payout, slots, and submission requirements without exposing the task questions or answer form
+
 ## [fix] Task Unlock Delay Now Follows Admin Settings Exactly - 2026-05-20
 - Removed the task unlock logic that treated `task_unlock_delay_hours` as whole hours and silently fell back to a hardcoded 24-hour delay, so minute-based test values like `0.0167` now work correctly
 - Updated task unlock snapshots to always derive the user timer from the current admin-configured delay plus any referral acceleration, which means admin delay changes are reflected immediately instead of staying stuck on older stored values

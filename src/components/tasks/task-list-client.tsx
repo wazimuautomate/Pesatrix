@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { Loader2, Clock, Users, CheckCircle, Search, Lock, ChevronRight } from "lucide-react";
+import { Loader2, Clock, Users, CheckCircle, Search, Lock, ChevronRight, Eye } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -295,9 +295,17 @@ function TaskCard({
               Locked
             </Button>
           ) : (
-            <Link href={`/tasks/${task.id}`} className="block">
-              <Button className="w-full">Start Task</Button>
-            </Link>
+            <div className="flex gap-2">
+              <Link href={`/tasks/${task.id}?view=details`} className="flex-1">
+                <Button variant="outline" className="w-full">
+                  <Eye className="mr-2 h-4 w-4" />
+                  View
+                </Button>
+              </Link>
+              <Link href={`/tasks/${task.id}`} className="flex-1">
+                <Button className="w-full">Start Task</Button>
+              </Link>
+            </div>
           )}
         </div>
       </CardContent>
