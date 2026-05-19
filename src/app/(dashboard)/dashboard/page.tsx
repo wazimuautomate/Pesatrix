@@ -49,6 +49,10 @@ type ReferralBonusRow = {
   amount: number | null;
 };
 
+type TrainingRewardRow = {
+  amount: number | null;
+};
+
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient();
 
@@ -92,7 +96,7 @@ export default async function DashboardPage() {
     .eq("referrer_id", user!.id)
     .eq("level", 1);
 
-  const [{ data: rewardSpinRows }, { data: referralBonusRows }] = await Promise.all([
+  const [{ data: rewardSpinRows }, { data: referralBonusRows }, { data: trainingRewardRows }] = await Promise.all([
     (supabase.from("reward_spins" as never) as any)
       .select("payout_amount")
       .eq("user_id", user!.id),
@@ -100,6 +104,12 @@ export default async function DashboardPage() {
       .from("referral_bonuses")
       .select("amount")
       .eq("referrer_id", user!.id),
+    supabase
+      .from("wallet_transactions")
+      .select("amount")
+      .eq("user_id", user!.id)
+      .eq("type", "task_earning")
+      .ilike("description", "%Training completion reward%"),
   ]);
 
   const [accountStatusResult, { data: profileRow }, trainingSnapshot] = await Promise.all([
@@ -185,6 +195,7 @@ export default async function DashboardPage() {
     (sum: number, row) => sum + Number(row.amount ?? 0),
     0
   );
+  const trainingEarnings = ((trainingRewardRows ?? []) as TrainingRewardRow[]).reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
   const earningPathSteps = [
     {
       label: "Setup",
@@ -321,18 +332,6 @@ export default async function DashboardPage() {
         </Card>
       ) : null}
 
-      <Card className="border-outline-variant/40">
-        <CardContent className="flex items-center justify-between gap-4 p-4">
-          <div>
-            <p className="font-medium text-foreground">Daily reward streak</p>
-            <p className="text-sm text-muted-foreground">
-              Keep your free-spin streak alive to maintain consistent reward momentum.
-            </p>
-          </div>
-          <Badge variant="muted">Streak: {rewardState.dailyStreak}</Badge>
-        </CardContent>
-      </Card>
-
       <Card className="overflow-hidden border-outline-variant/40">
         <CardContent className="p-0">
           <div className="grid gap-0 lg:grid-cols-[1.2fr,0.8fr]">
@@ -393,13 +392,6 @@ export default async function DashboardPage() {
                 </div>
                 <div className="flex items-center justify-between rounded-xl bg-white px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <Gift className="h-5 w-5 text-teal" />
-                    <span className="text-sm font-medium text-foreground">Wheel rewards</span>
-                  </div>
-                  <span className="text-sm font-bold tabular-nums text-navy">{formatKSh(wheelEarnings)}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl bg-white px-4 py-3">
-                  <div className="flex items-center gap-3">
                     <Users className="h-5 w-5 text-teal" />
                     <span className="text-sm font-medium text-foreground">Referral bonuses</span>
                   </div>
@@ -410,11 +402,7 @@ export default async function DashboardPage() {
                     <BookOpen className="h-5 w-5 text-primary" />
                     <span className="text-sm font-medium text-foreground">Training</span>
                   </div>
-                  <span className="text-sm font-bold text-navy">
-                    {trainingSnapshot.trainingCompleted
-                      ? "Complete"
-                      : `${trainingSnapshot.training.completed_days.length}/7 days`}
-                  </span>
+                  <span className="text-sm font-bold tabular-nums text-navy">{formatKSh(trainingEarnings)}</span>
                 </div>
               </div>
             </div>

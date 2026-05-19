@@ -17,12 +17,11 @@ export default function RewardsPage() {
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-navy">Coming Soon</h1>
             <p className="text-muted-foreground">
-              Daily rewards and spin wheel will be available once your account is fully set up.
-              Check back after activation and training completion.
+              Daily rewards and spin wheel will be available soon.
             </p>
           </div>
           <p className="text-sm text-on-surface-variant">
-            Complete onboarding → Activate account → Finish training → Access rewards
+            You will be notified when the feature is live. Stay tuned for exciting rewards and surprises!
           </p>
         </CardContent>
       </Card>

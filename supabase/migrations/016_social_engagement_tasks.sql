@@ -25,7 +25,12 @@ for select
 using (
   bucket_id = 'task-screenshots'
   and (
-    public.is_admin()
+    exists (
+      select 1
+      from public.admin_users au
+      where au.user_id = auth.uid()
+        and au.status = 'active'
+    )
     or auth.uid()::text = split_part(name, '/', 1)
   )
 );
@@ -45,14 +50,24 @@ for update
 using (
   bucket_id = 'task-screenshots'
   and (
-    public.is_admin()
+    exists (
+      select 1
+      from public.admin_users au
+      where au.user_id = auth.uid()
+        and au.status = 'active'
+    )
     or auth.uid()::text = split_part(name, '/', 1)
   )
 )
 with check (
   bucket_id = 'task-screenshots'
   and (
-    public.is_admin()
+    exists (
+      select 1
+      from public.admin_users au
+      where au.user_id = auth.uid()
+        and au.status = 'active'
+    )
     or auth.uid()::text = split_part(name, '/', 1)
   )
 );
@@ -63,7 +78,12 @@ for delete
 using (
   bucket_id = 'task-screenshots'
   and (
-    public.is_admin()
+    exists (
+      select 1
+      from public.admin_users au
+      where au.user_id = auth.uid()
+        and au.status = 'active'
+    )
     or auth.uid()::text = split_part(name, '/', 1)
   )
 );

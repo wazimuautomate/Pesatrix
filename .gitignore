@@ -45,3 +45,7 @@ dev-server-*.log
 .vscode
 /tests
 Old Pesatrix/
+offerwall-integration-guide.md
+PESATRIX_SYSTEM_DOC.md
+Pesatrix_Backend_Database_API_Spec.md
+training_curriculum_day1_to_day7.md
