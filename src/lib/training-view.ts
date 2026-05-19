@@ -1,7 +1,6 @@
 import type { TrainingProgramSnapshot } from "@/lib/training";
 import {
   TRAINING_DAYS,
-  TRAINING_REWARD_AMOUNT,
   TRAINING_STAGES,
   type TrainingStageId,
 } from "@/lib/training-program";
@@ -55,7 +54,7 @@ export type TrainingViewData = {
   steps: TrainingStepView[];
 };
 
-export function buildTrainingView(snapshot: TrainingProgramSnapshot): TrainingViewData {
+export function buildTrainingView(snapshot: TrainingProgramSnapshot, rewardAmount: number = 50): TrainingViewData {
   const completedDays = snapshot.training.completed_days.length;
   const stage = TRAINING_STAGES.find((item) => item.id === snapshot.training.current_stage) ?? TRAINING_STAGES[0];
   const currentDay = TRAINING_DAYS.find((day) => day.day === snapshot.training.current_day) ?? TRAINING_DAYS[0];
@@ -63,7 +62,7 @@ export function buildTrainingView(snapshot: TrainingProgramSnapshot): TrainingVi
   const trainingCompleted = snapshot.trainingCompleted;
 
   return {
-    rewardAmount: TRAINING_REWARD_AMOUNT,
+    rewardAmount,
     totalDays: TRAINING_DAYS.length,
     completedDays,
     progressValue: (completedDays / TRAINING_DAYS.length) * 100,

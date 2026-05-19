@@ -9,6 +9,7 @@ import {
   submitTrainingStageTest,
 } from "@/lib/training";
 import { buildTrainingView } from "@/lib/training-view";
+import { getTrainingCompletionRewardKsh } from "@/lib/platform-settings";
 
 const requestSchema = z.discriminatedUnion("action", [
   z.object({
@@ -41,8 +42,11 @@ export async function GET() {
       );
     }
 
-    const snapshot = await getTrainingProgramSnapshotForUser(user.id);
-    return NextResponse.json({ snapshot, view: buildTrainingView(snapshot) });
+    const [snapshot, rewardAmount] = await Promise.all([
+      getTrainingProgramSnapshotForUser(user.id),
+      getTrainingCompletionRewardKsh(),
+    ]);
+    return NextResponse.json({ snapshot, view: buildTrainingView(snapshot, rewardAmount) });
   } catch (error) {
     console.error("[GET /api/training/progress]", error);
 
@@ -79,7 +83,8 @@ export async function POST(request: Request) {
 
     if (parsed.data.action === "complete_day") {
       const { snapshot, result } = await completeTrainingDay(user.id, parsed.data.answers);
-      return NextResponse.json({ snapshot, view: buildTrainingView(snapshot), result });
+      const rewardAmount = await getTrainingCompletionRewardKsh();
+      return NextResponse.json({ snapshot, view: buildTrainingView(snapshot, rewardAmount), result });
     }
 
     if (parsed.data.action === "grade_question") {
@@ -94,9 +99,10 @@ export async function POST(request: Request) {
     }
 
     const result = await submitTrainingStageTest(user.id, parsed.data.answers);
+    const rewardAmount = await getTrainingCompletionRewardKsh();
     return NextResponse.json({
       ...result,
-      view: buildTrainingView(result.snapshot),
+      view: buildTrainingView(result.snapshot, rewardAmount),
     });
   } catch (error) {
     if (error instanceof TrainingProgressError) {

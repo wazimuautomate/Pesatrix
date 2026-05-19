@@ -1,5 +1,11 @@
 # Changelog
 
+## [fix] Training Reward Display Now Dynamic from Platform Settings - 2026-05-19
+- Removed hardcoded `TRAINING_REWARD_AMOUNT = 50` from `training-program.ts` and `training-view.ts`
+- `buildTrainingView()` now accepts an optional `rewardAmount` parameter (defaults to 50 for backward compat)
+- Training page and API routes fetch the reward from `platform_settings.training_completion_reward_ksh` via `getTrainingCompletionRewardKsh()` instead of using a static constant
+- Admin-configured reward changes are now reflected immediately on the training page (the actual reward credited was already dynamic via `ensureTrainingReward()`)
+
 ## [fix] Admin Training Progress System - 2026-05-19
 - Fixed the admin training dashboard to load real `training_progress` records with real profile data instead of relying on a broken relation select
 - Restored working search and status filters for not started, in progress, awaiting test, and completed learners

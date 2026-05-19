@@ -1,5 +1,3 @@
-export const TRAINING_REWARD_AMOUNT = 50;
-
 export type TrainingProgramStatus =
   | "not_started"
   | "in_progress"
@@ -58,7 +56,7 @@ export const TRAINING_DAYS = [
     "stageId": 1,
     "focus": "Foundations of Participant Integrity",
     "title": "Foundations of Participant Integrity",
-    "summary": "When you join an online research or micro-task platform, you enter a system built on trust. Platforms, researchers, and companies pay real money for your responses because they believe you are who you say you are, and that you are answering honestly. The moment you break that trust, the entire data pipeline downstream becomes corrupted.",
+    "summary": "When you join an online research or micro-task platform, you enter a system built on trust. Platforms, researchers, and companies pay real money for your responses because they believe you are who you say you are, and that you are answering honestly.",
     "sections": [
       {
         "title": "Why Integrity Is Your Most Valuable Asset",
