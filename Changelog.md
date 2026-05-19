@@ -1,5 +1,9 @@
 # Changelog
 
+## [fix] Remove Phone/Email Verification Requirement for Withdrawals - 2026-05-20
+- Removed phone and email verification check from withdrawal API
+- Users can now withdraw without requiring phone and email verification
+
 ## [fix] Training Reward Display Now Dynamic from Platform Settings - 2026-05-19
 - Removed hardcoded `TRAINING_REWARD_AMOUNT = 50` from `training-program.ts` and `training-view.ts`
 - `buildTrainingView()` now accepts an optional `rewardAmount` parameter (defaults to 50 for backward compat)

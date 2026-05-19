@@ -64,20 +64,6 @@ export async function POST(request: Request) {
 
     const { amount: validAmount, phone } = parsed.data;
 
-    const verification = await getWithdrawalVerification(user.id);
-
-    if (!verification.phoneVerified || !verification.emailVerified) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "VERIFICATION_REQUIRED",
-            message: "Phone and email must both be verified before withdrawing",
-          },
-        },
-        { status: 422 }
-      );
-    }
-
     const { available } = await getWalletSummaryForUser(user.id);
 
     if (validAmount > available) {
