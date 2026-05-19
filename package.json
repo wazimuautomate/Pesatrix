@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types src/lib/auth/register.test.ts tests/mpesa-phone.test.mjs tests/task-data-sanitize.test.mjs"
+    "test": "node --test --experimental-strip-types src/lib/auth/register.test.ts src/lib/referral-program.test.ts tests/mpesa-phone.test.mjs tests/task-data-sanitize.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

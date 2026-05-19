@@ -9,6 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  REFERRAL_ACTIVATION_RULE_KEY,
+  REFERRAL_LEVEL_1_REWARD_KEY,
+  REFERRAL_LEVEL_2_REWARD_KEY,
+  REFERRAL_LEVEL_3_REWARD_KEY,
+  REFERRAL_MAX_LEVELS_KEY,
   TRAINING_REWARD_SETTING_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
@@ -93,6 +98,33 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       max: 10000,
       defaultValue: "50",
     },
+    {
+      key: REFERRAL_LEVEL_1_REWARD_KEY,
+      label: "Referral level 1 reward (KSh)",
+      description: "Bonus for a direct referral after the referred account activates.",
+      type: "number",
+      min: 0,
+      max: 100000,
+      defaultValue: "100",
+    },
+    {
+      key: REFERRAL_LEVEL_2_REWARD_KEY,
+      label: "Referral level 2 reward (KSh)",
+      description: "Bonus when your referral's referral activates.",
+      type: "number",
+      min: 0,
+      max: 100000,
+      defaultValue: "50",
+    },
+    {
+      key: REFERRAL_LEVEL_3_REWARD_KEY,
+      label: "Referral level 3 reward (KSh)",
+      description: "Bonus when a third-level referral activates.",
+      type: "number",
+      min: 0,
+      max: 100000,
+      defaultValue: "25",
+    },
   ];
 
   const settingDefinitions = [
@@ -121,6 +153,18 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       label: "Training Day Unlock Minutes",
       description: "Minutes after completing a training day before next day becomes available",
       type: "number",
+    },
+    {
+      key: REFERRAL_MAX_LEVELS_KEY,
+      label: "Referral max levels",
+      description: "How many levels deep the referral engine should reward. Supported range is 1 to 3.",
+      type: "number",
+    },
+    {
+      key: REFERRAL_ACTIVATION_RULE_KEY,
+      label: "Referral activation rule",
+      description: "Current supported rule: activation_paid. Bonuses unlock only after paid activation.",
+      type: "text",
     },
   ];
 

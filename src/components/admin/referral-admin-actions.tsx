@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export function ReferralCreateForm() {
   const router = useRouter();
-  const [form, setForm] = useState({ referrerId: "", refereeId: "", level: "1", source: "admin" });
+  const [form, setForm] = useState({ referrerIdentifier: "", refereeIdentifier: "", source: "admin" });
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -22,7 +22,7 @@ export function ReferralCreateForm() {
       const response = await fetch("/api/admin/referrals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, level: Number(form.level), reason: "Created from Wazim referrals page" }),
+        body: JSON.stringify({ ...form, reason: "Created from Wazim referrals page" }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -30,7 +30,7 @@ export function ReferralCreateForm() {
         return;
       }
       toast.success("Referral created");
-      setForm({ referrerId: "", refereeId: "", level: "1", source: "admin" });
+      setForm({ referrerIdentifier: "", refereeIdentifier: "", source: "admin" });
       router.refresh();
     } finally {
       setLoading(false);
@@ -38,16 +38,19 @@ export function ReferralCreateForm() {
   }
 
   return (
-    <form className="grid gap-4 md:grid-cols-[1fr_1fr_110px_130px_auto]" onSubmit={onSubmit}>
-      <Field label="Referrer user ID" value={form.referrerId} onChange={(value) => setForm((current) => ({ ...current, referrerId: value }))} />
-      <Field label="Referee user ID" value={form.refereeId} onChange={(value) => setForm((current) => ({ ...current, refereeId: value }))} />
-      <div className="space-y-2">
-        <Label>Level</Label>
-        <Select value={form.level} onValueChange={(value) => setForm((current) => ({ ...current, level: value }))}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>{["1", "2", "3"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
+    <form className="grid gap-4 md:grid-cols-[1.2fr_1.2fr_160px_auto]" onSubmit={onSubmit}>
+      <Field
+        label="Referrer"
+        hint="User ID, referral code, email, or phone"
+        value={form.referrerIdentifier}
+        onChange={(value) => setForm((current) => ({ ...current, referrerIdentifier: value }))}
+      />
+      <Field
+        label="Referee"
+        hint="User ID, referral code, email, or phone"
+        value={form.refereeIdentifier}
+        onChange={(value) => setForm((current) => ({ ...current, refereeIdentifier: value }))}
+      />
       <div className="space-y-2">
         <Label>Source</Label>
         <Select value={form.source} onValueChange={(value) => setForm((current) => ({ ...current, source: value }))}>
@@ -63,9 +66,8 @@ export function ReferralCreateForm() {
   );
 }
 
-export function ReferralRowActions({ referralId, level, source }: { referralId: string; level: number; source: string }) {
+export function ReferralRowActions({ referralId, source }: { referralId: string; source: string }) {
   const router = useRouter();
-  const [nextLevel, setNextLevel] = useState(String(level));
   const [nextSource, setNextSource] = useState(source);
   const [loading, setLoading] = useState(false);
 
@@ -75,7 +77,7 @@ export function ReferralRowActions({ referralId, level, source }: { referralId: 
       const response = await fetch(`/api/admin/referrals/${referralId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ level: Number(nextLevel), source: nextSource, reason: "Referral update" }),
+        body: JSON.stringify({ source: nextSource, reason: "Referral source update" }),
       });
       if (!response.ok) {
         toast.error("Failed to update referral");
@@ -106,10 +108,6 @@ export function ReferralRowActions({ referralId, level, source }: { referralId: 
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <Select value={nextLevel} onValueChange={setNextLevel}>
-        <SelectTrigger className="h-9 w-20"><SelectValue /></SelectTrigger>
-        <SelectContent>{["1", "2", "3"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
-      </Select>
       <Select value={nextSource} onValueChange={setNextSource}>
         <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
         <SelectContent>{["admin", "signup", "import"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
@@ -120,12 +118,23 @@ export function ReferralRowActions({ referralId, level, source }: { referralId: 
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function Field({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   const id = label.toLowerCase().replace(/\s+/g, "-");
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
       <Input id={id} value={value} onChange={(event) => onChange(event.target.value)} />
+      <p className="text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 }

@@ -1,5 +1,18 @@
 # Changelog
 
+## [fix] Referral System End-to-End - 2026-05-19
+- Fixed user referral dashboard to load the logged-in profile referral code from `profiles.referral_code`
+- Added environment-aware referral link generation with server-side base URL detection for localhost, configured app URLs, and Vercel deployments
+- Replaced remaining referral mockups on the user dashboard with live referral network, pending earnings, available earnings, level counts, and bonus history
+- Refactored referral payout logic to read level depth and reward amounts from database-backed platform settings instead of hardcoded percentages
+- Preserved activation-gated referral crediting and tightened idempotency so existing bonuses and wallet credits are not duplicated or silently rewritten
+- Added referral programme settings keys and seeded defaults via a new migration
+- Expanded admin settings UI to manage referral level count, activation rule, and per-level KSh payouts
+- Rebuilt the admin referrals dashboard to show live counts, live bonus totals, real referrer/referee labels, and generated referral links
+- Fixed admin referral creation so staff can assign direct referrals by user ID, referral code, email, or phone with proper validation and persistence
+- Added loading/error handling for user and admin referral pages
+- Added referral reward unit coverage and updated the test command to include it
+
 ## [feat] OpenRouter Vision Models as Fallback - 2026-05-19
 - Extended existing NVIDIA vision fallback system with OpenRouter free vision models
 - Added OpenRouter models to fallback chain (processed after NVIDIA models fail):
