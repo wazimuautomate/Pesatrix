@@ -1,7 +1,12 @@
 import "server-only";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { getTrainingDayUnlockMinutes, getTrainingCompletionRewardKsh, getTaskUnlockDelayHours } from "@/lib/platform-settings";
+import {
+  getReferralTaskUnlockReduction,
+  getTaskUnlockDelayHours,
+  getTrainingCompletionRewardKsh,
+  getTrainingDayUnlockMinutes,
+} from "@/lib/platform-settings";
 import {
   type TrainingProgramStatus,
   type TrainingStageId,
@@ -151,6 +156,11 @@ function addHours(date: Date, hours: number) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
 
+function formatReductionPercentage(reduction: number) {
+  const percentage = Math.max(0, Math.min(100, reduction * 100));
+  return Number.isInteger(percentage) ? String(percentage) : percentage.toFixed(2).replace(/\.?0+$/, "");
+}
+
 function validDate(value: string | null | undefined) {
   if (!value) return null;
 
@@ -271,7 +281,7 @@ function buildGateMessage(activated: boolean, trainingCompleted: boolean) {
   return null;
 }
 
-function buildTasksLockedGateMessage(unlockAt: string, accelerated: boolean): string {
+function buildTasksLockedGateMessage(unlockAt: string, accelerated: boolean, reduction: number): string {
   const unlockDate = new Date(unlockAt);
   const timeStr = unlockDate.toLocaleString("en-KE", {
     dateStyle: "medium",
@@ -280,10 +290,10 @@ function buildTasksLockedGateMessage(unlockAt: string, accelerated: boolean): st
   });
 
   if (accelerated) {
-    return `You're almost there! Tasks unlock at ${timeStr}. (accelerated)`;
+    return `Your personalized tasks are being prepared and will be ready at ${timeStr}. Your referral reward has already shortened the wait.`;
   }
 
-  return `You're almost there! Tasks unlock at ${timeStr}. Refer a friend who activates to speed this up by 50%.`;
+  return `Your personalized tasks are being prepared and will be ready at ${timeStr}. Refer a friend who activates to shorten the remaining wait by ${formatReductionPercentage(reduction)}%.`;
 }
 
 function isMissingTrainingProgressRelation(error: PostgrestLikeError | null | undefined) {
@@ -366,7 +376,10 @@ export async function getTrainingProgramSnapshotForUser(
   const onboardingComplete = isOnboardingComplete(accountStatus);
   const activated = isActivated(accountStatus) || hasPaidActivation;
   const trainingCompleted = Boolean(trainingProgress.completed_at || trainingProgress.status === "completed");
-  const configuredTaskUnlockDelayHours = await getTaskUnlockDelayHours();
+  const [configuredTaskUnlockDelayHours, referralTaskUnlockReduction] = await Promise.all([
+    getTaskUnlockDelayHours(),
+    getReferralTaskUnlockReduction(),
+  ]);
   const completedAt = validDate(trainingProgress.completed_at);
   const configuredTaskUnlockAt = trainingCompleted && completedAt
     ? addHours(completedAt, configuredTaskUnlockDelayHours)
@@ -400,7 +413,8 @@ export async function getTrainingProgramSnapshotForUser(
     gateReason = "tasks_locked";
     gateMessage = buildTasksLockedGateMessage(
       effectiveTaskUnlockAtIso!,
-      trainingProgress.task_unlock_accelerated
+      trainingProgress.task_unlock_accelerated,
+      referralTaskUnlockReduction
     );
   }
 
@@ -417,6 +431,49 @@ export async function getTrainingProgramSnapshotForUser(
     taskUnlockAt: effectiveTaskUnlockAtIso,
     tasksLocked,
   };
+}
+
+export async function accelerateTaskUnlockForReferral(userId: string): Promise<boolean> {
+  const admin = createAdminSupabaseClient();
+  const snapshot = await getTrainingProgramSnapshotForUser(userId);
+
+  if (!snapshot.trainingCompleted || !snapshot.tasksLocked || !snapshot.taskUnlockAt) {
+    return false;
+  }
+
+  if (snapshot.training.task_unlock_accelerated) {
+    return false;
+  }
+
+  const reduction = await getReferralTaskUnlockReduction();
+  if (reduction <= 0) {
+    return false;
+  }
+
+  const now = new Date();
+  const currentUnlockAt = validDate(snapshot.taskUnlockAt);
+  if (!currentUnlockAt || currentUnlockAt.getTime() <= now.getTime()) {
+    return false;
+  }
+
+  const remainingMs = currentUnlockAt.getTime() - now.getTime();
+  const reducedRemainingMs = Math.max(0, Math.ceil(remainingMs * (1 - reduction)));
+  const newUnlockAt = new Date(now.getTime() + reducedRemainingMs).toISOString();
+
+  const { error } = await admin
+    .from("training_progress")
+    .update({
+      task_unlock_at: newUnlockAt,
+      task_unlock_accelerated: true,
+    })
+    .eq("user_id", userId)
+    .eq("status", "completed");
+
+  if (error) {
+    throw error;
+  }
+
+  return true;
 }
 
 export async function ensureTrainingReward(userId: string, createdByAdminId?: string | null) {

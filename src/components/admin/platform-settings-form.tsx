@@ -139,7 +139,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
     {
       key: "task_unlock_delay_hours",
       label: "Task Unlock Delay",
-      description: "Hours after training completion before user gets access to tasks",
+      description: "Hours after training completion before tasks open. Decimals are supported, so 0.0167 is about 1 minute.",
       type: "number",
       step: "0.0001",
     },
@@ -152,9 +152,9 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
     {
       key: "referral_task_unlock_reduction",
       label: "Referral Task Unlock Reduction",
-      description: "Fraction by which task unlock timer is reduced when user refers a friend who activates during waiting period",
+      description: "How much of the remaining wait is removed after a successful direct activation referral. Supports 0.5 or 50 for 50%.",
       type: "number",
-      step: "0.1",
+      step: "0.01",
     },
     {
       key: "training_day_unlock_minutes",

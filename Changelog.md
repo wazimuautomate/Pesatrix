@@ -1,5 +1,12 @@
 # Changelog
 
+## [fix] Task Unlock Delay Now Follows Admin Settings Exactly - 2026-05-20
+- Removed the task unlock logic that treated `task_unlock_delay_hours` as whole hours and silently fell back to a hardcoded 24-hour delay, so minute-based test values like `0.0167` now work correctly
+- Updated task unlock snapshots to always derive the user timer from the current admin-configured delay plus any referral acceleration, which means admin delay changes are reflected immediately instead of staying stuck on older stored values
+- Wired direct referral activation into the task wait window so a successful referral can shorten the remaining lock period using the configured reduction value
+- Refreshed the user task gate UI with more reassuring copy and added live polling/no-store fetches so countdown changes from admin updates or referral rewards appear without stale caching
+- Clarified the admin setting descriptions for task delay and referral reduction so fractional hours and percentage-style reduction values are easier to configure safely
+
 ## [fix] Admin Withdrawal Role Access - 2026-05-20
 - Fixed withdrawal admin API authorization so active `admin` users can open and operate the withdrawal dashboard instead of being blocked by finance-only route guards
 - Expanded read access for withdrawal list/detail endpoints to match the rest of the admin payment tooling, while keeping mutation routes limited to write-capable admin roles

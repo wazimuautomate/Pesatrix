@@ -5,6 +5,7 @@
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { sendReferralBonusEmail } from "@/lib/notifications";
 import { getReferralProgramSettings, getReferralRewardForLevel } from "@/lib/referral-program";
+import { accelerateTaskUnlockForReferral } from "@/lib/training";
 
 type AccountStatusRow = {
   state?: string | null;
@@ -226,10 +227,6 @@ export async function creditReferralChain(activatedUserId: string): Promise<void
       throw referralRowError;
     }
 
-    if (amount <= 0) {
-      continue;
-    }
-
     const { data: existingBonus, error: existingBonusError } = await supabase
       .from("referral_bonuses")
       .select("id")
@@ -243,6 +240,14 @@ export async function creditReferralChain(activatedUserId: string): Promise<void
     }
 
     let bonusRowId = existingBonus?.id ?? null;
+
+    if (level === 1 && !bonusRowId) {
+      await accelerateTaskUnlockForReferral(referrerId);
+    }
+
+    if (amount <= 0) {
+      continue;
+    }
 
     if (!bonusRowId) {
       const { data: bonus, error: bonusError } = await supabase

@@ -12,6 +12,8 @@ type TaskGatePanelProps = {
 };
 
 export function TaskGatePanel({ task, access }: TaskGatePanelProps) {
+  const isTaskPreparation = access.gateReason === "tasks_locked";
+
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-3xl items-center justify-center px-4 py-10">
       <Card className="w-full border-outline-variant/40">
@@ -39,7 +41,9 @@ export function TaskGatePanel({ task, access }: TaskGatePanelProps) {
             <div className="flex items-start gap-3">
               <Lock className="mt-0.5 h-5 w-5 text-amber-600" />
               <div>
-                <p className="font-semibold text-amber-900">Task start is locked</p>
+                <p className="font-semibold text-amber-900">
+                  {isTaskPreparation ? "Your personalized tasks are being prepared" : "Your task dashboard is not ready yet"}
+                </p>
                 <p className="mt-1 text-sm text-amber-800">
                   {access.gateMessage}
                 </p>
@@ -68,8 +72,20 @@ export function TaskGatePanel({ task, access }: TaskGatePanelProps) {
 
           <div className="flex gap-3">
             <Button asChild className="flex-1">
-              <Link href={!access.activated ? "/dashboard/activate" : "/dashboard/training"}>
-                {!access.activated ? "Activate account" : "Finish training"}
+              <Link
+                href={
+                  !access.activated
+                    ? "/dashboard/activate"
+                    : isTaskPreparation
+                      ? "/dashboard/referrals"
+                      : "/dashboard/training"
+                }
+              >
+                {!access.activated
+                  ? "Activate account"
+                  : isTaskPreparation
+                    ? "View referrals"
+                    : "Finish training"}
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>

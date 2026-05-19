@@ -111,6 +111,16 @@ export async function PATCH(request: Request) {
     }
   }
 
+  if (key === "referral_task_unlock_reduction") {
+    const numValue = Number(value);
+    if (!Number.isFinite(numValue) || numValue < 0 || numValue > 100) {
+      return NextResponse.json(
+        { error: "Referral task unlock reduction must be between 0 and 100 (or 0 and 1 as a fraction)" },
+        { status: 422 }
+      );
+    }
+  }
+
   if (key === WITHDRAWAL_N8N_WEBHOOK_URL_KEY) {
     const trimmed = String(value).trim();
     if (
