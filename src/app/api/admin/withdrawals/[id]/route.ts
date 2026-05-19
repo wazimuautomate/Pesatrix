@@ -33,7 +33,7 @@ async function getWithdrawal(admin: ReturnType<typeof createAdminSupabaseClient>
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { error } = await requireAdmin({
-    allowedRoles: ["super_admin", "finance"],
+    allowedRoles: ["super_admin", "finance", "admin", "support"],
   });
   if (error) return error;
 
@@ -81,7 +81,7 @@ export async function POST(request: Request, context: RouteContext) {
 export async function PATCH(request: Request, { params }: RouteContext) {
   const { error, userId } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "finance"],
+    allowedRoles: ["super_admin", "finance", "admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -160,7 +160,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 export async function DELETE(request: Request, { params }: RouteContext) {
   const { error, userId } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "finance"],
+    allowedRoles: ["super_admin", "finance", "admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -1,5 +1,9 @@
 # Changelog
 
+## [fix] Admin Withdrawal Role Access - 2026-05-20
+- Fixed withdrawal admin API authorization so active `admin` users can open and operate the withdrawal dashboard instead of being blocked by finance-only route guards
+- Expanded read access for withdrawal list/detail endpoints to match the rest of the admin payment tooling, while keeping mutation routes limited to write-capable admin roles
+
 ## [fix] Withdrawal Balance Rebuild And Admin Queue Recovery - 2026-05-20
 - Fixed wallet summary logic to derive available balance from ledger bucket state instead of relying on a narrow `status = 'available'` rule that could collapse older available credits to zero after a withdrawal request
 - Added a repair migration to rebuild `wallets.available_balance`, `pending_balance`, and `total_earned` from the transaction ledger for all users and keep future syncs aligned with the corrected bucket-based accounting

@@ -5,7 +5,7 @@ import { getAdminWithdrawals } from "@/lib/admin-withdrawals";
 
 export async function GET(request: Request) {
   const { error } = await requireAdmin({
-    allowedRoles: ["super_admin", "finance"],
+    allowedRoles: ["super_admin", "finance", "admin", "support"],
   });
   if (error) return error;
 
