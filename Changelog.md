@@ -1,5 +1,12 @@
 # Changelog
 
+## [fix] Withdrawal Balance Rebuild And Admin Queue Recovery - 2026-05-20
+- Fixed wallet summary logic to derive available balance from ledger bucket state instead of relying on a narrow `status = 'available'` rule that could collapse older available credits to zero after a withdrawal request
+- Added a repair migration to rebuild `wallets.available_balance`, `pending_balance`, and `total_earned` from the transaction ledger for all users and keep future syncs aligned with the corrected bucket-based accounting
+- Updated runtime wallet summary reads to fall back to live ledger computation and log any `wallets` table drift
+- Fixed the admin withdrawals API and detail views to load real request data with explicit profile hydration instead of the broken nested `profiles(...)` select that caused the dashboard fetch failure
+- Added inline retry/error handling on the admin withdrawals page and expanded wallet tests to cover the `200 -> 125` withdrawal reservation case
+
 ## [fix] Wallet History And Withdrawal Flow Hardening - 2026-05-20
 - Replaced the wallet transaction history with live `wallet_transactions` data, added server-seeded initial state, user-friendly `Money In` and `Money Out` filters, and clearer loading/error handling
 - Fixed withdrawal request creation by storing M-Pesa numbers in the database format expected by `withdrawal_requests`, enforcing account-phone-only withdrawals on both the client and server, and returning the configured processing timeframe in the success response

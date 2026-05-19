@@ -14,24 +14,35 @@ export type WalletSummary = {
 
 export function computeWalletSummary(rows: WalletLedgerMathRow[]): WalletSummary {
   const pending = rows
-    .filter((row) => row.status === "pending" && row.bucket === "pending")
-    .reduce((sum, row) => sum + (row.direction === "debit" ? -row.amount : row.amount), 0);
+    .filter(
+      (row) =>
+        row.direction === "credit" &&
+        row.bucket === "pending" &&
+        row.status === "pending"
+    )
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
 
   const availableCredits = rows
-    .filter((row) => row.direction === "credit" && row.status === "available")
+    .filter(
+      (row) =>
+        row.direction === "credit" &&
+        row.bucket === "available" &&
+        row.status !== "reversed"
+    )
     .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
 
   const reservedDebits = rows
     .filter(
       (row) =>
         row.direction === "debit" &&
-        (row.status === "locked" || row.status === "available")
+        row.bucket === "available" &&
+        row.status !== "reversed"
     )
     .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
 
   const availableRaw = availableCredits - reservedDebits;
   const totalEarned = rows
-    .filter((row) => row.direction === "credit" && row.status === row.bucket)
+    .filter((row) => row.direction === "credit" && row.status !== "reversed")
     .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
 
   return {

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminPageShell, StatusBadge } from "@/components/admin/admin-native";
 import { WithdrawalActions, WithdrawalEditActions } from "@/app/wazim/withdrawals/withdrawal-actions";
-import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getAdminWithdrawalById } from "@/lib/admin-withdrawals";
 import { money, requireWazimAdmin, shortDate } from "@/lib/wazim-admin";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -11,11 +11,7 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function AdminWithdrawalDetailPage({ params }: PageProps) {
   const adminSession = await requireWazimAdmin();
   const { id } = await params;
-  const admin = createAdminSupabaseClient();
-  const { data: withdrawal } = await (admin.from("withdrawal_requests" as never) as any)
-    .select("*, profiles(full_name, email)")
-    .eq("id", id)
-    .maybeSingle();
+  const withdrawal = await getAdminWithdrawalById(id);
 
   if (!withdrawal) notFound();
 

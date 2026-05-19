@@ -36,6 +36,25 @@ test("computeWalletSummary subtracts locked and completed withdrawal debits from
   assert.equal(summary.pending, 150);
 });
 
+test("computeWalletSummary preserves older available credits even when status is not available", () => {
+  const summary = computeWalletSummary([
+    {
+      amount: 200,
+      bucket: "available",
+      direction: "credit",
+      status: "locked",
+    },
+    {
+      amount: 75,
+      bucket: "available",
+      direction: "debit",
+      status: "locked",
+    },
+  ]);
+
+  assert.equal(summary.available, 125);
+});
+
 test("normalizeWithdrawalStoragePhone forces +2547 format for stored withdrawal numbers", () => {
   assert.equal(normalizeWithdrawalStoragePhone("0712345678"), "+254712345678");
   assert.equal(normalizeWithdrawalStoragePhone("254712345678"), "+254712345678");

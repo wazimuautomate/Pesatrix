@@ -76,6 +76,7 @@ export default function WithdrawalsPage() {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [counts, setCounts] = useState<Counts | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [b2cModal, setB2cModal] = useState<Withdrawal | null>(null);
   const [sendModal, setSendModal] = useState<Withdrawal | null>(null);
@@ -89,14 +90,20 @@ export default function WithdrawalsPage() {
 
   async function fetchWithdrawals() {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch(`/api/admin/withdrawals?status=${tab}`);
-      if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to fetch");
+      }
       setWithdrawals(data.withdrawals ?? []);
       setCounts(data.counts ?? null);
-    } catch {
-      toast.error("Failed to load withdrawals");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load withdrawals";
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -310,6 +317,15 @@ export default function WithdrawalsPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {loadError ? (
+            <div className="mb-4 flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+              <span className="text-destructive">{loadError}</span>
+              <Button variant="outline" size="sm" onClick={() => fetchWithdrawals()}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
+            </div>
+          ) : null}
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
