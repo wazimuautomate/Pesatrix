@@ -338,6 +338,27 @@ async function loadTrainingContext(userId: string) {
   };
 }
 
+async function findExistingTrainingRewardTransaction(userId: string) {
+  const admin = createAdminSupabaseClient();
+
+  const { data, error } = await (admin.from("wallet_transactions" as never) as any)
+    .select("id")
+    .eq("user_id", userId)
+    .eq("type", "task_earning")
+    .eq("direction", "credit")
+    .eq("reference_table", "training_progress")
+    .eq("reference_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.id ? String(data.id) : null;
+}
+
 export async function getTrainingProgramSnapshotForUser(
   userId: string
 ): Promise<TrainingProgramSnapshot> {
@@ -398,7 +419,7 @@ export async function getTrainingProgramSnapshotForUser(
   };
 }
 
-async function ensureTrainingReward(userId: string) {
+export async function ensureTrainingReward(userId: string, createdByAdminId?: string | null) {
   const admin = createAdminSupabaseClient();
 
   const { data: training } = await (admin.from("training_progress" as never) as any)
@@ -408,6 +429,15 @@ async function ensureTrainingReward(userId: string) {
 
   if (training?.reward_transaction_id) {
     return training.reward_transaction_id;
+  }
+
+  const existingRewardTransactionId = await findExistingTrainingRewardTransaction(userId);
+  if (existingRewardTransactionId) {
+    await (admin.from("training_progress" as never) as any)
+      .update({ reward_transaction_id: existingRewardTransactionId })
+      .eq("user_id", userId);
+
+    return existingRewardTransactionId;
   }
 
   const rewardAmount = await getTrainingCompletionRewardKsh();
@@ -425,6 +455,7 @@ async function ensureTrainingReward(userId: string) {
       reference_table: "training_progress",
       reference_id: userId,
       available_at: now.toISOString(),
+      created_by_admin_id: createdByAdminId ?? null,
     })
     .select("id")
     .single();
