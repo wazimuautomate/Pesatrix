@@ -9,7 +9,6 @@ type RouteContext = {
 };
 
 const updateReferralSchema = z.object({
-  level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   source: z.enum(["signup", "admin", "import"]).optional(),
   reason: z.string().trim().min(3).max(240).optional(),
 });
@@ -32,7 +31,6 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   const update: Record<string, unknown> = {};
-  if (parsed.data.level !== undefined) update.level = parsed.data.level;
   if (parsed.data.source !== undefined) update.source = parsed.data.source;
 
   const admin = createAdminSupabaseClient();

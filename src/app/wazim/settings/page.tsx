@@ -9,8 +9,14 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_DAILY_TASK_LIMIT,
   DAILY_TASK_LIMIT_KEY,
+  DEFAULT_REFERRAL_LEVEL_REWARDS,
+  DEFAULT_REFERRAL_MAX_LEVELS,
+  REFERRAL_LEVEL_1_REWARD_KEY,
   DEFAULT_TRAINING_REWARD_KSH,
   DEFAULT_WITHDRAWAL_HOLD_DAYS,
+  REFERRAL_LEVEL_2_REWARD_KEY,
+  REFERRAL_LEVEL_3_REWARD_KEY,
+  REFERRAL_MAX_LEVELS_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
 } from "@/lib/platform-settings";
 import { requireWazimAdmin } from "@/lib/wazim-admin";
@@ -54,9 +60,16 @@ export default async function AdminSettingsPage() {
   const trainingRewardSetting = settings.find((s: { key: string }) => s.key === "training_completion_reward_ksh");
   const holdSetting = settings.find((s: { key: string }) => s.key === WITHDRAWAL_HOLD_DAYS_KEY);
   const dailyTaskLimitSetting = settings.find((s: { key: string }) => s.key === DAILY_TASK_LIMIT_KEY);
+  const referralLevel1Setting = settings.find((s: { key: string }) => s.key === REFERRAL_LEVEL_1_REWARD_KEY);
+  const referralLevel2Setting = settings.find((s: { key: string }) => s.key === REFERRAL_LEVEL_2_REWARD_KEY);
+  const referralLevel3Setting = settings.find((s: { key: string }) => s.key === REFERRAL_LEVEL_3_REWARD_KEY);
+  const referralMaxLevelsSetting = settings.find((s: { key: string }) => s.key === REFERRAL_MAX_LEVELS_KEY);
   const dailyTaskLimit = Number.isInteger(Number(dailyTaskLimitSetting?.value))
     ? Number(dailyTaskLimitSetting?.value)
     : DEFAULT_DAILY_TASK_LIMIT;
+  const referralRuleSummary = `L1 KSh ${referralLevel1Setting?.value ?? DEFAULT_REFERRAL_LEVEL_REWARDS[1]}, L2 KSh ${
+    referralLevel2Setting?.value ?? DEFAULT_REFERRAL_LEVEL_REWARDS[2]
+  }, L3 KSh ${referralLevel3Setting?.value ?? DEFAULT_REFERRAL_LEVEL_REWARDS[3]}`;
 
   const environmentSettings = [
     { label: "Supabase URL", configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) },
@@ -72,7 +85,7 @@ export default async function AdminSettingsPage() {
       title="Settings"
       description="Control operational settings that affect user training, activation, payments, and provider integrations."
     >
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-4">
         <MetricCard
           label="Training reward"
           value={`KSh ${trainingRewardSetting?.value ?? DEFAULT_TRAINING_REWARD_KSH}`}
@@ -89,6 +102,12 @@ export default async function AdminSettingsPage() {
           value={adminSession.role}
           detail={adminSession.email ?? "Signed in admin"}
           tone="teal"
+        />
+        <MetricCard
+          label="Referral payouts"
+          value={`${referralMaxLevelsSetting?.value ?? DEFAULT_REFERRAL_MAX_LEVELS} levels`}
+          detail={referralRuleSummary}
+          tone="amber"
         />
       </section>
 

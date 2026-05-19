@@ -4,22 +4,12 @@
  */
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { sendReferralBonusEmail } from "@/lib/notifications";
-import { ACTIVATION_FEE_AMOUNT } from "@/lib/wallet";
-
-const BONUS_RATES: Record<number, number> = {
-  1: 0.2,
-  2: 0.1,
-  3: 0.05,
-};
+import { getReferralProgramSettings, getReferralRewardForLevel } from "@/lib/referral-program";
 
 type AccountStatusRow = {
   state?: string | null;
   is_activated?: boolean | null;
   activated_at?: string | null;
-};
-
-type ReferralBonusRow = {
-  id: string;
 };
 
 type NotificationRecipient = {
@@ -136,13 +126,14 @@ async function queueReferralActivationNotification(args: {
 }
 
 /**
- * Walk up to 3 levels of the referral chain for a given activated user and
+ * Walk up the configured referral depth for a given activated user and
  * create available wallet_transactions + referral_bonuses for each referrer.
  *
  * Called once after activation succeeds. Safe to call repeatedly.
  */
 export async function creditReferralChain(activatedUserId: string): Promise<void> {
   const supabase = createAdminSupabaseClient();
+  const settings = await getReferralProgramSettings();
 
   if (!await hasActivated(activatedUserId)) {
     return;
@@ -175,7 +166,7 @@ export async function creditReferralChain(activatedUserId: string): Promise<void
   const seen = new Set<string>([activatedUserId]);
   let currentId: string | null = directRef.referrer_id;
 
-  for (let level = 1; level <= 3; level++) {
+  for (let level = 1; level <= settings.maxLevels; level++) {
     if (!currentId || seen.has(currentId)) break;
 
     chain.push({ referrerId: currentId, level });
@@ -218,53 +209,67 @@ export async function creditReferralChain(activatedUserId: string): Promise<void
   );
 
   for (const { referrerId, level } of chain) {
-    const amount = Math.round(ACTIVATION_FEE_AMOUNT * BONUS_RATES[level]);
+    const amount = getReferralRewardForLevel(settings, level);
 
-    const { data: referralRow, error: referralRowError } = await supabase
+    const { error: referralRowError } = await supabase
       .from("referrals")
-      .upsert(
-        {
-          referrer_id: referrerId,
-          referee_id: activatedUserId,
-          level,
-          source: "signup",
-        },
-        { onConflict: "referee_id,level" }
-      )
+      .insert({
+        referrer_id: referrerId,
+        referee_id: activatedUserId,
+        level,
+        source: "signup",
+      })
       .select("id")
       .single();
 
-    if (referralRowError || !referralRow) {
+    if (referralRowError && referralRowError.code !== "23505") {
       throw referralRowError;
     }
 
-    const { data: bonus, error: bonusError } = await supabase
+    if (amount <= 0) {
+      continue;
+    }
+
+    const { data: existingBonus, error: existingBonusError } = await supabase
       .from("referral_bonuses")
-      .upsert(
-        {
+      .select("id")
+      .eq("referrer_id", referrerId)
+      .eq("referee_id", activatedUserId)
+      .eq("level", level)
+      .maybeSingle();
+
+    if (existingBonusError) {
+      throw existingBonusError;
+    }
+
+    let bonusRowId = existingBonus?.id ?? null;
+
+    if (!bonusRowId) {
+      const { data: bonus, error: bonusError } = await supabase
+        .from("referral_bonuses")
+        .insert({
           referrer_id: referrerId,
           referee_id: activatedUserId,
           level,
           amount,
           status: "available",
           available_at: new Date().toISOString(),
-        },
-        { onConflict: "referrer_id,referee_id,level" }
-      )
-      .select("id")
-      .single();
+        })
+        .select("id")
+        .single();
 
-    if (bonusError || !bonus) {
-      throw bonusError;
+      if (bonusError || !bonus) {
+        throw bonusError;
+      }
+
+      bonusRowId = bonus.id;
     }
-
-    const bonusRow = bonus as ReferralBonusRow;
 
     const { data: existingWalletTxn, error: walletLookupError } = await supabase
       .from("wallet_transactions")
       .select("id")
       .eq("reference_table", "referral_bonuses")
-      .eq("reference_id", bonusRow.id)
+      .eq("reference_id", bonusRowId)
       .maybeSingle();
 
     if (walletLookupError) {
@@ -281,7 +286,7 @@ export async function creditReferralChain(activatedUserId: string): Promise<void
         bucket: "available",
         description: `Level ${level} referral activation bonus`,
         reference_table: "referral_bonuses",
-        reference_id: bonusRow.id,
+        reference_id: bonusRowId,
         available_at: new Date().toISOString(),
       });
 
