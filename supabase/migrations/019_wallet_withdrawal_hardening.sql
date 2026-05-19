@@ -114,10 +114,10 @@ begin
   values (p_user_id)
   on conflict (user_id) do nothing;
 
-  select available_balance
+  select w.available_balance
   into v_available
-  from public.wallets
-  where user_id = p_user_id
+  from public.wallets as w
+  where w.user_id = p_user_id
   for update;
 
   v_available := coalesce(v_available, 0);
@@ -128,9 +128,9 @@ begin
 
   if exists (
     select 1
-    from public.withdrawal_requests
-    where user_id = p_user_id
-      and status in ('requested', 'processing', 'held')
+    from public.withdrawal_requests as wr
+    where wr.user_id = p_user_id
+      and wr.status in ('requested', 'processing', 'held')
   ) then
     raise exception 'ACTIVE_WITHDRAWAL_EXISTS';
   end if;
