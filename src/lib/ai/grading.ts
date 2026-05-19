@@ -60,19 +60,30 @@ type GradingResult = {
 
 const FALLBACK_NVIDIA_MODEL = "minimaxai/minimax-m2.7";
 const FALLBACK_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const TASK_SCREENSHOT_BUCKET = "task-screenshots";
 
 type VisionModelConfig = {
   modelId: string;
-  provider: string;
+  provider: "nvidia" | "openrouter";
   supportsVision: boolean;
+  baseUrl: string;
+  apiKeyName: "NVIDIA_API_KEY" | "OPENROUTER_API_KEY";
 };
 
-const VISION_MODELS: VisionModelConfig[] = [
-  { modelId: "mistralai/mistral-large-3-675b-instruct-2512", provider: "nvidia", supportsVision: false },
-  { modelId: "meta/llama-4-maverick-17b-128e-instruct", provider: "nvidia", supportsVision: false },
-  { modelId: "google/paligemma-3b-pt-224", provider: "nvidia", supportsVision: true },
+const NVIDIA_VISION_MODELS: VisionModelConfig[] = [
+  { modelId: "mistralai/mistral-large-3-675b-instruct-2512", provider: "nvidia", supportsVision: false, baseUrl: FALLBACK_NVIDIA_BASE_URL, apiKeyName: "NVIDIA_API_KEY" },
+  { modelId: "meta/llama-4-maverick-17b-128e-instruct", provider: "nvidia", supportsVision: false, baseUrl: FALLBACK_NVIDIA_BASE_URL, apiKeyName: "NVIDIA_API_KEY" },
+  { modelId: "google/paligemma-3b-pt-224", provider: "nvidia", supportsVision: true, baseUrl: FALLBACK_NVIDIA_BASE_URL, apiKeyName: "NVIDIA_API_KEY" },
 ];
+
+const OPENROUTER_VISION_MODELS: VisionModelConfig[] = [
+  { modelId: "qwen/qwen2.5-vl-72b-instruct:free", provider: "openrouter", supportsVision: true, baseUrl: OPENROUTER_BASE_URL, apiKeyName: "OPENROUTER_API_KEY" },
+  { modelId: "meta-llama/llama-3.2-11b-vision-instruct:free", provider: "openrouter", supportsVision: true, baseUrl: OPENROUTER_BASE_URL, apiKeyName: "OPENROUTER_API_KEY" },
+  { modelId: "google/gemma-3-27b-it:free", provider: "openrouter", supportsVision: true, baseUrl: OPENROUTER_BASE_URL, apiKeyName: "OPENROUTER_API_KEY" },
+];
+
+const VISION_MODELS = [...NVIDIA_VISION_MODELS, ...OPENROUTER_VISION_MODELS];
 
 const VISION_MODEL_TIMEOUT_MS = 30000;
 const VISION_MODEL_MAX_TOKENS = 1024;
@@ -387,18 +398,18 @@ async function gradeSocialEngagementSubmission(
     aiCriteria: taskData.ai_check_criteria,
   });
 
-  const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey) {
+  const hasAnyApiKey = process.env.NVIDIA_API_KEY || process.env.OPENROUTER_API_KEY;
+  if (!hasAnyApiKey) {
     return {
       score: 50,
       decision: "flagged",
       reasoning: "AI vision unavailable - manual review required.",
       criteria_scores: {},
-      grading_detail: { social_ai_error: "missing_nvidia_api_key" },
+      grading_detail: { social_ai_error: "missing_api_keys" },
     };
   }
 
-  const visionResult = await callVisionModelWithFallback(apiKey, image, prompt, submission.id);
+  const visionResult = await callVisionModelWithFallback(image, prompt, submission.id);
 
   if (!visionResult.success) {
     console.error("[Social Grading] All vision models failed:", {
@@ -681,7 +692,6 @@ type VisionModelResult = {
 };
 
 async function callVisionModelWithFallback(
-  apiKey: string,
   image: { base64: string; mediaType: string },
   prompt: string,
   submissionId: string
@@ -690,13 +700,24 @@ async function callVisionModelWithFallback(
 
   for (let i = 0; i < VISION_MODELS.length; i++) {
     const modelConfig = VISION_MODELS[i];
-    console.log(`[Social Grading] Attempting model: ${modelConfig.modelId} (${i + 1}/${VISION_MODELS.length})`);
+    const apiKey = process.env[modelConfig.apiKeyName] ?? null;
+
+    if (!apiKey) {
+      console.warn(`[Social Grading] No API key for ${modelConfig.apiKeyName}, skipping model: ${modelConfig.modelId}`);
+      errors.push({
+        model: modelConfig.modelId,
+        error: `Missing API key: ${modelConfig.apiKeyName}`,
+      });
+      continue;
+    }
+
+    console.log(`[Social Grading] Attempting model: ${modelConfig.modelId} (${i + 1}/${VISION_MODELS.length}) via ${modelConfig.provider}`);
 
     try {
       const result = await callVisionModel(apiKey, modelConfig, image, prompt, submissionId);
 
       if (result.success && result.response) {
-        console.log(`[Social Grading] Successfully used model: ${modelConfig.modelId}`);
+        console.log(`[Social Grading] Successfully used model: ${modelConfig.modelId} (${modelConfig.provider})`);
         return {
           success: true,
           response: result.response,
@@ -742,7 +763,7 @@ async function callVisionModel(
   modelConfig: VisionModelConfig,
   image: { base64: string; mediaType: string },
   prompt: string,
-  submissionId: string
+  _submissionId: string
 ): Promise<SingleModelResult> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), VISION_MODEL_TIMEOUT_MS);
@@ -773,12 +794,19 @@ async function callVisionModel(
           },
         ];
 
-    const response = await fetch(`${FALLBACK_NVIDIA_BASE_URL}/chat/completions`, {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    };
+
+    if (modelConfig.provider === "openrouter") {
+      headers["HTTP-Referer"] = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://pesatrix.com";
+      headers["X-Title"] = "Pesatrix";
+    }
+
+    const response = await fetch(`${modelConfig.baseUrl}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       body: JSON.stringify({
         model: modelConfig.modelId,
         messages,

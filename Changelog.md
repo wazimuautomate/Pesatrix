@@ -1,5 +1,19 @@
 # Changelog
 
+## [feat] OpenRouter Vision Models as Fallback - 2026-05-19
+- Extended existing NVIDIA vision fallback system with OpenRouter free vision models
+- Added OpenRouter models to fallback chain (processed after NVIDIA models fail):
+  - qwen/qwen2.5-vl-72b-instruct:free
+  - meta-llama/llama-3.2-11b-vision-instruct:free
+  - google/gemma-3-27b-it:free
+- Refactored vision model config to support multiple providers with different base URLs
+- Each model now specifies its own API key source (NVIDIA_API_KEY or OPENROUTER_API_KEY)
+- Added OpenRouter required headers (HTTP-Referer, X-Title) for API compliance
+- Check for ANY available API key before attempting vision grading (not just NVIDIA)
+- Updated .env.local.example with OPENROUTER_API_KEY placeholder
+- All models return standardized output: { score, reasoning, passed/decision }
+- Preserved existing error handling, timeouts, rate limiting, and JSON validation
+
 ## [fix] Auth Callback & Account Status Race Condition - 2026-05-18
 - Fixed auth callback showing "confirmation link invalid/already used" error
   - Added logic to check if user already has valid session when code exchange fails
