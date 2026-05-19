@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { requireAdmin, auditLog } from "../../../_lib";
-import { getTrainingCompletionRewardKsh } from "@/lib/platform-settings";
+import { ensureTrainingReward } from "@/lib/training";
 
 export async function POST(
   _request: Request,
@@ -29,41 +29,18 @@ export async function POST(
   }
 
   const now = new Date();
-  let walletTransactionId = training.reward_transaction_id as string | null;
-
-  if (!walletTransactionId) {
-    const rewardAmount = await getTrainingCompletionRewardKsh();
-
-    const { data: walletTx, error: walletError } = await (admin.from("wallet_transactions" as never) as any)
-      .insert({
-        user_id: userId,
-        type: "task_earning",
-        direction: "credit",
-        amount: rewardAmount,
-        status: "available",
-        bucket: "available",
-        description: "Training completion reward",
-        reference_table: "training_progress",
-        reference_id: userId,
-        available_at: now.toISOString(),
-        created_by_admin_id: adminAuthId,
-      })
-      .select("id")
-      .single();
-
-    if (walletError || !walletTx) {
-      return NextResponse.json({ error: "Failed to create wallet transaction" }, { status: 500 });
-    }
-
-    walletTransactionId = walletTx.id;
-  }
+  const walletTransactionId = await ensureTrainingReward(userId, adminAuthId);
 
   const { error: updateError } = await (admin.from("training_progress" as never) as any)
     .update({
       status: "completed",
       completed_at: now.toISOString(),
       current_day: 7,
+      current_stage: 3,
+      stage_attempt: 1,
       completed_days: [1, 2, 3, 4, 5, 6, 7],
+      next_day_unlock_at: null,
+      last_completed_at: now.toISOString(),
       reward_transaction_id: walletTransactionId,
     })
     .eq("user_id", userId);
@@ -87,6 +64,7 @@ export async function POST(
       status: "completed",
       completed_at: now.toISOString(),
       current_day: 7,
+      current_stage: 3,
       completed_days: [1, 2, 3, 4, 5, 6, 7],
       reward_transaction_id: walletTransactionId,
     },

@@ -1,5 +1,17 @@
 # Changelog
 
+## [fix] Admin Training Progress System - 2026-05-19
+- Fixed the admin training dashboard to load real `training_progress` records with real profile data instead of relying on a broken relation select
+- Restored working search and status filters for not started, in progress, awaiting test, and completed learners
+- Rebuilt the admin training table to show real user identity, status, day, stage, completed days, attempts, reward linkage, last activity, and completion time
+- Added admin loading and error states for the training dashboard
+- Expanded the admin training detail panel with validated controls to adjust day, stage, status, attempt count, unlock the next day, reset progress, and mark training completed
+- Added a dedicated admin training list helper so page and API responses use the same real database query path
+- Hardened training reward crediting by reusing or backfilling an existing wallet transaction before inserting a new one
+- Updated admin completion flow to use the shared reward helper and link `reward_transaction_id` consistently
+- Added a new wallet unique index migration to block duplicate training completion rewards at the database level
+- Preserved frontend and backend training lock protection after completion so users cannot repeat training unless an admin resets progress
+
 ## [fix] Referral System End-to-End - 2026-05-19
 - Fixed user referral dashboard to load the logged-in profile referral code from `profiles.referral_code`
 - Added environment-aware referral link generation with server-side base URL detection for localhost, configured app URLs, and Vercel deployments
