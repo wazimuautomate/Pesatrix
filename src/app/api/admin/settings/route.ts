@@ -102,9 +102,9 @@ export async function PATCH(request: Request) {
 
   if (key === WITHDRAWAL_PROCESSING_DAYS_KEY) {
     const numValue = Number(value);
-    if (!Number.isInteger(numValue) || numValue < 1 || numValue > 14) {
+    if (!Number.isFinite(numValue) || numValue < 0) {
       return NextResponse.json(
-        { error: "Withdrawal processing time must be a whole number between 1 and 14" },
+        { error: "Withdrawal processing time must be a positive number" },
         { status: 422 }
       );
     }

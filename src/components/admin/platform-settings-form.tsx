@@ -85,8 +85,8 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       label: "Withdrawal processing time (days)",
       description: "Expected admin payout processing time after a withdrawal is requested.",
       type: "number",
-      min: 1,
-      max: 14,
+      min: 0,
+      step: "any",
       defaultValue: "3",
     },
     {
@@ -213,7 +213,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
                     type={def.type}
                     min={def.min}
                     max={def.max}
-                    step={1}
+                    step={def.step ?? 1}
                     value={currentValue}
                     onChange={(e) => handleChange(def.key, e.target.value)}
                     className="max-w-xs"

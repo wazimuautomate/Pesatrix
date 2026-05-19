@@ -125,7 +125,7 @@ export async function getWithdrawalProcessingDays() {
     warnMissingSetting(WITHDRAWAL_PROCESSING_DAYS_KEY, DEFAULT_WITHDRAWAL_PROCESSING_DAYS);
   }
 
-  return normalizeIntegerInRange(setting?.value, DEFAULT_WITHDRAWAL_PROCESSING_DAYS, 1, 14);
+  return normalizeNonNegativeNumber(setting?.value, DEFAULT_WITHDRAWAL_PROCESSING_DAYS);
 }
 
 export async function getTaskUnlockDelayHours() {

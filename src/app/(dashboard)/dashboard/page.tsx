@@ -440,9 +440,6 @@ export default async function DashboardPage() {
             <div className="text-2xl font-bold tabular-nums text-navy">
               {formatKSh(pendingBalance)}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Pending funds are held for {withdrawalHoldDays} days before becoming withdrawable.
-            </p>
           </CardContent>
         </Card>
 
