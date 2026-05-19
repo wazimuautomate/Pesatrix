@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { mapWalletTransactionForApi } from "@/lib/wallet";
+import { getWalletTransactionsForUser } from "@/lib/wallet";
 
 export async function GET(request: Request) {
   try {
@@ -15,35 +15,23 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get("page") ?? "1", 10);
     const type = searchParams.get("type");
     const direction = searchParams.get("direction");
-    const limit = 20;
-    const offset = (page - 1) * limit;
+    const normalizedDirection =
+      direction === "credit" || direction === "debit" ? direction : undefined;
 
-    let query = supabase
-      .from("wallet_transactions")
-      .select("id, type, direction, amount, status, bucket, description, available_at, created_at, reference_table, reference_id", { count: "exact" })
-      .eq("user_id", user.id);
-
-    if (type) {
-      query = query.eq("type", type);
+    if (direction && !normalizedDirection) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Invalid transaction direction" } },
+        { status: 422 }
+      );
     }
 
-    if (direction) {
-      query = query.eq("direction", direction);
-    }
-
-    const { data: items, count } = await query
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    const total = count ?? 0;
-    const hasMore = offset + (items?.length ?? 0) < total;
-
-    return NextResponse.json({
-      items: (items ?? []).map(mapWalletTransactionForApi),
-      total,
+    const result = await getWalletTransactionsForUser(user.id, {
+      direction: normalizedDirection,
       page,
-      hasMore,
+      type: type ?? undefined,
     });
+
+    return NextResponse.json(result);
   } catch (err) {
     console.error("[Transactions Error]", err);
     return NextResponse.json(

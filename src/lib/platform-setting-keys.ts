@@ -1,6 +1,7 @@
 export const DAILY_TASK_LIMIT_KEY = "daily_task_limit";
 export const WITHDRAWAL_HOLD_DAYS_KEY = "withdrawal_hold_days";
 export const WITHDRAWAL_PROCESSING_DAYS_KEY = "withdrawal_processing_days";
+export const WITHDRAWAL_N8N_WEBHOOK_URL_KEY = "withdrawal_n8n_webhook_url";
 export const TRAINING_REWARD_SETTING_KEY = "training_completion_reward_ksh";
 export const REFERRAL_MAX_LEVELS_KEY = "referral_max_levels";
 export const REFERRAL_ACTIVATION_RULE_KEY = "referral_activation_rule";

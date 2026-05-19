@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { formatKSh } from "@/lib/utils";
 import { getWithdrawalHoldDays } from "@/lib/platform-settings";
-import { getWalletSummaryForUser } from "@/lib/wallet";
+import { getWalletSummaryForUser, getWalletTransactionsForUser } from "@/lib/wallet";
 import {
   Wallet as WalletIcon,
   ArrowUpRight,
@@ -21,29 +21,11 @@ export default async function WalletPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  type TransactionRow = {
-    id: string;
-    type: string;
-    direction: string;
-    amount: number;
-    status: string;
-    created_at: string;
-  };
-
-  const { data: transactionRows } = await supabase
-    .from("wallet_transactions")
-    .select("id, type, direction, amount, status, created_at")
-    .eq("user_id", user!.id);
-
-  const [wallet, withdrawalHoldDays] = await Promise.all([
+  const [wallet, withdrawalHoldDays, initialTransactions] = await Promise.all([
     getWalletSummaryForUser(user!.id),
     getWithdrawalHoldDays(),
+    getWalletTransactionsForUser(user!.id),
   ]);
-
-  const withdrawn: number =
-    (transactionRows ?? [] as TransactionRow[])
-      .filter((t: TransactionRow) => t.type === "withdrawal")
-      .reduce((sum: number, tx: TransactionRow) => sum + Math.abs(tx.amount), 0);
 
   return (
     <div className="space-y-6">
@@ -121,7 +103,11 @@ export default async function WalletPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <TransactionHistory />
+          <TransactionHistory
+            initialItems={initialTransactions.items}
+            initialHasMore={initialTransactions.hasMore}
+            initialTotal={initialTransactions.total}
+          />
         </CardContent>
       </Card>
     </div>

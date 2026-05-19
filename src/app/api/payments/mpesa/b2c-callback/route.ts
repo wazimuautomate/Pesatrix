@@ -63,7 +63,7 @@ export async function POST(request: Request) {
         .eq("id", withdrawal.id);
 
       await (admin.from("wallet_transactions" as never) as any)
-        .update({ status: "available" })
+        .update({ status: "available", bucket: "available" })
         .eq("reference_table", "withdrawal_requests")
         .eq("reference_id", withdrawal.id)
         .eq("direction", "debit");

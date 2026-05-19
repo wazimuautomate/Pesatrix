@@ -1,5 +1,6 @@
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getWithdrawalHoldDays } from "@/lib/platform-settings";
+import { computeWalletSummary, type WalletSummary } from "@/lib/wallet-math";
 
 export const ACTIVATION_FEE_AMOUNT = 500;
 export const MIN_WITHDRAWAL_AMOUNT = 100;
@@ -20,40 +21,12 @@ export type WalletLedgerRow = {
   created_at?: string | null;
 };
 
-export type WalletSummary = {
-  pending: number;
-  available: number;
-  total: number;
-  totalEarned: number;
+export type WalletTransactionsQuery = {
+  direction?: "credit" | "debit";
+  limit?: number;
+  page?: number;
+  type?: string;
 };
-
-function signedAmount(transaction: Pick<WalletLedgerRow, "amount" | "direction">) {
-  return transaction.direction === "debit" ? -transaction.amount : transaction.amount;
-}
-
-export function computeWalletSummary(rows: WalletLedgerRow[]): WalletSummary {
-  const pending = rows
-    .filter((row) => row.status === "pending" && row.bucket === "pending")
-    .reduce((sum, row) => sum + signedAmount(row), 0);
-
-  const availableRaw = rows
-    .filter((row) => row.status === "available" && row.bucket === "available")
-    .reduce((sum, row) => sum + signedAmount(row), 0);
-  const totalEarned = rows
-    .filter((row) => row.direction === "credit" && row.status === row.bucket)
-    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
-
-  if (availableRaw < 0) {
-    console.error("[Wallet] available balance calculated below zero from ledger", { availableRaw });
-  }
-
-  return {
-    pending,
-    available: Math.max(0, availableRaw),
-    total: totalEarned,
-    totalEarned,
-  };
-}
 
 export function mapWalletTransactionForApi(row: WalletLedgerRow) {
   return {
@@ -67,6 +40,48 @@ export function mapWalletTransactionForApi(row: WalletLedgerRow) {
     description: row.description,
     referenceTable: row.reference_table,
     referenceId: row.reference_id,
+  };
+}
+
+export async function getWalletTransactionsForUser(
+  userId: string,
+  { direction, limit = 20, page = 1, type }: WalletTransactionsQuery = {}
+) {
+  const admin = createAdminSupabaseClient();
+  const offset = Math.max(0, page - 1) * limit;
+
+  let query = admin
+    .from("wallet_transactions")
+    .select(
+      "id, type, direction, amount, status, bucket, description, available_at, created_at, reference_table, reference_id",
+      { count: "exact" }
+    )
+    .eq("user_id", userId);
+
+  if (direction) {
+    query = query.eq("direction", direction);
+  }
+
+  if (type) {
+    query = query.eq("type", type);
+  }
+
+  const { data, count, error } = await query
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    throw error;
+  }
+
+  const items = (data ?? []).map(mapWalletTransactionForApi);
+  const total = count ?? items.length;
+
+  return {
+    items,
+    total,
+    page,
+    hasMore: offset + items.length < total,
   };
 }
 

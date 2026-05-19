@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
-import { ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Loader2, RefreshCw } from "lucide-react";
 import { formatKSh } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,12 @@ type Transaction = {
   description: string | null;
   availableAt: string | null;
   createdAt: string;
+};
+
+type TransactionHistoryProps = {
+  initialHasMore: boolean;
+  initialItems: Transaction[];
+  initialTotal: number;
 };
 
 const typeLabel: Record<string, string> = {
@@ -39,17 +45,23 @@ const statusVariant: Record<string, "success" | "warning" | "destructive" | "sec
 
 type FilterType = "all" | "credit" | "debit";
 
-export default function TransactionHistory() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function TransactionHistory({
+  initialHasMore,
+  initialItems,
+  initialTotal,
+}: TransactionHistoryProps) {
+  const [transactions, setTransactions] = useState<Transaction[]>(initialItems);
+  const [loading, setLoading] = useState(initialItems.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [total, setTotal] = useState(initialTotal);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
 
   const fetchTransactions = useCallback(async (pageNum: number, isLoadMore = false) => {
     try {
+      setError(null);
       const params = new URLSearchParams({ page: pageNum.toString() });
       if (filter !== "all") {
         params.set("direction", filter);
@@ -70,6 +82,7 @@ export default function TransactionHistory() {
       setPage(pageNum);
     } catch (err) {
       console.error("Failed to fetch transactions", err);
+      setError("Unable to load transaction history right now.");
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -115,14 +128,27 @@ export default function TransactionHistory() {
             size="sm"
             onClick={() => setFilter(f)}
           >
-            {f === "all" ? "All" : f === "credit" ? "Credits" : "Debits"}
+            {f === "all" ? "All" : f === "credit" ? "Money In" : "Money Out"}
           </Button>
         ))}
       </div>
 
+      {error ? (
+        <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+          <span className="text-destructive">{error}</span>
+          <Button variant="outline" size="sm" onClick={() => {
+            setLoading(true);
+            fetchTransactions(1, false);
+          }}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
+        </div>
+      ) : null}
+
       {transactions.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
-          No transactions yet
+          No transactions found for this filter.
         </p>
       ) : (
         <>
@@ -156,11 +182,16 @@ export default function TransactionHistory() {
                     <p className="text-xs text-muted-foreground">
                       {format(new Date(tx.createdAt), "MMM d, yyyy h:mm a")}
                     </p>
-                    {tx.status === "pending" && tx.availableAt && (
+                    {tx.direction === "credit" && tx.status === "pending" && tx.availableAt && (
                       <p className="text-xs text-amber-600">
                         Available {format(new Date(tx.availableAt), "MMM d, yyyy")}
                       </p>
                     )}
+                    {tx.direction === "debit" && tx.status === "locked" ? (
+                      <p className="text-xs text-muted-foreground">
+                        Reserved while withdrawal is being processed
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="text-right">

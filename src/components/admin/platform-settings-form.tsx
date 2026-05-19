@@ -16,6 +16,7 @@ import {
   REFERRAL_MAX_LEVELS_KEY,
   TRAINING_REWARD_SETTING_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
+  WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
 } from "@/lib/platform-setting-keys";
 
@@ -88,6 +89,13 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       min: 0,
       step: "any",
       defaultValue: "3",
+    },
+    {
+      key: WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
+      label: "Withdrawal webhook URL",
+      description: "Optional n8n webhook called after a withdrawal request is saved.",
+      type: "text",
+      defaultValue: "",
     },
     {
       key: TRAINING_REWARD_SETTING_KEY,

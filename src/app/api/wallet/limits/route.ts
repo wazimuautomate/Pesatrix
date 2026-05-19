@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { MAX_WITHDRAWAL_AMOUNT } from "@/lib/wallet";
 import { getWithdrawalHoldDays, getWithdrawalProcessingDays } from "@/lib/platform-settings";
+import { getMinWithdrawalAmount, getWithdrawalContactForUser } from "@/lib/withdrawals";
 
 export async function GET() {
   try {
@@ -15,21 +15,15 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createAdminSupabaseClient();
-    const { data: settings } = await admin
-      .from("platform_settings")
-      .select("value")
-      .eq("key", "min_withdrawal_amount_ksh")
-      .maybeSingle();
-
-    const minWithdrawal = settings?.value ? parseInt(settings.value, 10) : 100;
-
-    const [withdrawalHoldDays, withdrawalProcessingDays] = await Promise.all([
+    const [minWithdrawal, withdrawalHoldDays, withdrawalProcessingDays, contact] = await Promise.all([
+      getMinWithdrawalAmount(),
       getWithdrawalHoldDays(),
       getWithdrawalProcessingDays(),
+      getWithdrawalContactForUser(user.id),
     ]);
 
     return NextResponse.json({
+      allowedPhone: contact.phone,
       minWithdrawal,
       maxWithdrawal: MAX_WITHDRAWAL_AMOUNT,
       withdrawalHoldDays,

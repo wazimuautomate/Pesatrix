@@ -1,5 +1,14 @@
 # Changelog
 
+## [fix] Wallet History And Withdrawal Flow Hardening - 2026-05-20
+- Replaced the wallet transaction history with live `wallet_transactions` data, added server-seeded initial state, user-friendly `Money In` and `Money Out` filters, and clearer loading/error handling
+- Fixed withdrawal request creation by storing M-Pesa numbers in the database format expected by `withdrawal_requests`, enforcing account-phone-only withdrawals on both the client and server, and returning the configured processing timeframe in the success response
+- Added a shared withdrawal helper for account phone resolution, webhook payload construction, and resilient n8n webhook delivery with retries and graceful failure logging
+- Hardened wallet balance sync so reserved and completed withdrawal debits reduce `wallets.available_balance`, and updated the wallet sync trigger to recalculate on deletes as well
+- Added a new database migration for atomic withdrawal creation, one-active-withdrawal protection, withdrawal ledger uniqueness, and a configurable `withdrawal_n8n_webhook_url` platform setting
+- Completed the admin withdrawal operations path by restoring missing `PATCH` and `DELETE` handlers, aligning approval and decline actions with the mock payout workflow, and keeping retry/reversal flows consistent with ledger state
+- Added focused withdrawal and wallet summary tests plus example environment entries for the optional webhook integration
+
 ## [fix] Remove Phone/Email Verification Requirement for Withdrawals - 2026-05-20
 - Removed phone and email verification check from withdrawal API
 - Users can now withdraw without requiring phone and email verification

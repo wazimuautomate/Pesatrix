@@ -26,10 +26,6 @@ export function WithdrawalActions({ withdrawalId }: { withdrawalId: string }) {
   const [loading, setLoading] = useState(false);
 
   async function markSent() {
-    if (!mpesaTxnId.trim()) {
-      toast.error("M-Pesa transaction ID required");
-      return;
-    }
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/withdrawals/${withdrawalId}`, {
@@ -37,8 +33,8 @@ export function WithdrawalActions({ withdrawalId }: { withdrawalId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "mark-sent", mpesaTxnId }),
       });
-      if (!res.ok) { toast.error("Failed to mark as sent"); return; }
-      toast.success("Withdrawal marked as sent");
+      if (!res.ok) { toast.error("Failed to approve withdrawal"); return; }
+      toast.success("Withdrawal approved");
       setOpenSent(false);
       router.refresh();
     } finally {
@@ -56,7 +52,7 @@ export function WithdrawalActions({ withdrawalId }: { withdrawalId: string }) {
         body: JSON.stringify({ action: "fail", reason: failReason }),
       });
       if (!res.ok) { toast.error("Action failed"); return; }
-      toast.success("Withdrawal failed and amount reversed");
+      toast.success("Withdrawal declined and amount reversed");
       setOpenFail(false);
       router.refresh();
     } finally {
@@ -71,27 +67,27 @@ export function WithdrawalActions({ withdrawalId }: { withdrawalId: string }) {
         <DialogTrigger asChild>
           <Button size="sm" className="gap-1">
             <CheckCircle2 className="h-3 w-3" />
-            Mark Sent
+            Approve
           </Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Mark Withdrawal as Sent</DialogTitle>
+            <DialogTitle>Approve Withdrawal</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="mpesa-txn-id">M-Pesa Transaction ID</Label>
+            <Label htmlFor="mpesa-txn-id">M-Pesa Transaction ID (optional)</Label>
             <Input
               id="mpesa-txn-id"
               value={mpesaTxnId}
               onChange={(e) => setMpesaTxnId(e.target.value)}
-              placeholder="QAR1234567"
+              placeholder="Leave blank to use a mock payout reference"
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpenSent(false)}>Cancel</Button>
             <Button onClick={markSent} disabled={loading}>
               {loading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-              Confirm Sent
+              Confirm Approval
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -107,7 +103,7 @@ export function WithdrawalActions({ withdrawalId }: { withdrawalId: string }) {
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Fail Withdrawal</DialogTitle>
+            <DialogTitle>Decline Withdrawal</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="fail-reason">Reason</Label>
@@ -122,7 +118,7 @@ export function WithdrawalActions({ withdrawalId }: { withdrawalId: string }) {
             <Button variant="outline" onClick={() => setOpenFail(false)}>Cancel</Button>
             <Button variant="destructive" onClick={markFailed} disabled={loading}>
               {loading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-              Confirm Fail
+              Confirm Decline
             </Button>
           </DialogFooter>
         </DialogContent>
