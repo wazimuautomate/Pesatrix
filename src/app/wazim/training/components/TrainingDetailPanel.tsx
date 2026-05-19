@@ -233,25 +233,28 @@ export function TrainingDetailPanel({ userId, adminRole }: { userId: string; adm
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <>
+              <DialogTitle className="sr-only">Loading training detail</DialogTitle>
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            </>
           ) : data ? (
             <>
               <DialogHeader>
                 <DialogTitle className="text-xl">{displayName}</DialogTitle>
-                <DialogDescription className="space-y-1">
-                  {profile?.phone && <p>{profile.phone}</p>}
-                  {profile?.email && <p className="text-xs">{profile.email}</p>}
-                  {tp && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <StatusBadge status={tp.status} />
-                      <span className="text-xs text-muted-foreground">
-                        Last activity: {formatDate(tp.last_completed_at || tp.updated_at)}
-                      </span>
-                    </div>
-                  )}
+                <DialogDescription>
+                  {profile?.phone && <span>{profile.phone}</span>}
+                  {profile?.email && <span className="text-xs">{profile.email}</span>}
                 </DialogDescription>
+                {tp && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <StatusBadge status={tp.status} />
+                    <span className="text-xs text-muted-foreground">
+                      Last activity: {formatDate(tp.last_completed_at || tp.updated_at)}
+                    </span>
+                  </div>
+                )}
               </DialogHeader>
 
               <div className="space-y-6">
@@ -389,7 +392,10 @@ export function TrainingDetailPanel({ userId, adminRole }: { userId: string; adm
               </DialogFooter>
             </>
           ) : (
-            <div className="py-8 text-center text-muted-foreground">Failed to load training detail.</div>
+            <>
+              <DialogTitle className="sr-only">Failed to load training detail</DialogTitle>
+              <div className="py-8 text-center text-muted-foreground">Failed to load training detail.</div>
+            </>
           )}
         </DialogContent>
       </Dialog>

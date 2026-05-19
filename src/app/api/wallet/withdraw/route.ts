@@ -1,22 +1,21 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { KENYAN_PHONE_REGEX, normalizePesaPhone } from "@/lib/mpesa";
+import { KENYAN_PHONE_REGEX } from "@/lib/mpesa";
 import {
   getWalletSummaryForUser,
-  getWithdrawalVerification,
   MAX_WITHDRAWAL_AMOUNT,
 } from "@/lib/wallet";
+import { getWithdrawalProcessingDays } from "@/lib/platform-settings";
+import {
+  buildWithdrawalWebhookPayload,
+  getMinWithdrawalAmount,
+  getWithdrawalContactForUser,
+  isAllowedWithdrawalPhone,
+  normalizeWithdrawalStoragePhone,
+  sendWithdrawalWebhook,
+} from "@/lib/withdrawals";
 import { z } from "zod";
-
-async function getMinWithdrawalAmountFromDb(supabase: ReturnType<typeof createAdminSupabaseClient>) {
-  const { data } = await supabase
-    .from("platform_settings")
-    .select("value")
-    .eq("key", "min_withdrawal_amount_ksh")
-    .maybeSingle();
-  return data?.value ? parseInt(data.value, 10) : 100;
-}
 
 export async function POST(request: Request) {
   try {
@@ -31,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
     }
 
-    const minWithdrawal = await getMinWithdrawalAmountFromDb(admin);
+    const minWithdrawal = await getMinWithdrawalAmount();
     const body = await request.json();
 
     const amount = body.amount;
@@ -64,61 +63,103 @@ export async function POST(request: Request) {
 
     const { amount: validAmount, phone } = parsed.data;
 
-    const verification = await getWithdrawalVerification(user.id);
+    const [walletSummary, contact, processingDays] = await Promise.all([
+      getWalletSummaryForUser(user.id),
+      getWithdrawalContactForUser(user.id),
+      getWithdrawalProcessingDays(),
+    ]);
 
-    if (!verification.phoneVerified || !verification.emailVerified) {
+    if (!contact.phone) {
       return NextResponse.json(
         {
           error: {
-            code: "VERIFICATION_REQUIRED",
-            message: "Phone and email must both be verified before withdrawing",
+            code: "PHONE_NOT_CONFIGURED",
+            message: "Set a valid Safaricom M-Pesa phone number on your profile before withdrawing.",
           },
         },
         { status: 422 }
       );
     }
 
-    const { available } = await getWalletSummaryForUser(user.id);
-
-    if (validAmount > available) {
+    if (!isAllowedWithdrawalPhone(phone, contact.phone)) {
       return NextResponse.json(
-        { error: { code: "INSUFFICIENT_FUNDS", message: `Available balance is KSh ${available}` } },
+        {
+          error: {
+            code: "PHONE_MISMATCH",
+            message: "Withdrawals can only be sent to the phone number saved on your account.",
+          },
+        },
         { status: 422 }
       );
     }
 
-    const normalizedPhone = normalizePesaPhone(phone);
-
-    const { data: withdrawal, error } = await admin
-      .from("withdrawal_requests")
-      .insert({
-        user_id: user.id,
-        amount: validAmount,
-        phone: normalizedPhone,
-        status: "requested",
-      })
-      .select("id")
-      .single();
-
-    if (error || !withdrawal) throw new Error("Failed to create withdrawal request");
-
-    const { error: ledgerError } = await admin.from("wallet_transactions").insert({
-      user_id: user.id,
-      type: "withdrawal",
-      direction: "debit",
-      amount: validAmount,
-      status: "locked",
-      bucket: "available",
-      description: `Withdrawal to ${normalizedPhone}`,
-      reference_table: "withdrawal_requests",
-      reference_id: withdrawal.id,
-    });
-
-    if (ledgerError) {
-      throw ledgerError;
+    if (validAmount > walletSummary.available) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "INSUFFICIENT_FUNDS",
+            message: `Available balance is KSh ${walletSummary.available}`,
+          },
+        },
+        { status: 422 }
+      );
     }
 
-    return NextResponse.json({ withdrawalId: withdrawal.id, status: "requested" });
+    const normalizedPhone = normalizeWithdrawalStoragePhone(phone);
+    const { data: withdrawal, error } = await admin.rpc("create_withdrawal_request", {
+      p_amount: validAmount,
+      p_description: `Withdrawal to ${normalizedPhone}`,
+      p_phone: normalizedPhone,
+      p_user_id: user.id,
+    });
+
+    if (error || !Array.isArray(withdrawal) || withdrawal.length === 0) {
+      const message = error?.message ?? "Failed to create withdrawal request";
+      if (message.includes("ACTIVE_WITHDRAWAL_EXISTS")) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "ACTIVE_WITHDRAWAL_EXISTS",
+              message: "You already have a withdrawal request being processed.",
+            },
+          },
+          { status: 409 }
+        );
+      }
+
+      if (message.includes("INSUFFICIENT_FUNDS")) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "INSUFFICIENT_FUNDS",
+              message: `Available balance is KSh ${walletSummary.available}`,
+            },
+          },
+          { status: 422 }
+        );
+      }
+
+      throw new Error(message);
+    }
+
+    const created = withdrawal[0];
+    void sendWithdrawalWebhook(
+      buildWithdrawalWebhookPayload({
+        amount: validAmount,
+        createdAt: created.created_at,
+        contact,
+        phone: normalizedPhone,
+      }),
+      created.id
+    );
+
+    return NextResponse.json({
+      withdrawalId: created.id,
+      status: created.status,
+      message:
+        "Withdrawal request submitted successfully. It will be processed within the configured processing timeframe.",
+      processingDays,
+    });
   } catch (err) {
     console.error("[Withdrawal Error]", err);
     return NextResponse.json(

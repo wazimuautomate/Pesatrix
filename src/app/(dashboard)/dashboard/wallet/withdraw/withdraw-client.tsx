@@ -23,8 +23,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { formatPhone } from "@/lib/utils";
 
 type Limits = {
+  allowedPhone: string | null;
   minWithdrawal: number;
   maxWithdrawal: number;
   withdrawalHoldDays: number;
@@ -40,25 +42,9 @@ export default function WithdrawClientPage() {
   const router = useRouter();
   const [step, setStep] = useState<"form" | "success">("form");
   const [withdrawalId, setWithdrawalId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string>("");
   const [limits, setLimits] = useState<Limits | null>(null);
   const [limitsLoading, setLimitsLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchLimits() {
-      try {
-        const res = await fetch("/api/wallet/limits");
-        const data = await res.json();
-        if (res.ok && data.minWithdrawal) {
-          setLimits(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch limits", err);
-      } finally {
-        setLimitsLoading(false);
-      }
-    }
-    fetchLimits();
-  }, []);
 
   const schema = z.object({
     amount: z
@@ -75,10 +61,31 @@ export default function WithdrawClientPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+
+  useEffect(() => {
+    async function fetchLimits() {
+      try {
+        const res = await fetch("/api/wallet/limits");
+        const data = await res.json();
+        if (res.ok && data.minWithdrawal) {
+          setLimits(data);
+          if (data.allowedPhone) {
+            setValue("phone", data.allowedPhone, { shouldValidate: true });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch limits", err);
+      } finally {
+        setLimitsLoading(false);
+      }
+    }
+    fetchLimits();
+  }, [setValue]);
 
   async function onSubmit(data: FormData) {
     try {
@@ -93,6 +100,8 @@ export default function WithdrawClientPage() {
       if (!res.ok) {
         if (json.error?.code === "BELOW_MINIMUM" && json.error?.minimum) {
           toast.error(`Minimum withdrawal is KSh ${json.error.minimum.toLocaleString()}`);
+        } else if (json.error?.code === "PHONE_MISMATCH" || json.error?.code === "PHONE_NOT_CONFIGURED") {
+          toast.error(json.error.message);
         } else {
           toast.error(json.error?.message || "Withdrawal failed. Please try again.");
         }
@@ -100,7 +109,12 @@ export default function WithdrawClientPage() {
       }
 
       setWithdrawalId(json.withdrawalId);
+      setSuccessMessage(
+        json.message ||
+          "Withdrawal request submitted successfully. It will be processed within the configured processing timeframe."
+      );
       setStep("success");
+      toast.success("Withdrawal request submitted successfully.");
     } catch {
       toast.error("Something went wrong. Please try again.");
     }
@@ -176,7 +190,9 @@ export default function WithdrawClientPage() {
                   <Input
                     id="withdraw-phone"
                     className="pl-10"
-                    placeholder="07XX XXX XXX"
+                    placeholder={limits?.allowedPhone ? formatPhone(limits.allowedPhone) : "Set phone on profile first"}
+                    readOnly
+                    disabled={limitsLoading || !limits?.allowedPhone}
                     {...register("phone")}
                   />
                 </div>
@@ -185,12 +201,22 @@ export default function WithdrawClientPage() {
                     {errors.phone.message}
                   </p>
                 )}
+                {!errors.phone && limits?.allowedPhone ? (
+                  <p className="text-xs text-muted-foreground">
+                    Withdrawals are only allowed to your saved profile number: {formatPhone(limits.allowedPhone)}
+                  </p>
+                ) : null}
+                {!errors.phone && !limitsLoading && !limits?.allowedPhone ? (
+                  <p className="text-xs text-destructive">
+                    Add a valid Safaricom M-Pesa number on your profile before requesting a withdrawal.
+                  </p>
+                ) : null}
               </div>
 
               <Button
                 type="submit"
                 className="w-full"
-                disabled={isSubmitting}
+                disabled={isSubmitting || limitsLoading || !limits?.allowedPhone}
               >
                 {isSubmitting ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -216,7 +242,10 @@ export default function WithdrawClientPage() {
                 Reference: {withdrawalId?.slice(0, 8).toUpperCase()}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Our team will process your withdrawal within {limits?.withdrawalProcessingDays ?? 3} days.
+                {successMessage}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Processing typically takes {limits?.withdrawalProcessingDays ?? 3} days.
               </p>
             </div>
             <Button

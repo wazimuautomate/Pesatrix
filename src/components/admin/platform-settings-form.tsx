@@ -16,6 +16,7 @@ import {
   REFERRAL_MAX_LEVELS_KEY,
   TRAINING_REWARD_SETTING_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
+  WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
 } from "@/lib/platform-setting-keys";
 
@@ -85,9 +86,16 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       label: "Withdrawal processing time (days)",
       description: "Expected admin payout processing time after a withdrawal is requested.",
       type: "number",
-      min: 1,
-      max: 14,
+      min: 0,
+      step: "any",
       defaultValue: "3",
+    },
+    {
+      key: WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
+      label: "Withdrawal webhook URL",
+      description: "Optional n8n webhook called after a withdrawal request is saved.",
+      type: "text",
+      defaultValue: "",
     },
     {
       key: TRAINING_REWARD_SETTING_KEY,
@@ -213,7 +221,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
                     type={def.type}
                     min={def.min}
                     max={def.max}
-                    step={1}
+                    step={def.step ?? 1}
                     value={currentValue}
                     onChange={(e) => handleChange(def.key, e.target.value)}
                     className="max-w-xs"

@@ -10,13 +10,19 @@ import {
   REFERRAL_MAX_LEVELS_KEY,
   TRAINING_REWARD_SETTING_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
+  WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
 } from "@/lib/platform-setting-keys";
 
 export const TRAINING_UNLOCK_SETTING_KEY = "training_day_unlock_minutes";
 export const DEFAULT_TRAINING_UNLOCK_MINUTES = 1;
 
-export { TRAINING_REWARD_SETTING_KEY, WITHDRAWAL_HOLD_DAYS_KEY, WITHDRAWAL_PROCESSING_DAYS_KEY };
+export {
+  TRAINING_REWARD_SETTING_KEY,
+  WITHDRAWAL_HOLD_DAYS_KEY,
+  WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
+  WITHDRAWAL_PROCESSING_DAYS_KEY,
+};
 export const DEFAULT_TRAINING_REWARD_KSH = 50;
 export const DEFAULT_WITHDRAWAL_HOLD_DAYS = 7;
 export const DEFAULT_WITHDRAWAL_PROCESSING_DAYS = 3;
@@ -125,7 +131,7 @@ export async function getWithdrawalProcessingDays() {
     warnMissingSetting(WITHDRAWAL_PROCESSING_DAYS_KEY, DEFAULT_WITHDRAWAL_PROCESSING_DAYS);
   }
 
-  return normalizeIntegerInRange(setting?.value, DEFAULT_WITHDRAWAL_PROCESSING_DAYS, 1, 14);
+  return normalizeNonNegativeNumber(setting?.value, DEFAULT_WITHDRAWAL_PROCESSING_DAYS);
 }
 
 export async function getTaskUnlockDelayHours() {

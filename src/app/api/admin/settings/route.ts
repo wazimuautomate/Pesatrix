@@ -10,6 +10,7 @@ import {
   REFERRAL_MAX_LEVELS_KEY,
   TRAINING_REWARD_SETTING_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
+  WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
 } from "@/lib/platform-setting-keys";
 
@@ -102,9 +103,22 @@ export async function PATCH(request: Request) {
 
   if (key === WITHDRAWAL_PROCESSING_DAYS_KEY) {
     const numValue = Number(value);
-    if (!Number.isInteger(numValue) || numValue < 1 || numValue > 14) {
+    if (!Number.isFinite(numValue) || numValue < 0) {
       return NextResponse.json(
-        { error: "Withdrawal processing time must be a whole number between 1 and 14" },
+        { error: "Withdrawal processing time must be a positive number" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === WITHDRAWAL_N8N_WEBHOOK_URL_KEY) {
+    const trimmed = String(value).trim();
+    if (
+      trimmed.length > 0 &&
+      !/^https?:\/\/.+/i.test(trimmed)
+    ) {
+      return NextResponse.json(
+        { error: "Withdrawal webhook URL must be a valid http or https URL" },
         { status: 422 }
       );
     }

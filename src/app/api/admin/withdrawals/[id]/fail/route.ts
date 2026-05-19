@@ -41,6 +41,13 @@ export async function POST(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Withdrawal not found" }, { status: 404 });
   }
 
+  if (withdrawal.status === "failed") {
+    return NextResponse.json(
+      { error: "Withdrawal has already been declined" },
+      { status: 409 }
+    );
+  }
+
   if (withdrawal.status === "sent") {
     return NextResponse.json(
       { error: "Cannot fail a withdrawal that has already been sent" },

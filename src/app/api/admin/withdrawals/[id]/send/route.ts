@@ -8,7 +8,7 @@ type RouteContext = {
 };
 
 const schema = z.object({
-  mpesaTxnId: z.string().min(1, "M-Pesa transaction ID required"),
+  mpesaTxnId: z.string().trim().optional(),
   reason: z.string().optional(),
 });
 
@@ -56,11 +56,14 @@ export async function POST(request: Request, { params }: RouteContext) {
     .maybeSingle();
 
   const now = new Date().toISOString();
+  const generatedTxnId =
+    parsed.data.mpesaTxnId?.trim() ||
+    `MOCK-${withdrawal.id.slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-6)}`;
 
   const { error: updateError } = await (admin.from("withdrawal_requests" as never) as any)
     .update({
       status: "sent",
-      mpesa_txn_id: parsed.data.mpesaTxnId,
+      mpesa_txn_id: generatedTxnId,
       processed_at: now,
     })
     .eq("id", id);
@@ -70,7 +73,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   await (admin.from("wallet_transactions" as never) as any)
-    .update({ status: "available" })
+    .update({ status: "available", bucket: "available" })
     .eq("reference_table", "withdrawal_requests")
     .eq("reference_id", id)
     .eq("direction", "debit");
@@ -81,11 +84,11 @@ export async function POST(request: Request, { params }: RouteContext) {
     entityType: "withdrawal_requests",
     entityId: id,
     before,
-    after: { status: "sent", mpesa_txn_id: parsed.data.mpesaTxnId, processed_at: now },
-    reason: parsed.data.reason ?? "Marked as sent manually",
+    after: { status: "sent", mpesa_txn_id: generatedTxnId, processed_at: now },
+    reason: parsed.data.reason ?? "Withdrawal approved with mock payout completion",
     ip: getRequestMeta(request).ip ?? undefined,
     userAgent: getRequestMeta(request).userAgent ?? undefined,
   });
 
-  return NextResponse.json({ ok: true, mpesaTxnId: parsed.data.mpesaTxnId });
+  return NextResponse.json({ ok: true, mpesaTxnId: generatedTxnId });
 }

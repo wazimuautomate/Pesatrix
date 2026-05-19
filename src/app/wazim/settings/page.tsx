@@ -75,6 +75,7 @@ export default async function AdminSettingsPage() {
     { label: "Supabase URL", configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) },
     { label: "Service role key", configured: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY) },
     { label: "M-Pesa shortcode", configured: Boolean(process.env.MPESA_SHORTCODE) },
+    { label: "Withdrawal n8n webhook", configured: Boolean(process.env.WITHDRAWAL_N8N_WEBHOOK_URL) },
     { label: "NVIDIA API key fallback", configured: Boolean(process.env.NVIDIA_API_KEY) },
     { label: "Cron secret", configured: Boolean(process.env.CRON_SECRET) },
   ];

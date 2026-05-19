@@ -135,10 +135,6 @@ export default function WithdrawalsPage() {
   }
 
   async function markSent(withdrawal: Withdrawal) {
-    if (!mpesaTxnId.trim()) {
-      toast.error("M-Pesa transaction ID required");
-      return;
-    }
     setActionLoading(true);
     try {
       const res = await fetch(`/api/admin/withdrawals/${withdrawal.id}/send`, {
@@ -148,10 +144,10 @@ export default function WithdrawalsPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error ?? "Failed to mark as sent");
+        toast.error(data.error ?? "Failed to approve withdrawal");
         return;
       }
-      toast.success("Withdrawal marked as sent");
+      toast.success("Withdrawal approved");
       setSendModal(null);
       setMpesaTxnId("");
       setSendReason("");
@@ -177,10 +173,10 @@ export default function WithdrawalsPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error ?? "Failed to fail withdrawal");
+        toast.error(data.error ?? "Failed to decline withdrawal");
         return;
       }
-      toast.success("Withdrawal failed and amount reversed");
+      toast.success("Withdrawal declined and amount reversed");
       setFailModal(null);
       setFailReason("");
       fetchWithdrawals();
@@ -250,7 +246,7 @@ export default function WithdrawalsPage() {
         adminUserId: "",
       }}
       title="Withdrawals"
-      description="Review and process withdrawal requests. Trigger M-Pesa B2C payouts, mark as sent manually, or fail and reverse."
+      description="Review and process withdrawal requests. Approve to complete the temporary mock payout flow or decline to reverse the reserved debit."
     >
       {counts && (
         <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -384,7 +380,7 @@ export default function WithdrawalsPage() {
                               onClick={() => openSendModal(w)}
                             >
                               <CheckCircle2 className="h-3 w-3" />
-                              Mark Sent
+                              Approve
                             </Button>
                             <Button
                               size="sm"
@@ -393,7 +389,7 @@ export default function WithdrawalsPage() {
                               onClick={() => openFailModal(w)}
                             >
                               <XCircle className="h-3 w-3" />
-                              Fail
+                              Decline
                             </Button>
                           </>
                         )}
@@ -406,7 +402,7 @@ export default function WithdrawalsPage() {
                               onClick={() => openSendModal(w)}
                             >
                               <CheckCircle2 className="h-3 w-3" />
-                              Mark Sent
+                              Approve
                             </Button>
                             <Button
                               size="sm"
@@ -415,7 +411,7 @@ export default function WithdrawalsPage() {
                               onClick={() => openFailModal(w)}
                             >
                               <XCircle className="h-3 w-3" />
-                              Fail
+                              Decline
                             </Button>
                           </>
                         )}
@@ -437,7 +433,7 @@ export default function WithdrawalsPage() {
                               onClick={() => openSendModal(w)}
                             >
                               <CheckCircle2 className="h-3 w-3" />
-                              Mark Sent
+                              Approve
                             </Button>
                             <Button
                               size="sm"
@@ -446,7 +442,7 @@ export default function WithdrawalsPage() {
                               onClick={() => openFailModal(w)}
                             >
                               <XCircle className="h-3 w-3" />
-                              Fail
+                              Decline
                             </Button>
                           </>
                         )}
@@ -538,20 +534,20 @@ export default function WithdrawalsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-teal" />
-              Mark Withdrawal as Sent
+              Approve Withdrawal
             </DialogTitle>
             <DialogDescription>
-              Enter the M-Pesa transaction ID to confirm this withdrawal was sent manually.
+              Approve this withdrawal. You can enter a transaction ID or leave it blank to use a mock payout reference.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="mpesa-txn-id">M-Pesa Transaction ID</Label>
+              <Label htmlFor="mpesa-txn-id">M-Pesa Transaction ID (optional)</Label>
               <Input
                 id="mpesa-txn-id"
                 value={mpesaTxnId}
                 onChange={(e) => setMpesaTxnId(e.target.value)}
-                placeholder="e.g. QAR1234567"
+                placeholder="Leave blank to generate a mock payout reference"
                 className="font-mono"
               />
             </div>
@@ -575,7 +571,7 @@ export default function WithdrawalsPage() {
               disabled={actionLoading}
             >
               {actionLoading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-              Confirm Sent
+              Confirm Approval
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -587,10 +583,10 @@ export default function WithdrawalsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <XCircle className="h-4 w-4" />
-              Fail & Reverse Withdrawal
+              Decline Withdrawal
             </DialogTitle>
             <DialogDescription>
-              This will mark the withdrawal as failed and reverse the debit in the ledger.
+              This will decline the withdrawal and reverse the reserved debit in the ledger.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -613,7 +609,7 @@ export default function WithdrawalsPage() {
               disabled={actionLoading}
             >
               {actionLoading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-              Confirm Fail
+              Confirm Decline
             </Button>
           </DialogFooter>
         </DialogContent>
