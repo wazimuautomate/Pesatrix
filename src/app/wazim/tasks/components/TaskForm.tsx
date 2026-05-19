@@ -31,6 +31,7 @@ import {
   taskInsertSchema,
 } from "@/lib/task-types";
 import { DataLabelingTask } from "@/components/tasks/DataLabelingTask";
+import { VerificationAdminFields } from "@/components/tasks/verification/VerificationAdminFields";
 import { normalizeDatetime } from "@/lib/datetime";
 import {
   ACTION_LABELS,
@@ -120,8 +121,10 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
     setMeta((m) => ({
       ...m,
       category,
-      requires_screenshot: category === "social_engagement" ? true : m.requires_screenshot,
-      ai_grading_enabled: category === "social_engagement" ? true : m.ai_grading_enabled,
+      requires_screenshot: category === "social_engagement" ? true : category === "verification" ? false : m.requires_screenshot,
+      requires_url: category === "verification" ? false : m.requires_url,
+      min_word_count: category === "verification" ? "1" : m.min_word_count,
+      ai_grading_enabled: category === "social_engagement" || category === "verification" ? true : m.ai_grading_enabled,
     }));
     setTaskData(createEmptyTaskData(category) as Record<string, unknown>);
   }
@@ -379,6 +382,9 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
         category={meta.category}
         taskData={taskData}
         setTaskData={setTaskData}
+        onVerificationRequirementChange={(requirements) =>
+          setMeta((current) => ({ ...current, ...requirements }))
+        }
       />
 
       <Separator />
@@ -444,10 +450,16 @@ function TaskDataEditor({
   category,
   taskData,
   setTaskData,
+  onVerificationRequirementChange,
 }: {
   category: TaskCategory;
   taskData: Record<string, unknown>;
   setTaskData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
+  onVerificationRequirementChange: (requirements: {
+    requires_screenshot?: boolean;
+    requires_url?: boolean;
+    min_word_count?: string;
+  }) => void;
 }) {
   if (category === "survey") {
     return (
@@ -483,9 +495,10 @@ function TaskDataEditor({
   }
   if (category === "verification") {
     return (
-      <VerificationEditor
+      <VerificationAdminFields
         taskData={taskData}
         setTaskData={setTaskData}
+        onRequirementChange={onVerificationRequirementChange}
       />
     );
   }

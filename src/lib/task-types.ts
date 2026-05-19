@@ -106,19 +106,17 @@ export const socialEngagementTaskDataSchema = z.object({
   reverification_enabled: z.boolean().default(false),
 });
 
-export const verificationQuestionSchema = z.object({
-  id: z.string().min(1),
-  text: z.string().min(1),
-  type: z.enum(["yes_no", "open_text"]).default("yes_no"),
-});
-
 export const verificationTaskDataSchema = z.object({
   type: z.literal("verification"),
-  target_url: z.string().url(),
-  target_description: z.string().min(1),
-  questions: z.array(verificationQuestionSchema).min(1),
-  requires_screenshot: z.boolean().default(true),
-  min_time_seconds: z.number().int().min(0).default(60),
+  verification_type: z.enum(["text_only", "screenshot_only", "url_only", "mixed"]).default("text_only"),
+  requires_text_answer: z.boolean().default(true),
+  requires_screenshot: z.boolean().default(false),
+  requires_url: z.boolean().default(false),
+  text_answer_label: z.string().trim().max(120).optional().nullable(),
+  expected_answer: z.string().trim().max(1000).optional().nullable(),
+  expected_answer_strict: z.boolean().default(false),
+  answer_hint: z.string().trim().max(500).optional().nullable(),
+  verification_url: z.string().trim().max(1000).optional().nullable(),
 });
 
 export const contentCreationTaskDataSchema = z.object({
@@ -272,11 +270,15 @@ export function createEmptySocialEngagementTaskData(): SocialEngagementTaskData 
 export function createEmptyVerificationTaskData(): VerificationTaskData {
   return {
     type: "verification",
-    target_url: "",
-    target_description: "",
-    questions: [],
-    requires_screenshot: true,
-    min_time_seconds: 120,
+    verification_type: "text_only",
+    requires_text_answer: true,
+    requires_screenshot: false,
+    requires_url: false,
+    text_answer_label: "Your Answer",
+    expected_answer: null,
+    expected_answer_strict: false,
+    answer_hint: null,
+    verification_url: null,
   };
 }
 

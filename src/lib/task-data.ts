@@ -20,10 +20,21 @@ export type SocialEngagementTaskData = {
   [key: string]: unknown;
 };
 
+export type VerificationTaskData = {
+  type: "verification";
+  [key: string]: unknown;
+};
+
 export function sanitizeTaskDataForClient(taskData: unknown): unknown {
   if (isRecord(taskData) && taskData.type === "social_engagement") {
     const cloned = structuredClone(taskData) as Record<string, unknown>;
     const { ai_check_criteria: _aiCriteria, verification_notes: _verificationNotes, ...clientSafe } = cloned;
+    return clientSafe;
+  }
+
+  if (isRecord(taskData) && taskData.type === "verification") {
+    const cloned = structuredClone(taskData) as Record<string, unknown>;
+    const { expected_answer: _expectedAnswer, expected_answer_strict: _expectedAnswerStrict, ...clientSafe } = cloned;
     return clientSafe;
   }
 
@@ -56,6 +67,10 @@ export function isDataLabelingTaskData(value: unknown): value is DataLabelingTas
 
 export function isSocialEngagementTaskData(value: unknown): value is SocialEngagementTaskData {
   return isRecord(value) && value.type === "social_engagement";
+}
+
+export function isVerificationTaskData(value: unknown): value is VerificationTaskData {
+  return isRecord(value) && value.type === "verification";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

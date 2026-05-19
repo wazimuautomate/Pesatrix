@@ -17,6 +17,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/task-types";
 import { DataLabelingTask } from "@/components/tasks/DataLabelingTask";
 import { SocialEngagementTask } from "@/components/tasks/SocialEngagementTask";
+import {
+  VerificationTaskUI,
+  type VerificationSubmission,
+} from "@/components/tasks/verification/VerificationTaskUI";
 
 type Task = {
   id: string;
@@ -188,6 +192,38 @@ export function TaskSubmissionForm({
     }
   }
 
+  async function handleVerificationSubmit(data: VerificationSubmission) {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/tasks/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskId: task.id,
+          answers: {
+            text_answer: data.text_answer ?? null,
+            verification_notes: data.verification_notes ?? null,
+          },
+          screenshotUrl: data.screenshot_url ?? null,
+          submittedUrl: data.submitted_url ?? null,
+        }),
+      });
+
+      const payload = await res.json();
+
+      if (!res.ok) {
+        toast.error(payload?.error?.message ?? payload?.error ?? "Submission failed");
+        return;
+      }
+
+      setSubmitted(true);
+      toast.success("Verification submitted successfully!");
+      router.push("/tasks");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function canSubmit(): boolean {
     if (taskType === "survey") {
       const questions = (taskData.questions as Array<{ id: string; required: boolean }>) ?? [];
@@ -313,12 +349,10 @@ export function TaskSubmissionForm({
             />
           )}
           {taskType === "verification" && (
-            <VerificationForm
-              questions={taskData.questions as Array<Record<string, unknown>>}
-              answers={answers}
-              setAnswers={setAnswers}
-              screenshotUrl={screenshotUrl}
-              setScreenshotUrl={setScreenshotUrl}
+            <VerificationTaskUI
+              task={task}
+              onSubmit={handleVerificationSubmit}
+              isSubmitting={loading}
             />
           )}
           {taskType === "content_creation" && (
@@ -348,7 +382,7 @@ export function TaskSubmissionForm({
             </div>
           )}
 
-          {task.requires_url && (
+          {task.requires_url && taskType !== "verification" && (
             <div>
               <Label htmlFor="submittedUrl">Submitted URL</Label>
               <Input
@@ -360,7 +394,7 @@ export function TaskSubmissionForm({
             </div>
           )}
 
-          {taskType !== "data_labeling" && (
+          {taskType !== "data_labeling" && taskType !== "verification" && (
             <>
               <Button
                 onClick={handleSubmit}

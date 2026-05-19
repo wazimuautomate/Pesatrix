@@ -1,8 +1,9 @@
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getVaultSecret } from "@/lib/ai/provider-secrets";
 import { getWithdrawalHoldDays } from "@/lib/platform-settings";
-import { isDataLabelingTaskData, isSocialEngagementTaskData } from "@/lib/task-data";
+import { isDataLabelingTaskData, isSocialEngagementTaskData, isVerificationTaskData } from "@/lib/task-data";
 import { normalizeSocialTaskData } from "@/lib/social-engagement";
+import { gradeVerificationSubmission } from "@/lib/ai/gradeVerificationTask";
 
 const SYSTEM_PROMPT = `You are a strict but fair task submission reviewer for Pesatrix, a Kenyan online earning platform. Your job is to evaluate user task submissions and decide if they meet the required quality standard.
 
@@ -129,6 +130,28 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
   if (isSocialEngagementTaskData(task.task_data)) {
     const result = await gradeSocialEngagementSubmission(supabaseAdmin, submission, task);
     await writeGradingResultAndCredit(supabaseAdmin, submission, task, result);
+    return;
+  }
+
+  if (isVerificationTaskData(task.task_data)) {
+    const verificationResult = await gradeVerificationSubmission(task, submission);
+    const decision: GradingResult["decision"] = verificationResult.manualReview
+      ? "flagged"
+      : verificationResult.score >= 70
+        ? "approved"
+        : verificationResult.score >= 50
+          ? "flagged"
+          : "declined";
+
+    await writeGradingResultAndCredit(supabaseAdmin, submission, task, {
+      score: verificationResult.score,
+      decision,
+      reasoning: verificationResult.reasoning,
+      criteria_scores: {
+        verification: verificationResult.score,
+      },
+      grading_detail: verificationResult.gradingDetail,
+    });
     return;
   }
 

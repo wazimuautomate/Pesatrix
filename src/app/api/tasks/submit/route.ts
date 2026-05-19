@@ -12,8 +12,8 @@ import { normalizeSocialTaskData } from "@/lib/social-engagement";
 const submissionSchema = z.object({
   taskId: z.string().uuid(),
   answers: z.record(z.unknown()),
-  screenshotUrl: z.string().url().nullable().optional(),
-  submittedUrl: z.string().url().nullable().optional(),
+  screenshotUrl: z.string().nullable().optional(),
+  submittedUrl: z.string().nullable().optional(),
 });
 
 const TASK_SCREENSHOT_BUCKET = "task-screenshots";
@@ -54,6 +54,8 @@ export async function POST(request: Request) {
   }
 
   const { taskId, answers, screenshotUrl, submittedUrl } = parsed.data;
+  const normalizedScreenshotUrl = screenshotUrl?.trim() || null;
+  let normalizedSubmittedUrl = submittedUrl?.trim() || null;
 
   const admin = createAdminSupabaseClient();
 
@@ -68,6 +70,16 @@ export async function POST(request: Request) {
       { error: "This task is no longer available" },
       { status: 409 }
     );
+  }
+
+  if (normalizedSubmittedUrl) {
+    normalizedSubmittedUrl = normalizeSubmittedUrl(normalizedSubmittedUrl);
+    if (!isValidHttpUrl(normalizedSubmittedUrl)) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Submitted URL must be a valid http(s) URL." } },
+        { status: 422 }
+      );
+    }
   }
 
   const socialTaskData = normalizeSocialTaskData(task.task_data);
@@ -140,6 +152,29 @@ export async function POST(request: Request) {
     if (validationError) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: validationError } },
+        { status: 422 }
+      );
+    }
+  }
+
+  const isVerificationTask = task.category === "verification";
+  if (isVerificationTask) {
+    const validationErrors = validateVerificationSubmission({
+      taskData: task.task_data,
+      answers,
+      screenshotUrl: normalizedScreenshotUrl,
+      submittedUrl: normalizedSubmittedUrl,
+    });
+
+    if (validationErrors.length > 0) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Please complete all required verification proof fields.",
+            fields: validationErrors,
+          },
+        },
         { status: 422 }
       );
     }
@@ -242,8 +277,8 @@ export async function POST(request: Request) {
       task_id: taskId,
       user_id: user.id,
       answers,
-      screenshot_url: socialScreenshotUrl ?? screenshotUrl ?? null,
-      submitted_url: submittedUrl ?? null,
+      screenshot_url: socialScreenshotUrl ?? normalizedScreenshotUrl ?? null,
+      submitted_url: normalizedSubmittedUrl ?? null,
       status: initialStatus,
       screenshot_hash: socialScreenshotHash,
       ip: requestIp,
@@ -281,8 +316,21 @@ export async function POST(request: Request) {
       .update({ status: "ai_reviewing" })
       .eq("id", submission.id);
 
-    if (isDataLabelingTaskData(task.task_data) || isSocialTask) {
-      await gradeSubmission(submission.id);
+    if (isDataLabelingTaskData(task.task_data) || isSocialTask || isVerificationTask) {
+      try {
+        await gradeSubmission(submission.id);
+      } catch (err) {
+        console.error("[Grading] Failed for submission:", submission.id, err);
+        await admin
+          .from("task_submissions")
+          .update({
+            status: "flagged",
+            ai_reasoning: "AI grading failed. Manual review required.",
+            ai_reviewed_at: new Date().toISOString(),
+          })
+          .eq("id", submission.id)
+          .is("ai_reviewed_at", null);
+      }
     } else {
       gradeSubmission(submission.id).catch((err) => {
         console.error("[Grading] Failed for submission:", submission.id, err);
@@ -290,7 +338,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data: reviewedSubmission } = task.ai_grading_enabled && (isDataLabelingTaskData(task.task_data) || isSocialTask)
+  const { data: reviewedSubmission } = task.ai_grading_enabled && (isDataLabelingTaskData(task.task_data) || isSocialTask || isVerificationTask)
     ? await admin
       .from("task_submissions")
       .select("id, status, submitted_at, ai_score, ai_reasoning")
@@ -431,4 +479,78 @@ function validateDataLabelingAnswers(taskData: unknown, answers: Record<string, 
   }
 
   return null;
+}
+
+function validateVerificationSubmission({
+  taskData,
+  answers,
+  screenshotUrl,
+  submittedUrl,
+}: {
+  taskData: unknown;
+  answers: Record<string, unknown>;
+  screenshotUrl?: string | null;
+  submittedUrl?: string | null;
+}) {
+  const data = normalizeVerificationTaskData(taskData);
+  const errors: Array<{ field: string; message: string }> = [];
+
+  if (data.requires_text_answer) {
+    const textAnswer = typeof answers.text_answer === "string" ? answers.text_answer.trim() : "";
+    if (!textAnswer) {
+      errors.push({ field: "text_answer", message: "Text answer is required." });
+    }
+  }
+
+  if (data.requires_screenshot) {
+    if (!screenshotUrl?.trim() || !isValidHttpUrl(screenshotUrl.trim())) {
+      errors.push({ field: "screenshot_url", message: "Screenshot proof is required." });
+    }
+  }
+
+  if (data.requires_url) {
+    if (!submittedUrl?.trim() || !isValidHttpUrl(submittedUrl.trim())) {
+      errors.push({ field: "submitted_url", message: "A valid submitted URL is required." });
+    }
+  }
+
+  return errors;
+}
+
+function normalizeVerificationTaskData(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    console.warn("[Submission] Verification task_data missing or malformed; defaulting to text-only proof.");
+    return {
+      requires_text_answer: true,
+      requires_screenshot: false,
+      requires_url: false,
+    };
+  }
+
+  const data = value as Record<string, unknown>;
+  if (data.type !== "verification") {
+    console.warn("[Submission] Verification task_data missing type; defaulting to text-only proof.");
+  }
+
+  return {
+    requires_text_answer: data.requires_text_answer !== false,
+    requires_screenshot: data.requires_screenshot === true,
+    requires_url: data.requires_url === true,
+  };
+}
+
+function normalizeSubmittedUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function isValidHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
