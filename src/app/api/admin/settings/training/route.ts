@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       adminId: userId,
       action: "training_unlock_minutes_update",
       entityType: "platform_settings",
-      entityId: "00000000-0000-0000-0000-000000000000",
+      entityId: TRAINING_UNLOCK_SETTING_KEY,
       after: setting,
       reason: `Set training unlock minutes to ${parsed.data.unlockMinutes}`,
       ip: requestMeta?.ip ?? undefined,

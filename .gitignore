@@ -44,7 +44,6 @@ dev-server-*.log
 .playwright-mcp
 .vscode
 /tests
-Old Pesatrix/
 offerwall-integration-guide.md
 PESATRIX_SYSTEM_DOC.md
 Pesatrix_Backend_Database_API_Spec.md

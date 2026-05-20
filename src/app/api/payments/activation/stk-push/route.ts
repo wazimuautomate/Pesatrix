@@ -1,212 +1,161 @@
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { creditDirectReferralBonus } from "@/lib/referral";
-import { KENYAN_PHONE_REGEX, normalizePesaPhone, MPESA_STK_AMOUNT } from "@/lib/mpesa";
 import { z } from "zod";
 
+import { internalErrorResponse, rateLimitedResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  KENYAN_PHONE_REGEX,
+  MPESA_STK_AMOUNT,
+  initiateStkPush,
+  normalizePesaPhone,
+} from "@/lib/mpesa";
+
+const ACTIVATION_AMOUNT = MPESA_STK_AMOUNT;
+
 const schema = z.object({
-  phone: z.string().regex(KENYAN_PHONE_REGEX, "Invalid Kenyan phone number"),
+  phone: z.string().trim().regex(KENYAN_PHONE_REGEX, "Invalid Kenyan phone number"),
 });
 
 export async function POST(request: Request) {
-  const admin = createAdminSupabaseClient();
-
   try {
-    const body = await request.json();
-    const parsed = schema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0].message } },
-        { status: 422 }
-      );
-    }
-
     const supabase = await createServerSupabaseClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) {
+      return unauthorizedResponse("Not authenticated");
+    }
+
+    const parsed = schema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
+      return validationErrorResponse(parsed.error.errors[0]?.message ?? "Invalid request");
+    }
+
+    const paymentLimit = await checkRateLimit(`activation_stk_push:user:${user.id}`, 3, 10 * 60);
+    if (!paymentLimit.allowed) {
+      return rateLimitedResponse("Too many activation attempts. Please try again later.");
+    }
+
+    const admin = createAdminSupabaseClient();
+
+    const { data: currentStatus, error: statusError } = await admin
+      .from("account_status")
+      .select("is_activated")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (statusError) {
+      throw statusError;
+    }
+
+    if (currentStatus?.is_activated) {
       return NextResponse.json(
-        { error: { code: "UNAUTHORIZED", message: "Not authenticated" } },
-        { status: 401 }
+        {
+          error: { code: "ALREADY_ACTIVATED", message: "Account is already activated" },
+          alreadyActivated: true,
+        },
+        { status: 409 }
       );
     }
 
-    const userId = user.id;
-    console.log("[Activation] Starting activation flow for user:", userId);
-
-    const { data: currentStatus } = await admin
-      .from("account_status")
-      .select("is_activated")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (currentStatus?.is_activated === true) {
-      console.log("[Activation] User already activated:", userId);
-      return NextResponse.json({
-        ok: true,
-        alreadyActivated: true,
-        message: "Account is already activated",
-      });
+    const phone = normalizePesaPhone(parsed.data.phone);
+    if (!/^254[71]\d{8}$/.test(phone)) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Invalid Kenyan phone number" } },
+        { status: 422 }
+      );
     }
 
-    const phone = normalizePesaPhone(parsed.data.phone);
-    const activatedAt = new Date().toISOString();
-    const mockReceipt = `MOCK-${Date.now()}`;
-
-    console.log("[Activation] Writing activation for user:", userId);
-
-    const { data: existingPayment } = await admin
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: pendingPayment, error: pendingError } = await admin
       .from("activation_payments")
-      .select("id")
-      .eq("user_id", userId)
+      .select("id, created_at")
+      .eq("user_id", user.id)
       .eq("status", "pending")
+      .gte("created_at", tenMinutesAgo)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    let paymentId: string | null = null;
-
-    if (existingPayment) {
-      const { data: paidPayment, error: paymentUpdateError } = await admin
-        .from("activation_payments")
-        .update({
-          status: "paid",
-          mpesa_receipt: mockReceipt,
-          paid_at: activatedAt,
-          merchant_request_id: `MOCK-MID-${Date.now()}`,
-          checkout_request_id: `MOCK-CID-${Date.now()}`,
-          callback_raw: {
-            mock: true,
-            timestamp: Date.now(),
-          },
-        })
-        .eq("id", existingPayment.id)
-        .select("id")
-        .single();
-
-      if (paymentUpdateError) {
-        console.error("[Activation] Payment record failed:", paymentUpdateError);
-        return NextResponse.json(
-          { error: "Payment record failed", detail: paymentUpdateError.message },
-          { status: 500 }
-        );
-      }
-
-      paymentId = paidPayment.id;
-    } else {
-      const { data: paidPayment, error: paymentInsertError } = await admin
-        .from("activation_payments")
-        .insert({
-          user_id: userId,
-          amount: MPESA_STK_AMOUNT,
-          phone,
-          status: "paid",
-          mpesa_receipt: mockReceipt,
-          paid_at: activatedAt,
-          merchant_request_id: `MOCK-MID-${Date.now()}`,
-          checkout_request_id: `MOCK-CID-${Date.now()}`,
-          callback_raw: {
-            mock: true,
-            timestamp: Date.now(),
-          },
-        })
-        .select("id")
-        .single();
-
-      if (paymentInsertError) {
-        console.error("[Activation] Payment record failed:", paymentInsertError);
-        return NextResponse.json(
-          { error: "Payment record failed", detail: paymentInsertError.message },
-          { status: 500 }
-        );
-      }
-
-      paymentId = paidPayment.id;
+    if (pendingError) {
+      throw pendingError;
     }
 
-    console.log("[Activation] activation_payments updated for user:", userId);
-
-    const activationPatch = {
-      is_activated: true,
-      activated_at: activatedAt,
-      status: "active",
-      state: "activated",
-    };
-
-    const { data: updatedStatus, error: statusError } = await admin
-      .from("account_status")
-      .update(activationPatch)
-      .eq("user_id", userId)
-      .select("user_id")
-      .maybeSingle();
-
-    if (statusError) {
-      console.error("[Activation] Status update failed:", statusError);
+    if (pendingPayment) {
       return NextResponse.json(
-        { error: "Status update failed", detail: statusError.message },
-        { status: 500 }
+        {
+          error: {
+            code: "PENDING_PAYMENT_EXISTS",
+            message: "An activation payment is already pending. Wait a few minutes before trying again.",
+          },
+        },
+        { status: 409 }
       );
     }
 
-    if (!updatedStatus) {
-      const { error: statusInsertError } = await admin
-        .from("account_status")
-        .insert({
-          user_id: userId,
-          is_setup_complete: false,
-          ...activationPatch,
-        });
+    const initiatedAt = new Date().toISOString();
+    const { data: payment, error: insertError } = await admin
+      .from("activation_payments")
+      .insert({
+        user_id: user.id,
+        amount: ACTIVATION_AMOUNT,
+        phone,
+        status: "pending",
+        stk_initiated_at: initiatedAt,
+      })
+      .select("id")
+      .single();
 
-      if (statusInsertError) {
-        console.error("[Activation] Status update failed:", statusInsertError);
-        return NextResponse.json(
-          { error: "Status update failed", detail: statusInsertError.message },
-          { status: 500 }
-        );
+    if (insertError || !payment) {
+      throw insertError ?? new Error("Failed to create activation payment");
+    }
+
+    try {
+      const stk = await initiateStkPush({
+        phone,
+        amount: ACTIVATION_AMOUNT,
+        accountRef: "Pesatrix",
+        description: "Pesatrix activation",
+      });
+
+      const { error: updateError } = await admin
+        .from("activation_payments")
+        .update({
+          checkout_request_id: stk.checkoutRequestId,
+          merchant_request_id: stk.merchantRequestId,
+        })
+        .eq("id", payment.id);
+
+      if (updateError) {
+        throw updateError;
       }
+
+      return NextResponse.json({
+        paymentId: payment.id,
+        status: "pending",
+        message: "Check your phone for M-Pesa prompt",
+      });
+    } catch (error) {
+      await admin
+        .from("activation_payments")
+        .update({
+          status: "failed",
+          callback_validation_error: "stk_initiation_failed",
+          stk_completed_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id);
+
+      console.error("[POST /api/payments/activation/stk-push] STK initiation failed:", error);
+      return NextResponse.json(
+        { error: { code: "STK_UNAVAILABLE", message: "Could not start M-Pesa payment right now" } },
+        { status: 502 }
+      );
     }
-
-    console.log("[Activation] account_status updated for user:", userId);
-
-    const { error: walletError } = await admin.from("wallet_transactions").insert({
-      user_id: userId,
-      type: "activation_fee",
-      direction: "debit",
-      amount: MPESA_STK_AMOUNT,
-      status: "available",
-      bucket: "available",
-      description: "Mock activation fee captured during development",
-      reference_table: "activation_payments",
-      reference_id: paymentId,
-      available_at: activatedAt,
-    });
-
-    if (walletError) {
-      console.warn("[Activation] wallet activation fee insert skipped", walletError);
-    }
-
-    await creditDirectReferralBonus(userId);
-
-    console.log("[Activation] Successfully activated user:", userId);
-
-    return NextResponse.json({
-      ok: true,
-      activated: true,
-      paymentId,
-      status: "paid",
-      receipt: mockReceipt,
-      customerMessage: "Mock activation completed successfully.",
-    });
-  } catch (err) {
-    console.error("[Activation] Error:", err);
-
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "Payment initiation failed" } },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("[POST /api/payments/activation/stk-push] error:", error);
+    return internalErrorResponse("Payment initiation failed");
   }
 }

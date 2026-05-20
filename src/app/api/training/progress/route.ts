@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { internalErrorResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   TrainingProgressError,
@@ -59,26 +60,19 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const parsed = requestSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0].message } },
-        { status: 422 }
-      );
-    }
-
     const supabase = await createServerSupabaseClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json(
-        { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
-        { status: 401 }
-      );
+      return unauthorizedResponse();
+    }
+
+    const parsed = requestSchema.safeParse(await request.json());
+
+    if (!parsed.success) {
+      return validationErrorResponse(parsed.error.errors[0].message);
     }
 
     if (parsed.data.action === "complete_day") {
@@ -112,11 +106,7 @@ export async function POST(request: Request) {
       );
     }
 
-    console.error("[POST /api/training/progress]", error);
-
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "Failed to update training progress" } },
-      { status: 500 }
-    );
+    console.error("[POST /api/training/progress] error:", error);
+    return internalErrorResponse("Failed to update training progress");
   }
 }

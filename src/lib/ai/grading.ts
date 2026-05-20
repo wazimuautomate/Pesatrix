@@ -1067,13 +1067,10 @@ async function callVisionModelWithFallback(
       continue;
     }
 
-    console.log(`[Social Grading] Attempting model: ${modelConfig.modelId} (${i + 1}/${VISION_MODELS.length}) via ${modelConfig.provider}`);
-
     try {
       const result = await callVisionModel(apiKey, modelConfig, image, prompt, submissionId);
 
       if (result.success && result.response) {
-        console.log(`[Social Grading] Successfully used model: ${modelConfig.modelId} (${modelConfig.provider})`);
         return {
           success: true,
           response: result.response,

@@ -1,5 +1,6 @@
 import { randomInt } from "node:crypto";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import {
   getAccountProgressSnapshot,
@@ -35,6 +36,11 @@ const PAID_REWARDS = [
 ] as const;
 
 type SpinMode = "free" | "paid";
+
+const spinRequestSchema = z.object({
+  mode: z.enum(["free", "paid"]).optional(),
+  adConfirmed: z.boolean().optional(),
+});
 
 type RewardTransactionRow = {
   id: string;
@@ -223,10 +229,11 @@ export async function POST(request: Request) {
       return errorResponse("Authentication required", "UNAUTHORIZED", 401);
     }
 
-    const body = (await request.json().catch(() => ({}))) as {
-      mode?: SpinMode;
-      adConfirmed?: boolean;
-    };
+    const parsed = spinRequestSchema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
+      return errorResponse(parsed.error.errors[0]?.message ?? "Invalid reward spin request.", "VALIDATION_ERROR", 422);
+    }
+    const body = parsed.data;
     const mode: SpinMode = body.mode === "paid" ? "paid" : "free";
 
     const admin = createAdminSupabaseClient();

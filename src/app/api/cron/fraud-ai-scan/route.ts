@@ -75,7 +75,7 @@ async function runCron(request: Request) {
       results.push({
         userId,
         ok: false,
-        error: error instanceof Error ? error.message : "Unknown scan error",
+        error: "SCAN_FAILED",
       });
     }
 

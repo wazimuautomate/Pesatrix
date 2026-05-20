@@ -14,7 +14,7 @@ const schema = z.object({
 export async function POST(request: Request, { params }: RouteContext) {
   const { error, userId } = await requireAdmin({
     request,
-    allowedRoles: ["admin"],
+    allowedRoles: ["finance", "super_admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -67,26 +67,16 @@ export async function POST(request: Request, { params }: RouteContext) {
       status: "failed",
       failure_reason: parsed.data.reason,
       processed_at: now,
+      b2c_result_code: "manual_fail",
+      b2c_result_desc: parsed.data.reason,
     })
     .eq("id", id);
 
   await (admin.from("wallet_transactions" as never) as any)
-    .update({ status: "reversed" })
+    .update({ status: "reversed", bucket: "locked" })
     .eq("reference_table", "withdrawal_requests")
     .eq("reference_id", id)
     .eq("direction", "debit");
-
-  await (admin.from("wallet_transactions" as never) as any).insert({
-    user_id: withdrawal.user_id,
-    type: "reversal",
-    direction: "credit",
-    amount: withdrawal.amount,
-    status: "available",
-    bucket: "available",
-    description: `Withdrawal reversal: ${parsed.data.reason}`,
-    reference_table: "withdrawal_requests",
-    reference_id: id,
-  });
 
   await auditLog({
     adminId: userId,

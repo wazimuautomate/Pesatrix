@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { internalErrorResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const onboardingSchema = z.object({
@@ -13,26 +14,19 @@ const onboardingSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const parsed = onboardingSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0].message } },
-        { status: 422 }
-      );
-    }
-
     const supabase = await createServerSupabaseClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json(
-        { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
-        { status: 401 }
-      );
+      return unauthorizedResponse();
+    }
+
+    const parsed = onboardingSchema.safeParse(await request.json());
+
+    if (!parsed.success) {
+      return validationErrorResponse(parsed.error.errors[0].message);
     }
 
     const admin = createAdminSupabaseClient();
@@ -89,13 +83,12 @@ export async function POST(request: Request) {
       .eq("id", user.id);
 
     if (profileError) {
-      console.error("[POST /api/onboarding/complete] Profile update failed:", profileError);
+      console.error("[POST /api/onboarding/complete] profile update failed:", profileError);
       return NextResponse.json(
         {
           error: {
             code: "PROFILE_UPDATE_FAILED",
             message: "Profile update failed",
-            detail: profileError.message,
           },
         },
         { status: 500 }
@@ -130,13 +123,12 @@ export async function POST(request: Request) {
     );
 
     if (accountStatusError) {
-      console.error("[POST /api/onboarding/complete] Status update failed:", accountStatusError);
+      console.error("[POST /api/onboarding/complete] status update failed:", accountStatusError);
       return NextResponse.json(
         {
           error: {
             code: "STATUS_UPDATE_FAILED",
             message: "Status update failed",
-            detail: accountStatusError.message,
           },
         },
         { status: 500 }
@@ -149,7 +141,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (verifyError || verifiedStatus?.is_setup_complete !== true) {
-      console.error("[POST /api/onboarding/complete] Status verification failed:", {
+      console.error("[POST /api/onboarding/complete] status verification failed:", {
         error: verifyError,
         status: verifiedStatus,
       });
@@ -158,7 +150,6 @@ export async function POST(request: Request) {
           error: {
             code: "STATUS_VERIFY_FAILED",
             message: "Status verification failed",
-            detail: verifyError?.message ?? "Setup completion was not persisted",
           },
         },
         { status: 500 }
@@ -167,11 +158,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, setupComplete: true });
   } catch (error) {
-    console.error("[POST /api/onboarding/complete]", error);
-
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "Failed to complete onboarding" } },
-      { status: 500 }
-    );
+    console.error("[POST /api/onboarding/complete] error:", error);
+    return internalErrorResponse("Failed to complete onboarding");
   }
 }

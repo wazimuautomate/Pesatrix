@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "../../_lib";
 import { validateTaskFinancials } from "@/lib/financial-limits";
@@ -18,6 +19,10 @@ type ValidationError = {
   title: string;
   errors: string[];
 };
+
+const importTasksSchema = z.object({
+  tasks: z.array(z.unknown()).min(1, "tasks must be a non-empty array"),
+});
 
 function parseTaskData(raw: unknown): { data: Record<string, unknown>; errors: string[] } {
   const errors: string[] = [];
@@ -139,15 +144,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (typeof body !== "object" || body === null || !("tasks" in body)) {
-    return NextResponse.json({ error: "Body must contain { tasks: [...] }" }, { status: 400 });
+  const parsedBody = importTasksSchema.safeParse(body);
+  if (!parsedBody.success) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: parsedBody.error.errors[0]?.message ?? "Invalid import payload" } },
+      { status: 422 }
+    );
   }
-
-  const b = body as Record<string, unknown>;
-  const rawTasks = b.tasks;
-  if (!Array.isArray(rawTasks) || rawTasks.length === 0) {
-    return NextResponse.json({ error: "tasks must be a non-empty array" }, { status: 400 });
-  }
+  const rawTasks = parsedBody.data.tasks;
 
   const admin = createAdminSupabaseClient();
   const failed: ValidationError[] = [];
@@ -223,11 +227,12 @@ export async function POST(request: Request) {
         .select("*");
 
       if (insertError) {
+        console.error("[POST /api/admin/tasks/import] insert error:", insertError);
         for (const r of batch) {
           failed.push({
             row: r.originalIndex + 1,
             title: r.data.title as string,
-            errors: [`Insert error: ${insertError.message}`],
+            errors: ["Insert error: failed to save task"],
           });
         }
       } else if (data) {

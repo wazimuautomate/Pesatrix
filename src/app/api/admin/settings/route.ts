@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { requireAdmin, auditLog } from "../_lib";
 import {
@@ -15,6 +16,11 @@ import {
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
 } from "@/lib/platform-setting-keys";
+
+const settingsUpdateSchema = z.object({
+  key: z.string().trim().min(1, "Setting key is required"),
+  value: z.union([z.string(), z.number(), z.boolean()]),
+});
 
 export async function GET(request: Request) {
   const { error, adminUser, userId: adminAuthId, requestMeta } = await requireAdmin({});
@@ -38,16 +44,14 @@ export async function PATCH(request: Request) {
   const { error, adminUser, userId: adminAuthId, requestMeta } = await requireAdmin({});
   if (error) return error;
 
-  const body = await request.json();
-  const { key, value } = body;
-
-  if (!key || typeof key !== "string") {
-    return NextResponse.json({ error: "Setting key is required" }, { status: 422 });
+  const parsed = settingsUpdateSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0]?.message ?? "Invalid setting" } },
+      { status: 422 }
+    );
   }
-
-  if (value === undefined) {
-    return NextResponse.json({ error: "Setting value is required" }, { status: 422 });
-  }
+  const { key, value } = parsed.data;
 
   const numericSettings = [
     TRAINING_REWARD_SETTING_KEY,

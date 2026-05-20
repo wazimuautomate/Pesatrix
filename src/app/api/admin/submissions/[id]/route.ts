@@ -18,10 +18,7 @@ function supabaseErrorResponse(context: string, error: SupabaseErrorLike) {
   });
 
   return NextResponse.json(
-    {
-      error: error.message ?? "Supabase request failed",
-      code: error.code ?? null,
-    },
+    { error: { code: "INTERNAL_ERROR", message: "Request failed" } },
     { status: 500 }
   );
 }

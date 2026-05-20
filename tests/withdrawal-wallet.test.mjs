@@ -7,7 +7,7 @@ const {
   normalizeWithdrawalStoragePhone,
 } = await import("../src/lib/withdrawal-utils.ts");
 
-test("computeWalletSummary subtracts locked and completed withdrawal debits from available balance", () => {
+test("computeWalletSummary subtracts only finalized withdrawal debits from available balance", () => {
   const summary = computeWalletSummary([
     {
       amount: 1200,
@@ -24,6 +24,13 @@ test("computeWalletSummary subtracts locked and completed withdrawal debits from
       type: "withdrawal",
     },
     {
+      amount: 100,
+      bucket: "available",
+      direction: "debit",
+      status: "available",
+      type: "withdrawal",
+    },
+    {
       amount: 150,
       bucket: "pending",
       direction: "credit",
@@ -32,11 +39,11 @@ test("computeWalletSummary subtracts locked and completed withdrawal debits from
     },
   ]);
 
-  assert.equal(summary.available, 900);
+  assert.equal(summary.available, 1100);
   assert.equal(summary.pending, 150);
 });
 
-test("computeWalletSummary preserves older available credits even when status is not available", () => {
+test("computeWalletSummary ignores non-finalized debits until payout success", () => {
   const summary = computeWalletSummary([
     {
       amount: 200,
@@ -52,7 +59,7 @@ test("computeWalletSummary preserves older available credits even when status is
     },
   ]);
 
-  assert.equal(summary.available, 125);
+  assert.equal(summary.available, 200);
 });
 
 test("normalizeWithdrawalStoragePhone forces +2547 format for stored withdrawal numbers", () => {

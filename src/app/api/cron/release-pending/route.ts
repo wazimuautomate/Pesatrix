@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { reconcileStuckTransactions } from "@/lib/mpesa/reconciliation";
 
 export async function GET(request: Request) {
   const cronSecret = request.headers.get("x-cron-secret");
@@ -8,12 +9,18 @@ export async function GET(request: Request) {
   }
 
   const supabaseAdmin = createAdminSupabaseClient();
-  const { error } = await supabaseAdmin.rpc("release_pending_wallet_credits");
+  const [{ error }, reconciliation] = await Promise.all([
+    supabaseAdmin.rpc("release_pending_wallet_credits"),
+    reconcileStuckTransactions(),
+  ]);
 
   if (error) {
-    console.error("[Cron] release_pending_wallet_credits failed:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[GET /api/cron/release-pending] release_pending_wallet_credits failed:", error);
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "Failed to release pending credits" } },
+      { status: 500 }
+    );
   }
 
-  return NextResponse.json({ ok: true, ran: new Date().toISOString() });
+  return NextResponse.json({ ok: true, ran: new Date().toISOString(), reconciliation });
 }

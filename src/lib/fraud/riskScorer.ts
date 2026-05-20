@@ -1,7 +1,6 @@
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
-export const SYSTEM_ADMIN_ID =
-  process.env.SYSTEM_ADMIN_UUID ?? "9b16c6d7-9567-4db3-9e24-4d3f9bdb7f31";
+export const SYSTEM_ADMIN_ID = process.env.SYSTEM_ADMIN_UUID ?? null;
 
 type RiskFlags = Record<string, unknown>;
 
@@ -366,18 +365,20 @@ async function suspendForRiskThreshold(supabase: any, userId: string) {
     throw statusError;
   }
 
-  const { error: auditError } = await supabase.from("audit_log").insert({
-    admin_id: SYSTEM_ADMIN_ID,
-    action: "auto_suspend",
-    entity_type: "user",
-    entity_id: userId,
-    reason: "risk_score >= 100",
-    before_json: before,
-    after_json: after,
-  });
+  if (SYSTEM_ADMIN_ID) {
+    const { error: auditError } = await supabase.from("audit_log").insert({
+      admin_id: SYSTEM_ADMIN_ID,
+      action: "auto_suspend",
+      entity_type: "user",
+      entity_id: userId,
+      reason: "risk_score >= 100",
+      before_json: before,
+      after_json: after,
+    });
 
-  if (auditError) {
-    console.error("[fraud:risk] Failed to write auto-suspend audit log", auditError);
+    if (auditError) {
+      console.error("[fraud:risk] Failed to write auto-suspend audit log", auditError);
+    }
   }
 }
 

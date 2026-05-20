@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { requireAdmin } from "@/app/api/admin/_lib";
 import { gradeSubmission } from "@/lib/ai/grading";
 
 const gradingRequestSchema = z.object({
@@ -7,6 +8,12 @@ const gradingRequestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const { error } = await requireAdmin({
+    request,
+    allowedRoles: ["admin"],
+  });
+  if (error) return error;
+
   const parsed = gradingRequestSchema.safeParse(await request.json());
 
   if (!parsed.success) {

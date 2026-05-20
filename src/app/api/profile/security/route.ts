@@ -83,7 +83,8 @@ export async function PATCH(request: Request) {
       });
 
       if (authError) {
-        return errorResponse(authError.message, "AUTH_UPDATE_FAILED", 422);
+        console.error("[PATCH /api/profile/security] auth update failed:", authError);
+        return errorResponse("Unable to update authentication details", "AUTH_UPDATE_FAILED", 422);
       }
     }
 

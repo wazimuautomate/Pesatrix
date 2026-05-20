@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.9.0] - 2026-05-20
+
+### Added
+- M-Pesa Real Integration
+  - STK Push for KSh 500 activation with real Daraja credentials
+  - B2C payments for user withdrawals
+  - Safaricom IP whitelist validation on all callbacks
+  - Idempotency on STK and B2C callbacks (safe to retry)
+  - Amount validation on STK callback (rejects non-500 payments)
+  - Stuck transaction reconciliation cron job
+  - B2C timeout handler with admin review flagging
+  - Wallet deduction ONLY on confirmed B2C success callback
+
+### Security
+- Full security audit completed across all API routes
+- Added Zod schema validation on all input-accepting endpoints
+- Added security headers via next.config.ts (HSTS, CSP, X-Frame-Options, etc.)
+- Fixed all IDOR vulnerabilities — every resource query now enforces ownership
+- Auth checks moved to top of all route handlers
+- Error messages sanitized — no stack traces or internals exposed to client
+- Rate limiting added: login, OTP, STK push, withdrawal, support tickets
+- Hardcoded secrets scan completed — all values moved to environment variables
+- RLS verified on all public schema tables including new tables
+- npm audit completed and critical/high vulnerabilities resolved
+- Safaricom callback IP whitelist enforced in production
+
+### Removed
+- All test and debug files from src/ directory
+- Exposed SQL schema files outside migrations directory
+- Dead code: pending offerwall integrations moved to src/lib/offerwalls/pending/
+- console.log statements containing PII or payment data
+- Commented-out route handlers and auth bypasses
+- Duplicate utility functions consolidated
+
+### Changed
+- All error responses now return generic messages to client
+- process.env access consolidated to server-side files only
+- Pending offerwall files (Lootably, BitLabs, AdGate, Adscend, Torox) moved out of active API routes
+
 ## [0.8.0] - 2026-05-20
 
 ### Added

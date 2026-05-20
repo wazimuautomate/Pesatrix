@@ -51,8 +51,11 @@ export async function GET(request: Request) {
     .range(offset, offset + limit - 1);
 
   if (error) {
-    console.error("[Submissions] Fetch error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[GET /api/tasks/submissions] fetch error:", error);
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "Failed to load submissions" } },
+      { status: 500 }
+    );
   }
 
   const total = count ?? 0;

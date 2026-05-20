@@ -76,7 +76,7 @@ export async function POST(request: Request) {
 
   if (insertError) {
     return NextResponse.json(
-      { error: "Failed to import tasks", details: insertError.message },
+      { error: { code: "INTERNAL_ERROR", message: "Failed to import tasks" } },
       { status: 500 }
     );
   }

@@ -5,8 +5,13 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 export type AdminWithdrawalRecord = {
   amount: number;
   amount_after_fee: number | null;
+  b2c_request_id: string | null;
   b2c_conversation_id: string | null;
   b2c_originator_id: string | null;
+  b2c_result_code: string | null;
+  b2c_result_desc: string | null;
+  b2c_initiated_at: string | null;
+  last_reconciled_at: string | null;
   created_at: string;
   fee_ksh: number | null;
   failure_reason: string | null;
@@ -33,7 +38,7 @@ export async function getAdminWithdrawals(options: GetWithdrawalsOptions = {}) {
   const admin = createAdminSupabaseClient();
   let query = (admin.from("withdrawal_requests" as never) as any)
     .select(
-      "id, user_id, amount, fee_ksh, amount_after_fee, phone, status, mpesa_txn_id, failure_reason, b2c_conversation_id, b2c_originator_id, created_at, processed_at"
+      "id, user_id, amount, fee_ksh, amount_after_fee, phone, status, mpesa_txn_id, failure_reason, b2c_request_id, b2c_conversation_id, b2c_originator_id, b2c_result_code, b2c_result_desc, b2c_initiated_at, last_reconciled_at, created_at, processed_at"
     )
     .order("created_at", { ascending: false });
 

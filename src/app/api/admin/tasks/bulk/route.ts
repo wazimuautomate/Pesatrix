@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
+
+const bulkActionSchema = z.object({
+  action: z.enum(["delete", "publish", "draft"]),
+  taskIds: z.array(z.string().uuid()).min(1, "No tasks selected"),
+});
 
 export async function POST(request: Request) {
   const { error, userId, requestMeta } = await requireAdmin({
@@ -10,16 +16,14 @@ export async function POST(request: Request) {
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = await request.json();
-  const { action, taskIds } = body;
-
-  if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
-    return NextResponse.json({ error: "No tasks selected" }, { status: 400 });
+  const parsed = bulkActionSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0]?.message ?? "Invalid request" } },
+      { status: 422 }
+    );
   }
-
-  if (!["delete", "publish", "draft"].includes(action)) {
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  }
+  const { action, taskIds } = parsed.data;
 
   const admin = createAdminSupabaseClient();
 
@@ -31,7 +35,8 @@ export async function POST(request: Request) {
       .in("id", taskIds);
 
     if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+      console.error("[POST /api/admin/tasks/bulk] delete error:", deleteError);
+      return NextResponse.json({ error: { code: "INTERNAL_ERROR", message: "Failed to delete tasks" } }, { status: 500 });
     }
 
     await auditLog({
@@ -55,7 +60,8 @@ export async function POST(request: Request) {
       .in("status", ["draft", "paused"]);
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
+      console.error("[POST /api/admin/tasks/bulk] publish error:", updateError);
+      return NextResponse.json({ error: { code: "INTERNAL_ERROR", message: "Failed to publish tasks" } }, { status: 500 });
     }
 
     await auditLog({
@@ -79,7 +85,8 @@ export async function POST(request: Request) {
       .in("status", ["active", "paused", "scheduled"]);
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
+      console.error("[POST /api/admin/tasks/bulk] draft error:", updateError);
+      return NextResponse.json({ error: { code: "INTERNAL_ERROR", message: "Failed to revert tasks to draft" } }, { status: 500 });
     }
 
     await auditLog({
