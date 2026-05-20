@@ -82,7 +82,7 @@ export default async function DashboardLayout({
   const isSetupComplete = accountStatus?.is_setup_complete === true;
 
   if (!isSetupComplete) {
-    redirect("/onboarding");
+    redirect("/dashboard/onboarding");
   }
 
   return (

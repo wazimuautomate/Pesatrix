@@ -38,7 +38,7 @@ export default async function TaskDetailPage({ params, searchParams }: RouteCont
 
   if (!access.canStartTasks) {
     if (access.gateReason === "onboarding") {
-      redirect("/onboarding");
+      redirect("/dashboard/onboarding");
     }
 
     redirect("/tasks");

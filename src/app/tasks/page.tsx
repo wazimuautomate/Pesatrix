@@ -28,7 +28,7 @@ export default async function TasksPage() {
   ]);
 
   if (!snapshot.canStartTasks && snapshot.gateReason === "onboarding") {
-    redirect("/onboarding");
+    redirect("/dashboard/onboarding");
   }
 
   return (

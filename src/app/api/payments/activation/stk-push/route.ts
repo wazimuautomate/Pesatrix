@@ -4,15 +4,13 @@ import { z } from "zod";
 import { internalErrorResponse, rateLimitedResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getActivationFeeKsh } from "@/lib/platform-settings";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   KENYAN_PHONE_REGEX,
-  MPESA_STK_AMOUNT,
   initiateStkPush,
   normalizePesaPhone,
 } from "@/lib/mpesa";
-
-const ACTIVATION_AMOUNT = MPESA_STK_AMOUNT;
 
 const schema = z.object({
   phone: z.string().trim().regex(KENYAN_PHONE_REGEX, "Invalid Kenyan phone number"),
@@ -40,6 +38,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminSupabaseClient();
+    const activationFeeKsh = await getActivationFeeKsh();
 
     const { data: currentStatus, error: statusError } = await admin
       .from("account_status")
@@ -101,7 +100,7 @@ export async function POST(request: Request) {
       .from("activation_payments")
       .insert({
         user_id: user.id,
-        amount: ACTIVATION_AMOUNT,
+        amount: activationFeeKsh,
         phone,
         status: "pending",
         stk_initiated_at: initiatedAt,
@@ -116,7 +115,7 @@ export async function POST(request: Request) {
     try {
       const stk = await initiateStkPush({
         phone,
-        amount: ACTIVATION_AMOUNT,
+        amount: activationFeeKsh,
         accountRef: "Pesatrix",
         description: "Pesatrix activation",
       });

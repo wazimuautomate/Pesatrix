@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getAccountProgressSnapshot, resolveAccountFlags } from "@/lib/account-progress";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
-import { getWithdrawalHoldDays } from "@/lib/platform-settings";
+import { getActivationFeeKsh, getWithdrawalHoldDays } from "@/lib/platform-settings";
 import { getWalletSummaryForUser } from "@/lib/wallet";
 import { formatKSh } from "@/lib/utils";
 import { redirect } from "next/navigation";
@@ -68,9 +68,10 @@ export default async function DashboardPage() {
 
   const walletTxns = (walletTxnRows ?? []) as WalletSummaryTxn[];
 
-  const [walletSummary, withdrawalHoldDays] = await Promise.all([
+  const [walletSummary, withdrawalHoldDays, activationFeeKsh] = await Promise.all([
     getWalletSummaryForUser(user!.id),
     getWithdrawalHoldDays(),
+    getActivationFeeKsh(),
   ]);
 
   const pendingBalance = walletSummary.pending;
@@ -182,7 +183,7 @@ export default async function DashboardPage() {
   }
 
   if (!accountStatusRow) {
-    redirect("/onboarding");
+    redirect("/dashboard/onboarding");
   }
 
   const accountStatus = resolveAccountFlags(accountStatusRow as any);
@@ -277,7 +278,7 @@ export default async function DashboardPage() {
                 Activate your account to start earning
               </p>
               <p className="text-sm text-muted-foreground">
-                One-time activation fee of KSh 500 via M-Pesa
+                One-time activation fee of {formatKSh(activationFeeKsh)} via M-Pesa
               </p>
             </div>
             <Button asChild size="sm">

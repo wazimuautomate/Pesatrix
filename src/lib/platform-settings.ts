@@ -1,8 +1,9 @@
 import "server-only";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { FINANCIAL_LIMITS } from "@/lib/constants";
+import { FINANCIAL_LIMITS, DEFAULT_ACTIVATION_FEE_KSH } from "@/lib/constants";
 import {
+  ACTIVATION_FEE_KSH_KEY,
   DAILY_TASK_LIMIT_KEY,
   LEGACY_MIN_WITHDRAWAL_KSH_KEY,
   MAX_TASK_BATCH_VALUE_KSH_KEY,
@@ -21,6 +22,7 @@ export const TRAINING_UNLOCK_SETTING_KEY = "training_day_unlock_minutes";
 export const DEFAULT_TRAINING_UNLOCK_MINUTES = 1;
 
 export {
+  ACTIVATION_FEE_KSH_KEY,
   TRAINING_REWARD_SETTING_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
@@ -29,6 +31,7 @@ export {
 export const DEFAULT_TRAINING_REWARD_KSH = 50;
 export const DEFAULT_WITHDRAWAL_HOLD_DAYS = 7;
 export const DEFAULT_WITHDRAWAL_PROCESSING_DAYS = 3;
+export { DEFAULT_ACTIVATION_FEE_KSH };
 
 export const TASK_UNLOCK_DELAY_HOURS_KEY = "task_unlock_delay_hours";
 export const DEFAULT_TASK_UNLOCK_DELAY_HOURS = 0;
@@ -151,6 +154,15 @@ export async function getTrainingCompletionRewardKsh() {
   }
 
   return normalizeIntegerInRange(setting?.value, DEFAULT_TRAINING_REWARD_KSH, 0, 10000);
+}
+
+export async function getActivationFeeKsh() {
+  const setting = await getPlatformSetting(ACTIVATION_FEE_KSH_KEY);
+  if (!setting) {
+    warnMissingSetting(ACTIVATION_FEE_KSH_KEY, DEFAULT_ACTIVATION_FEE_KSH);
+  }
+
+  return normalizeIntegerWithFloor(setting?.value, DEFAULT_ACTIVATION_FEE_KSH);
 }
 
 export async function getWithdrawalHoldDays() {

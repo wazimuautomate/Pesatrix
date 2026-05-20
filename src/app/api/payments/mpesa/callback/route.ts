@@ -5,7 +5,6 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { creditDirectReferralBonus } from "@/lib/referral";
 import { SYSTEM_ADMIN_ID } from "@/lib/fraud/riskScorer";
 import {
-  MPESA_STK_AMOUNT,
   extractIP,
   parseStkCallbackMetadata,
   phonesMatch,
@@ -110,7 +109,7 @@ export async function POST(request: Request) {
 
     const metadata = parseStkCallbackMetadata(stk.CallbackMetadata?.Item);
 
-    if (metadata.amount !== MPESA_STK_AMOUNT) {
+    if (metadata.amount !== payment.amount) {
       await admin
         .from("activation_payments")
         .update({
@@ -126,7 +125,7 @@ export async function POST(request: Request) {
       await writeAuditLog(
         payment.id,
         "activation_amount_mismatch",
-        `Expected ${MPESA_STK_AMOUNT}, got ${metadata.amount ?? "unknown"}`,
+        `Expected ${payment.amount}, got ${metadata.amount ?? "unknown"}`,
         { checkout_request_id: checkoutRequestId }
       );
 

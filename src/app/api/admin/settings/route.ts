@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { requireAdmin, auditLog } from "../_lib";
 import {
+  ACTIVATION_FEE_KSH_KEY,
   DAILY_TASK_LIMIT_KEY,
   LEGACY_MIN_WITHDRAWAL_KSH_KEY,
   MAX_TASK_BATCH_VALUE_KSH_KEY,
@@ -54,6 +55,7 @@ export async function PATCH(request: Request) {
   const { key, value } = parsed.data;
 
   const numericSettings = [
+    ACTIVATION_FEE_KSH_KEY,
     TRAINING_REWARD_SETTING_KEY,
     "task_unlock_delay_hours",
     LEGACY_MIN_WITHDRAWAL_KSH_KEY,
@@ -93,6 +95,16 @@ export async function PATCH(request: Request) {
     if (!Number.isInteger(numValue) || numValue < 0 || numValue > 30) {
       return NextResponse.json(
         { error: "Withdrawal hold period must be a whole number between 0 and 30" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === ACTIVATION_FEE_KSH_KEY) {
+    const numValue = Number(value);
+    if (!Number.isInteger(numValue) || numValue < 1) {
+      return NextResponse.json(
+        { error: "Activation fee must be a whole number of at least KSh 1" },
         { status: 422 }
       );
     }
