@@ -1,0 +1,8 @@
+export const FINANCIAL_LIMITS = {
+  MIN_WITHDRAWAL_KSH: 200,
+  WITHDRAWAL_FEE_KSH: 30,
+  MAX_TASK_PAYOUT_KSH: 120,
+  MAX_TASK_BATCH_VALUE_KSH: 600,
+} as const;
+
+export const MIN_TASK_PAYOUT_KSH = 10 as const;

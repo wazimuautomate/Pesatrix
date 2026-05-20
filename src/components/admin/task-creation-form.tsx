@@ -14,6 +14,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { TaskFinancialHint } from "@/components/admin/task-financial-hint";
+import { validateTaskFinancials } from "@/lib/financial-limits";
 import {
   type TaskCategory,
   type TaskDifficulty,
@@ -64,7 +66,15 @@ export function TaskCreationForm() {
 
   function canProceed(): boolean {
     if (currentStep === 0) {
-      return meta.title.trim().length >= 3 && meta.instructions.trim().length >= 10 && Number(meta.payout_ksh) > 0 && Number(meta.total_slots) > 0;
+      const payoutKsh = Number(meta.payout_ksh || 0);
+      const totalSlots = Number(meta.total_slots || 0);
+      return (
+        meta.title.trim().length >= 3 &&
+        meta.instructions.trim().length >= 10 &&
+        payoutKsh > 0 &&
+        totalSlots > 0 &&
+        !validateTaskFinancials({ payoutKsh, totalSlots })
+      );
     }
     if (currentStep === 1) {
       if (meta.category === "survey") {
@@ -291,6 +301,10 @@ function Step1Meta({
           onChange={(e) => setMeta((m) => ({ ...m, total_slots: e.target.value }))}
           placeholder="300"
         />
+      </div>
+
+      <div className="sm:col-span-2 lg:col-span-3">
+        <TaskFinancialHint payoutValue={meta.payout_ksh} totalSlotsValue={meta.total_slots} />
       </div>
 
       <div>

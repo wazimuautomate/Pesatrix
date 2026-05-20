@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPlatformSetting } from "@/lib/platform-settings";
+import { getMinWithdrawalKsh, getPlatformSetting, getWithdrawalFeeKsh } from "@/lib/platform-settings";
 import { WITHDRAWAL_N8N_WEBHOOK_URL_KEY } from "@/lib/platform-setting-keys";
 import { normalizePesaPhone } from "@/lib/mpesa";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -9,7 +9,6 @@ import {
   normalizeWithdrawalStoragePhone,
 } from "@/lib/withdrawal-utils";
 
-const DEFAULT_MIN_WITHDRAWAL_AMOUNT = 100;
 const WEBHOOK_TIMEOUT_MS = 5000;
 const WEBHOOK_MAX_ATTEMPTS = 3;
 
@@ -20,15 +19,11 @@ export type WithdrawalContact = {
 };
 
 export async function getMinWithdrawalAmount() {
-  const admin = createAdminSupabaseClient();
-  const { data } = await admin
-    .from("platform_settings")
-    .select("value")
-    .eq("key", "min_withdrawal_amount_ksh")
-    .maybeSingle();
+  return getMinWithdrawalKsh();
+}
 
-  const parsed = Number.parseInt(String(data?.value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MIN_WITHDRAWAL_AMOUNT;
+export async function getWithdrawalFeeAmount() {
+  return getWithdrawalFeeKsh();
 }
 
 export async function getWithdrawalContactForUser(userId: string): Promise<WithdrawalContact> {
@@ -89,20 +84,26 @@ export type WithdrawalWebhookPayload = {
   amount: number;
   date: string;
   email: string | null;
+  fee_ksh?: number;
   name: string | null;
   phone_number: string;
+  requested_amount?: number;
 };
 
 export function buildWithdrawalWebhookPayload(input: {
-  amount: number;
+  amountToReceive: number;
   createdAt: string;
   contact: WithdrawalContact;
+  feeKsh: number;
   phone: string;
+  requestedAmount: number;
 }): WithdrawalWebhookPayload {
   return {
     name: input.contact.fullName,
     email: input.contact.email,
-    amount: input.amount,
+    amount: input.amountToReceive,
+    requested_amount: input.requestedAmount,
+    fee_ksh: input.feeKsh,
     phone_number: normalizePesaPhone(input.phone),
     date: input.createdAt,
   };

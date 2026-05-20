@@ -20,7 +20,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const admin = createAdminSupabaseClient();
 
   const { data: withdrawal, error: fetchError } = await (admin.from("withdrawal_requests" as never) as any)
-    .select("id, user_id, amount, phone, status, b2c_conversation_id")
+    .select("id, user_id, amount, amount_after_fee, phone, status, b2c_conversation_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -48,9 +48,10 @@ export async function POST(request: Request, { params }: RouteContext) {
     .maybeSingle();
 
   const phone = normalizePesaPhone(withdrawal.phone);
+  const payoutAmount = Number(withdrawal.amount_after_fee ?? withdrawal.amount ?? 0);
 
   try {
-    const b2cResult = await initiateB2C(withdrawal.amount, phone, id);
+    const b2cResult = await initiateB2C(payoutAmount, phone, id);
     const { data: before } = await (admin.from("withdrawal_requests" as never) as any)
       .select("*")
       .eq("id", id)

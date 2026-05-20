@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "../../_lib";
+import { validateTaskFinancials } from "@/lib/financial-limits";
+import { getMaxTaskBatchValueKsh, getMaxTaskPayoutKsh } from "@/lib/platform-settings";
 
 const VALID_CATEGORIES = [
   "survey",
@@ -150,10 +152,29 @@ export async function POST(request: Request) {
   const admin = createAdminSupabaseClient();
   const failed: ValidationError[] = [];
   const validRows: { data: Record<string, unknown>; originalIndex: number }[] = [];
+  const [maxTaskPayoutKsh, maxTaskBatchValueKsh] = await Promise.all([
+    getMaxTaskPayoutKsh(),
+    getMaxTaskBatchValueKsh(),
+  ]);
 
   for (let i = 0; i < rawTasks.length; i++) {
     const result = validateTaskRow(rawTasks[i], i);
     if (result.valid) {
+      const financialError = validateTaskFinancials({
+        payoutKsh: Number(result.data.payout_ksh ?? 0),
+        totalSlots: Number(result.data.total_slots ?? 0),
+        maxTaskPayoutKsh,
+        maxTaskBatchValueKsh,
+      });
+      if (financialError) {
+        failed.push({
+          row: i + 1,
+          title: String(result.data.title ?? "(no title)"),
+          errors: [financialError.message],
+        });
+        continue;
+      }
+
       validRows.push({ data: result.data, originalIndex: i });
     } else {
       failed.push(result.error);

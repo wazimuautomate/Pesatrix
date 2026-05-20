@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
@@ -10,6 +11,7 @@ export const metadata = {
 
 export default async function TasksPage() {
   const supabase = await createServerSupabaseClient();
+  const admin = createAdminSupabaseClient();
 
   const {
     data: { user },
@@ -19,9 +21,10 @@ export default async function TasksPage() {
     redirect("/login");
   }
 
-  const [{ data: profile }, snapshot] = await Promise.all([
+  const [{ data: profile }, snapshot, adminRole] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
     getTrainingProgramSnapshotForUser(user.id),
+    (admin.from("admin_users" as never) as any).select("user_id").eq("user_id", user.id).maybeSingle(),
   ]);
 
   if (!snapshot.canStartTasks && snapshot.gateReason === "onboarding") {
@@ -39,7 +42,7 @@ export default async function TasksPage() {
             Complete tasks to earn KSh. Each task can only be done once.
           </p>
         </div>
-        <TaskListClient userId={user.id} />
+        <TaskListClient userId={user.id} isAdmin={Boolean(adminRole?.user_id)} />
       </div>
     </DashboardShell>
   );

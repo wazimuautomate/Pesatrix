@@ -3,9 +3,14 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { requireAdmin, auditLog } from "../_lib";
 import {
   DAILY_TASK_LIMIT_KEY,
+  LEGACY_MIN_WITHDRAWAL_KSH_KEY,
+  MAX_TASK_BATCH_VALUE_KSH_KEY,
+  MAX_TASK_PAYOUT_KSH_KEY,
+  MIN_WITHDRAWAL_KSH_KEY,
   REFERRAL_ACTIVATION_RULE_KEY,
   REFERRAL_LEVEL_1_REWARD_KEY,
   TRAINING_REWARD_SETTING_KEY,
+  WITHDRAWAL_FEE_KSH_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
@@ -47,7 +52,11 @@ export async function PATCH(request: Request) {
   const numericSettings = [
     TRAINING_REWARD_SETTING_KEY,
     "task_unlock_delay_hours",
-    "min_withdrawal_amount_ksh",
+    LEGACY_MIN_WITHDRAWAL_KSH_KEY,
+    MIN_WITHDRAWAL_KSH_KEY,
+    WITHDRAWAL_FEE_KSH_KEY,
+    MAX_TASK_PAYOUT_KSH_KEY,
+    MAX_TASK_BATCH_VALUE_KSH_KEY,
     "referral_task_unlock_reduction",
     "training_day_unlock_minutes",
     DAILY_TASK_LIMIT_KEY,
@@ -80,6 +89,46 @@ export async function PATCH(request: Request) {
     if (!Number.isInteger(numValue) || numValue < 0 || numValue > 30) {
       return NextResponse.json(
         { error: "Withdrawal hold period must be a whole number between 0 and 30" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === MIN_WITHDRAWAL_KSH_KEY || key === LEGACY_MIN_WITHDRAWAL_KSH_KEY) {
+    const numValue = Number(value);
+    if (!Number.isInteger(numValue) || numValue < 200) {
+      return NextResponse.json(
+        { error: "Minimum withdrawal must be a whole number of at least KSh 200" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === WITHDRAWAL_FEE_KSH_KEY) {
+    const numValue = Number(value);
+    if (!Number.isInteger(numValue) || numValue < 30) {
+      return NextResponse.json(
+        { error: "Withdrawal fee must be a whole number of at least KSh 30" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === MAX_TASK_PAYOUT_KSH_KEY) {
+    const numValue = Number(value);
+    if (!Number.isInteger(numValue) || numValue < 120) {
+      return NextResponse.json(
+        { error: "Maximum task payout must be a whole number of at least KSh 120" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === MAX_TASK_BATCH_VALUE_KSH_KEY) {
+    const numValue = Number(value);
+    if (!Number.isInteger(numValue) || numValue < 600) {
+      return NextResponse.json(
+        { error: "Maximum task batch value must be a whole number of at least KSh 600" },
         { status: 422 }
       );
     }

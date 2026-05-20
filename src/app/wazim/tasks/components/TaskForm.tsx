@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Eye, GripVertical, Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { TaskFinancialHint } from "@/components/admin/task-financial-hint";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -30,6 +31,7 @@ import {
   createEmptyTaskData,
   taskInsertSchema,
 } from "@/lib/task-types";
+import { validateTaskFinancials } from "@/lib/financial-limits";
 import { DataLabelingTask } from "@/components/tasks/DataLabelingTask";
 import { VerificationAdminFields } from "@/components/tasks/verification/VerificationAdminFields";
 import { normalizeDatetime } from "@/lib/datetime";
@@ -93,6 +95,18 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
   const [publishImmediately, setPublishImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
   const [titleError, setTitleError] = useState("");
+  const taskFinancialError = useMemo(() => {
+    const payoutKsh = Number(meta.payout_ksh || 0);
+    const totalSlots = Number(meta.total_slots || 0);
+    if (payoutKsh <= 0 || totalSlots <= 0) {
+      return null;
+    }
+
+    return validateTaskFinancials({
+      payoutKsh,
+      totalSlots,
+    });
+  }, [meta.payout_ksh, meta.total_slots]);
 
   useEffect(() => {
     if (task) {
@@ -134,7 +148,8 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
       meta.title.trim().length >= 3 &&
       meta.instructions.trim().length >= 10 &&
       Number(meta.payout_ksh) > 0 &&
-      Number(meta.total_slots) > 0
+      Number(meta.total_slots) > 0 &&
+      !taskFinancialError
     );
   }
 
@@ -267,6 +282,10 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
             }
             placeholder="300"
           />
+        </div>
+
+        <div className="sm:col-span-2 lg:col-span-3">
+          <TaskFinancialHint payoutValue={meta.payout_ksh} totalSlotsValue={meta.total_slots} />
         </div>
 
         <div>

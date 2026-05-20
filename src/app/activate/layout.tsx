@@ -15,21 +15,20 @@ export default async function ActivateLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
+  if (user) {
+    const { data: statusRow } = await supabase
+      .from("account_status")
+      .select("is_activated")
+      .eq("user_id", user.id)
+      .single();
 
-  // Already activated? Skip this page
-  const { data: statusRow } = await supabase
-    .from("account_status")
-    .select("is_activated")
-    .eq("user_id", user.id)
-    .single();
-
-  const status = statusRow as ActivationStatus | null;
-  if (status?.is_activated) redirect("/dashboard");
+    const status = statusRow as ActivationStatus | null;
+    if (status?.is_activated) redirect("/dashboard");
+  }
 
   return (
     <div className="min-h-screen bg-surface-container-low">
-      <div className="mx-auto max-w-2xl px-4 py-12">{children}</div>
+      {children}
     </div>
   );
 }

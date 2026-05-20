@@ -23,6 +23,7 @@ import {
   CATEGORY_LABELS,
   generateQuestionId,
 } from "@/lib/task-types";
+import { validateTaskFinancials } from "@/lib/financial-limits";
 import { normalizeDatetime } from "@/lib/datetime";
 
 type ParsedTask = {
@@ -90,6 +91,16 @@ function validateRow(raw: Record<string, unknown>, index: number): { errors: str
   const slotsRaw = raw.total_slots;
   const slots = typeof slotsRaw === "number" ? slotsRaw : Number(slotsRaw);
   if (isNaN(slots) || !Number.isInteger(slots) || slots <= 0) errors.push("total_slots must be an integer greater than 0");
+
+  if (!isNaN(payout) && !isNaN(slots) && Number.isInteger(slots) && payout > 0 && slots > 0) {
+    const financialError = validateTaskFinancials({
+      payoutKsh: payout,
+      totalSlots: slots,
+    });
+    if (financialError) {
+      errors.push(financialError.message);
+    }
+  }
 
   let taskData: Record<string, unknown> = {};
   const tdRaw = raw.task_data;

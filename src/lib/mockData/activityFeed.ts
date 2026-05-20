@@ -1,0 +1,57 @@
+export type ActivityFeedItem = {
+  name: string;
+  location: string;
+  action: "just withdrew" | "completed a task" | "earned from referral";
+  amount: number;
+  minutesAgo: number;
+};
+
+export const ACTIVITY_FEED: ActivityFeedItem[] = [
+  { name: "Aisha M.", location: "Mombasa", action: "just withdrew", amount: 250, minutesAgo: 2 },
+  { name: "Kelvin R.", location: "Kwale", action: "completed a task", amount: 35, minutesAgo: 3 },
+  { name: "Neema K.", location: "Kilifi", action: "just withdrew", amount: 300, minutesAgo: 4 },
+  { name: "Hassan J.", location: "Tana River", action: "just withdrew", amount: 220, minutesAgo: 5 },
+  { name: "Wanjiku L.", location: "Lamu", action: "earned from referral", amount: 100, minutesAgo: 6 },
+  { name: "Brian T.", location: "Taita Taveta", action: "just withdrew", amount: 410, minutesAgo: 7 },
+  { name: "Amina H.", location: "Garissa", action: "completed a task", amount: 40, minutesAgo: 8 },
+  { name: "Dennis O.", location: "Wajir", action: "just withdrew", amount: 230, minutesAgo: 9 },
+  { name: "Fauzia N.", location: "Mandera", action: "just withdrew", amount: 280, minutesAgo: 10 },
+  { name: "Ibrahim D.", location: "Marsabit", action: "completed a task", amount: 55, minutesAgo: 11 },
+  { name: "Mercy A.", location: "Isiolo", action: "just withdrew", amount: 200, minutesAgo: 12 },
+  { name: "Faith G.", location: "Meru", action: "just withdrew", amount: 370, minutesAgo: 13 },
+  { name: "Pauline K.", location: "Tharaka Nithi", action: "completed a task", amount: 30, minutesAgo: 14 },
+  { name: "Victor M.", location: "Embu", action: "just withdrew", amount: 260, minutesAgo: 15 },
+  { name: "Sharon W.", location: "Kitui", action: "earned from referral", amount: 100, minutesAgo: 16 },
+  { name: "Kevin N.", location: "Machakos", action: "just withdrew", amount: 450, minutesAgo: 17 },
+  { name: "Dorcas M.", location: "Makueni", action: "completed a task", amount: 45, minutesAgo: 18 },
+  { name: "James K.", location: "Nyandarua", action: "just withdrew", amount: 240, minutesAgo: 19 },
+  { name: "Cynthia A.", location: "Nyeri", action: "just withdrew", amount: 390, minutesAgo: 20 },
+  { name: "Ann W.", location: "Kirinyaga", action: "completed a task", amount: 60, minutesAgo: 21 },
+  { name: "Joseph M.", location: "Murang'a", action: "just withdrew", amount: 280, minutesAgo: 22 },
+  { name: "Brenda N.", location: "Kiambu", action: "just withdrew", amount: 320, minutesAgo: 23 },
+  { name: "Loice E.", location: "Turkana", action: "earned from referral", amount: 100, minutesAgo: 24 },
+  { name: "David C.", location: "West Pokot", action: "just withdrew", amount: 210, minutesAgo: 25 },
+  { name: "Naomi S.", location: "Samburu", action: "completed a task", amount: 50, minutesAgo: 26 },
+  { name: "Edward B.", location: "Trans Nzoia", action: "just withdrew", amount: 340, minutesAgo: 27 },
+  { name: "Linet C.", location: "Uasin Gishu", action: "just withdrew", amount: 470, minutesAgo: 28 },
+  { name: "Peter J.", location: "Elgeyo Marakwet", action: "completed a task", amount: 25, minutesAgo: 29 },
+  { name: "Mary C.", location: "Nandi", action: "just withdrew", amount: 260, minutesAgo: 30 },
+  { name: "Betty R.", location: "Baringo", action: "just withdrew", amount: 205, minutesAgo: 31 },
+  { name: "Fred K.", location: "Laikipia", action: "earned from referral", amount: 100, minutesAgo: 32 },
+  { name: "Faith K.", location: "Nakuru", action: "just withdrew", amount: 400, minutesAgo: 33 },
+  { name: "Charles S.", location: "Narok", action: "completed a task", amount: 70, minutesAgo: 34 },
+  { name: "Esther P.", location: "Kajiado", action: "just withdrew", amount: 290, minutesAgo: 35 },
+  { name: "Beatrice C.", location: "Kericho", action: "just withdrew", amount: 330, minutesAgo: 36 },
+  { name: "Dennis M.", location: "Bomet", action: "completed a task", amount: 35, minutesAgo: 37 },
+  { name: "Gloria A.", location: "Kakamega", action: "just withdrew", amount: 360, minutesAgo: 38 },
+  { name: "Lydia O.", location: "Vihiga", action: "just withdrew", amount: 215, minutesAgo: 39 },
+  { name: "Martin W.", location: "Bungoma", action: "earned from referral", amount: 100, minutesAgo: 40 },
+  { name: "Phoebe E.", location: "Busia", action: "just withdrew", amount: 245, minutesAgo: 41 },
+  { name: "Brian O.", location: "Siaya", action: "completed a task", amount: 35, minutesAgo: 42 },
+  { name: "Aisha O.", location: "Kisumu", action: "just withdrew", amount: 350, minutesAgo: 43 },
+  { name: "Vincent A.", location: "Homa Bay", action: "just withdrew", amount: 230, minutesAgo: 44 },
+  { name: "Janet R.", location: "Migori", action: "completed a task", amount: 50, minutesAgo: 45 },
+  { name: "James O.", location: "Kisii", action: "just withdrew", amount: 275, minutesAgo: 46 },
+  { name: "Mildred M.", location: "Nyamira", action: "just withdrew", amount: 295, minutesAgo: 47 },
+  { name: "Wanjiru M.", location: "Nairobi", action: "just withdrew", amount: 250, minutesAgo: 48 },
+];

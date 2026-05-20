@@ -285,6 +285,8 @@ export interface Database {
           id: string;
           user_id: string;
           amount: number;
+          fee_ksh: number | null;
+          amount_after_fee: number | null;
           phone: string;
           status: WithdrawalStatus;
           mpesa_txn_id: string | null;

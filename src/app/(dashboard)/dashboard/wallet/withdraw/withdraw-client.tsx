@@ -27,8 +27,10 @@ import { formatPhone } from "@/lib/utils";
 
 type Limits = {
   allowedPhone: string | null;
+  availableBalance: number;
   minWithdrawal: number;
   maxWithdrawal: number;
+  withdrawalFee: number;
   withdrawalHoldDays: number;
   withdrawalProcessingDays: number;
 };
@@ -42,7 +44,11 @@ export default function WithdrawClientPage() {
   const router = useRouter();
   const [step, setStep] = useState<"form" | "success">("form");
   const [withdrawalId, setWithdrawalId] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string>("");
+  const [successSummary, setSuccessSummary] = useState<{
+    amountRequested: number;
+    fee: number;
+    amountToReceive: number;
+  } | null>(null);
   const [limits, setLimits] = useState<Limits | null>(null);
   const [limitsLoading, setLimitsLoading] = useState(true);
 
@@ -50,7 +56,7 @@ export default function WithdrawClientPage() {
     amount: z
       .number({ required_error: "Enter an amount" })
       .int("Must be a whole number")
-      .min(limits?.minWithdrawal ?? 100, `Minimum withdrawal is KSh ${limits?.minWithdrawal ?? 100}`)
+      .min(limits?.minWithdrawal ?? 200, `Minimum withdrawal is KSh ${limits?.minWithdrawal ?? 200}`)
       .max(limits?.maxWithdrawal ?? 100000, `Maximum withdrawal is KSh ${(limits?.maxWithdrawal ?? 100000).toLocaleString()}`),
     phone: z
       .string()
@@ -62,10 +68,21 @@ export default function WithdrawClientPage() {
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+  const requestedAmount = Number(watch("amount") || 0);
+  const projectedReceive = requestedAmount - (limits?.withdrawalFee ?? 0);
+  const balanceBelowMinimum = (limits?.availableBalance ?? 0) < (limits?.minWithdrawal ?? 0);
+  const canSubmitWithdrawal =
+    !limitsLoading &&
+    !balanceBelowMinimum &&
+    Boolean(limits?.allowedPhone) &&
+    requestedAmount >= (limits?.minWithdrawal ?? 0) &&
+    requestedAmount <= (limits?.availableBalance ?? 0) &&
+    projectedReceive > 0;
 
   useEffect(() => {
     async function fetchLimits() {
@@ -109,10 +126,11 @@ export default function WithdrawClientPage() {
       }
 
       setWithdrawalId(json.withdrawalId);
-      setSuccessMessage(
-        json.message ||
-          "Withdrawal request submitted successfully. It will be processed within the configured processing timeframe."
-      );
+      setSuccessSummary({
+        amountRequested: Number(json.amountRequested ?? data.amount),
+        fee: Number(json.fee ?? limits?.withdrawalFee ?? 0),
+        amountToReceive: Number(json.amountToReceive ?? 0),
+      });
       setStep("success");
       toast.success("Withdrawal request submitted successfully.");
     } catch {
@@ -143,6 +161,9 @@ export default function WithdrawClientPage() {
               Pending earnings become available after a {limits?.withdrawalHoldDays ?? 7}-day hold. Processing
               typically takes {limits?.withdrawalProcessingDays ?? 3} days after approval.
             </p>
+            <p className="mt-2 font-medium text-foreground">
+              Minimum withdrawal: KSh {limits?.minWithdrawal?.toLocaleString() ?? 200} | Processing fee: KSh {limits?.withdrawalFee?.toLocaleString() ?? 30}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -163,16 +184,16 @@ export default function WithdrawClientPage() {
                 <div className="flex items-center justify-between">
                   <Label htmlFor="withdraw-amount">Amount (KSh)</Label>
                   {limits && (
-                    <span className="text-xs text-muted-foreground">
-                      Minimum: KSh {limits.minWithdrawal.toLocaleString()}
-                    </span>
+                  <span className="text-xs text-muted-foreground">
+                    Minimum: KSh {limits.minWithdrawal.toLocaleString()}
+                  </span>
                   )}
                 </div>
                 <Input
                   id="withdraw-amount"
                   type="number"
-                  placeholder={limitsLoading ? "Loading..." : `Min ${limits?.minWithdrawal ?? 100}`}
-                  min={limits?.minWithdrawal ?? 100}
+                  placeholder={limitsLoading ? "Loading..." : `Min ${limits?.minWithdrawal ?? 200}`}
+                  min={limits?.minWithdrawal ?? 200}
                   disabled={limitsLoading}
                   {...register("amount", { valueAsNumber: true })}
                 />
@@ -181,6 +202,11 @@ export default function WithdrawClientPage() {
                     {errors.amount.message}
                   </p>
                 )}
+                {!errors.amount && requestedAmount > 0 ? (
+                  <p className={projectedReceive > 0 ? "text-xs text-muted-foreground" : "text-xs text-destructive"}>
+                    You&apos;ll receive KSh {Math.max(projectedReceive, 0).toLocaleString("en-KE")} after KSh {(limits?.withdrawalFee ?? 30).toLocaleString("en-KE")} processing fee
+                  </p>
+                ) : null}
               </div>
 
               <div className="space-y-2">
@@ -213,10 +239,24 @@ export default function WithdrawClientPage() {
                 ) : null}
               </div>
 
+              {limits && (
+                <div className="rounded-lg border border-outline-variant/40 bg-surface-container-low px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Available balance</span>
+                    <span className="font-semibold text-navy">KSh {limits.availableBalance.toLocaleString("en-KE")}</span>
+                  </div>
+                  {balanceBelowMinimum ? (
+                    <p className="mt-2 text-xs font-medium text-destructive">
+                      Your available balance must reach KSh {limits.minWithdrawal.toLocaleString("en-KE")} before you can withdraw.
+                    </p>
+                  ) : null}
+                </div>
+              )}
+
               <Button
                 type="submit"
                 className="w-full"
-                disabled={isSubmitting || limitsLoading || !limits?.allowedPhone}
+                disabled={isSubmitting || !canSubmitWithdrawal}
               >
                 {isSubmitting ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -242,8 +282,13 @@ export default function WithdrawClientPage() {
                 Reference: {withdrawalId?.slice(0, 8).toUpperCase()}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                {successMessage}
+                Request recorded for KSh {successSummary?.amountRequested.toLocaleString("en-KE") ?? 0}.
               </p>
+              {successSummary ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  You&apos;ll receive KSh {successSummary.amountToReceive.toLocaleString("en-KE")} after KSh {successSummary.fee.toLocaleString("en-KE")} processing fee.
+                </p>
+              ) : null}
               <p className="mt-2 text-sm text-muted-foreground">
                 Processing typically takes {limits?.withdrawalProcessingDays ?? 3} days.
               </p>

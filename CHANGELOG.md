@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.8.0] - 2026-05-20
+
+### Added
+- Fraud & Risk System
+  - Device fingerprinting via @fingerprintjs/fingerprintjs on registration and login
+  - IP geolocation and VPN detection via ip-api.com (soft flag, no hard blocks)
+  - `device_sessions` table to track devices per user
+  - Automated risk scoring engine (`riskScorer.ts`) with 5 signal checks
+  - Auto-suspension at risk_score >= 100 (admin confirmation required to lift)
+  - Referral fraud guard: blocks bonus if referrer/referee share device or IP
+  - Task submission rate limiting (max 10/hour per user)
+  - Minimum time-on-task enforcement
+  - Duplicate and uniform answer detection on submissions
+  - AI fraud scoring layer via OpenRouter free models
+  - `/wazim/fraud` admin dashboard with flagged users, risk signals, AI scan trigger
+  - AI mode toggle: Auto / Manual / Disabled (stored in platform_settings)
+  - Nightly cron job for AI fraud batch scan (users with risk_score change in 24hrs)
+
+### Changed
+- Referral system simplified from 3 levels to 1 level (KSh 100 flat)
+- Removed all level 2 and level 3 referral bonus logic
+- DB migration: added CHECK constraints enforcing level = 1 and amount = 100
+
+### Added
+- Financial Guardrails
+  - Minimum withdrawal enforced at KSh 200 (API + UI)
+  - Flat KSh 30 withdrawal processing fee (shown upfront to user)
+  - Maximum task payout capped at KSh 120 per slot
+  - Maximum task batch value capped at KSh 600 (payout × slots)
+  - Financial constants in `src/lib/constants.ts`
+  - Fee and limit constants seeded into `platform_settings` table
+
+### Added
+- Psychology & Conversion Layer
+  - 4-state rotating empty task component with traffic, curation, sampling, and countdown frames
+  - Full activation page rebuild with social proof framing
+  - Live activity feed (mock) showing real-feel M-Pesa withdrawals and task completions
+  - Testimonials section with Kenyan user stories
+  - Language audit: removed "pay/fee/charge" from activation flow
+  - FAQ section addressing skepticism without planting doubt
+
 ## [style] Apply Real Pesatrix Logo Across App Chrome - 2026-05-20
 - Added a shared logo image component using `public/images/pesatrix.webp`
 - Replaced boxed letter marks on auth, admin login, dashboard, admin dashboard, and marketing chrome with uniformly sized unboxed logo images

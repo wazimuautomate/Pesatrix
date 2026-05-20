@@ -3,18 +3,20 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { KENYAN_PHONE_REGEX } from "@/lib/mpesa";
 import {
+  getWithdrawalVerification,
   getWalletSummaryForUser,
   MAX_WITHDRAWAL_AMOUNT,
 } from "@/lib/wallet";
-import { getWithdrawalProcessingDays } from "@/lib/platform-settings";
+import { getMinWithdrawalKsh, getWithdrawalProcessingDays } from "@/lib/platform-settings";
 import {
   buildWithdrawalWebhookPayload,
-  getMinWithdrawalAmount,
+  getWithdrawalFeeAmount,
   getWithdrawalContactForUser,
   isAllowedWithdrawalPhone,
   normalizeWithdrawalStoragePhone,
   sendWithdrawalWebhook,
 } from "@/lib/withdrawals";
+import { calculateWithdrawalNetAmount } from "@/lib/financial-limits";
 import { z } from "zod";
 
 export async function POST(request: Request) {
@@ -29,27 +31,11 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
     }
-
-    const minWithdrawal = await getMinWithdrawalAmount();
     const body = await request.json();
-
-    const amount = body.amount;
-    if (amount < minWithdrawal) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "BELOW_MINIMUM",
-            message: `Minimum withdrawal is KSh ${minWithdrawal}`,
-            minimum: minWithdrawal,
-          },
-        },
-        { status: 422 }
-      );
-    }
 
     const parsed = z
       .object({
-        amount: z.number().int().min(minWithdrawal).max(MAX_WITHDRAWAL_AMOUNT),
+        amount: z.coerce.number().int().positive().max(MAX_WITHDRAWAL_AMOUNT),
         phone: z.string().regex(KENYAN_PHONE_REGEX, "Invalid M-Pesa number"),
       })
       .safeParse(body);
@@ -63,11 +49,67 @@ export async function POST(request: Request) {
 
     const { amount: validAmount, phone } = parsed.data;
 
-    const [walletSummary, contact, processingDays] = await Promise.all([
+    const [walletSummary, contact, processingDays, minWithdrawal, withdrawalFee, verification, accountStatus] = await Promise.all([
       getWalletSummaryForUser(user.id),
       getWithdrawalContactForUser(user.id),
       getWithdrawalProcessingDays(),
+      getMinWithdrawalKsh(),
+      getWithdrawalFeeAmount(),
+      getWithdrawalVerification(user.id),
+      (admin.from("account_status" as never) as any)
+        .select("is_activated")
+        .eq("user_id", user.id)
+        .maybeSingle(),
     ]);
+
+    if (!accountStatus.data?.is_activated) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "ACCOUNT_NOT_ACTIVATED",
+            message: "Activate your account before requesting a withdrawal.",
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    if (!verification.phoneVerified) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "PHONE_NOT_VERIFIED",
+            message: "Verify your phone number before requesting a withdrawal.",
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    if (!verification.emailVerified) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "EMAIL_NOT_VERIFIED",
+            message: "Verify your email address before requesting a withdrawal.",
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    if (validAmount < minWithdrawal) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "BELOW_MINIMUM",
+            message: `Minimum withdrawal is KSh ${minWithdrawal}`,
+            minimum: minWithdrawal,
+          },
+        },
+        { status: 422 }
+      );
+    }
 
     if (!contact.phone) {
       return NextResponse.json(
@@ -93,12 +135,25 @@ export async function POST(request: Request) {
       );
     }
 
-    if (validAmount > walletSummary.available) {
+    if (validAmount > walletSummary.available || walletSummary.available - validAmount < 0) {
       return NextResponse.json(
         {
           error: {
-            code: "INSUFFICIENT_FUNDS",
+            code: "INSUFFICIENT_BALANCE",
             message: `Available balance is KSh ${walletSummary.available}`,
+          },
+        },
+        { status: 422 }
+      );
+    }
+
+    const amountAfterFee = calculateWithdrawalNetAmount(validAmount, withdrawalFee);
+    if (amountAfterFee <= 0) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "FEE_EXCEEDS_AMOUNT",
+            message: `Amount too small after KSh ${withdrawalFee} fee`,
           },
         },
         { status: 422 }
@@ -108,7 +163,9 @@ export async function POST(request: Request) {
     const normalizedPhone = normalizeWithdrawalStoragePhone(phone);
     const { data: withdrawal, error } = await admin.rpc("create_withdrawal_request", {
       p_amount: validAmount,
+      p_amount_after_fee: amountAfterFee,
       p_description: `Withdrawal to ${normalizedPhone}`,
+      p_fee_ksh: withdrawalFee,
       p_phone: normalizedPhone,
       p_user_id: user.id,
     });
@@ -131,7 +188,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error: {
-              code: "INSUFFICIENT_FUNDS",
+              code: "INSUFFICIENT_BALANCE",
               message: `Available balance is KSh ${walletSummary.available}`,
             },
           },
@@ -145,19 +202,21 @@ export async function POST(request: Request) {
     const created = withdrawal[0];
     void sendWithdrawalWebhook(
       buildWithdrawalWebhookPayload({
-        amount: validAmount,
+        amountToReceive: amountAfterFee,
         createdAt: created.created_at,
         contact,
+        feeKsh: withdrawalFee,
         phone: normalizedPhone,
+        requestedAmount: validAmount,
       }),
       created.id
     );
 
     return NextResponse.json({
       withdrawalId: created.id,
-      status: created.status,
-      message:
-        "Withdrawal request submitted successfully. It will be processed within the configured processing timeframe.",
+      amountRequested: validAmount,
+      fee: withdrawalFee,
+      amountToReceive: amountAfterFee,
       processingDays,
     });
   } catch (err) {

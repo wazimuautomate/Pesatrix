@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { validateTaskFinancials } from "@/lib/financial-limits";
+import { getMaxTaskBatchValueKsh, getMaxTaskPayoutKsh } from "@/lib/platform-settings";
 import { auditLog, requireAdmin } from "../../_lib";
 import { normalizeTaskDatetimes } from "@/lib/datetime";
 
@@ -13,7 +15,7 @@ const updateTaskSchema = z.object({
   category: z.enum(["survey", "data_labeling", "social_engagement", "verification", "content_creation", "watch_respond"]).optional(),
   description: z.string().trim().max(1000).optional().nullable(),
   instructions: z.string().trim().min(10).optional(),
-  payout_ksh: z.number().int().min(1).optional(),
+  payout_ksh: z.number().int().min(10, "Minimum task payout is KSh 10").optional(),
   total_slots: z.number().int().min(1).optional(),
   difficulty: z.enum(["easy", "medium", "hard"]).optional(),
   publish_at: z.string().datetime().nullable().optional(),
@@ -76,6 +78,19 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   const update: Record<string, unknown> = {};
   const data = parsed.data;
+  const [maxTaskPayoutKsh, maxTaskBatchValueKsh] = await Promise.all([
+    getMaxTaskPayoutKsh(),
+    getMaxTaskBatchValueKsh(),
+  ]);
+  const financialError = validateTaskFinancials({
+    payoutKsh: data.payout_ksh ?? Number(before.payout_ksh ?? 0),
+    totalSlots: data.total_slots ?? Number(before.total_slots ?? 0),
+    maxTaskPayoutKsh,
+    maxTaskBatchValueKsh,
+  });
+  if (financialError) {
+    return NextResponse.json({ error: financialError }, { status: 422 });
+  }
 
   if (data.title !== undefined) update.title = data.title;
   if (data.category !== undefined) update.category = data.category;
