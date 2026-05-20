@@ -371,6 +371,28 @@ export interface Database {
         Insert: Omit<Database["public"]["Tables"]["task_submissions"]["Row"], "id" | "submitted_at" | "status" | "payout_credited">;
         Update: Partial<Database["public"]["Tables"]["task_submissions"]["Insert"]>;
       };
+      watch_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          task_id: string;
+          started_at: string;
+          completed_at: string | null;
+          duration_seconds: number | null;
+          cheat_strikes: number;
+          status: string;
+          created_at: string;
+        };
+        // FIXED: Add generated typings for server-side watch session persistence.
+        Insert: Omit<Database["public"]["Tables"]["watch_sessions"]["Row"], "id" | "started_at" | "created_at" | "cheat_strikes" | "status"> & {
+          id?: string;
+          started_at?: string;
+          created_at?: string;
+          cheat_strikes?: number;
+          status?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["watch_sessions"]["Insert"]>;
+      };
       ai_provider_configs: {
         Row: {
           id: string;

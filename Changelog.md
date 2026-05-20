@@ -1,5 +1,12 @@
 # Changelog
 
+## [fix] Harden Watch Respond And Content Creation Tasks - 2026-05-20
+- Added persisted Watch & Respond sessions with server-side start, elapsed-time validation, cheat-strike tracking, forfeiture at three strikes, and Supabase video signed URL issuing
+- Updated the user Watch & Respond UI for YouTube embeds, HTML5 video playback, external link instructions, debounced tab/window anti-cheat, locked questions, radio-card multiple choice, and required-answer gating
+- Enforced Content Creation minimum word counts on both client and server, added live word and character counters, example output display, and user-safe post-submit messaging
+- Added category-specific free OpenRouter grading for Content Creation and Watch & Respond, including exact multiple-choice checks, Swahili/Sheng-aware content prompts, prior-submission similarity context, and admin-only AI/similarity flags
+- Updated admin task forms to create the expected `content_type`, `content_url`, `question`, `correct_option`, `max_characters`, `language_hint`, and `example_output` task data fields
+
 ## [feat] Task Cards Now Include A Preview Action - 2026-05-20
 - Added a `View` button on user task cards so users can open a task preview before starting work
 - Added a preview-only task details mode that shows overview, instructions, payout, slots, and submission requirements without exposing the task questions or answer form

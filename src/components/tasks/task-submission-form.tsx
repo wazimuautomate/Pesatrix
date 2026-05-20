@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, ArrowLeft, CheckCircle, Clock, FileText, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle, Clock, ExternalLink, FileText, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/task-types";
 import { DataLabelingTask } from "@/components/tasks/DataLabelingTask";
 import { SocialEngagementTask } from "@/components/tasks/SocialEngagementTask";
@@ -49,6 +50,29 @@ type Submission = {
   ai_reasoning: string | null;
 };
 
+type WatchSessionState = {
+  session_token: string;
+  started_at: string;
+  min_watch_seconds: number;
+  cheat_strikes: number;
+  content_url?: string;
+};
+
+type WatchQuestion = {
+  id: string;
+  type: "multiple_choice" | "open_ended";
+  question: string;
+  options?: string[];
+  correct_option?: string;
+};
+
+type NormalizedWatchData = {
+  content_type: "youtube" | "supabase_video" | "external_url";
+  content_url: string;
+  min_watch_seconds: number;
+  questions: WatchQuestion[];
+};
+
 export function TaskSubmissionForm({
   task,
   existingSubmission,
@@ -63,8 +87,10 @@ export function TaskSubmissionForm({
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [watchSeconds, setWatchSeconds] = useState(0);
-  const [watchTimer, setWatchTimer] = useState<NodeJS.Timeout | null>(null);
-  const videoRef = useRef<HTMLIFrameElement>(null);
+  const [watchSession, setWatchSession] = useState<WatchSessionState | null>(null);
+  const [watchPaused, setWatchPaused] = useState(false);
+  const [watchForfeited, setWatchForfeited] = useState(false);
+  const lastStrikeAtRef = useRef(0);
 
   const taskData = task.task_data;
   const taskType = taskData.type as string;
@@ -90,12 +116,7 @@ export function TaskSubmissionForm({
             >
               Status: {existingSubmission.status}
             </Badge>
-            {existingSubmission.ai_score != null && (
-              <p>AI Score: {existingSubmission.ai_score}%</p>
-            )}
-            {existingSubmission.ai_reasoning && (
-              <p className="text-muted-foreground">{existingSubmission.ai_reasoning}</p>
-            )}
+            {/* FIXED: Do not expose grading score, flags, or AI reasoning to users after submission. */}
           </div>
           <Button className="mt-6" onClick={() => router.push("/tasks")}>
             Back to Tasks
@@ -105,69 +126,135 @@ export function TaskSubmissionForm({
     );
   }
 
-  if (taskType === "watch_respond" && !watchTimer) {
-    const minWatchSeconds = (taskData.min_watch_seconds as number) ?? 60;
-    return (
-      <div className="space-y-6">
-        <Button variant="ghost" onClick={() => router.push("/tasks")}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Tasks
-        </Button>
-        <Card>
-          <CardHeader>
-            <CardTitle>{task.title}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
-              <iframe
-                ref={videoRef}
-                src={getYouTubeEmbedUrl(taskData.video_url as string)}
-                className="h-full w-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Watch for at least {minWatchSeconds} seconds before submitting.
-              </p>
-              <p className="text-sm font-semibold">
-                {watchSeconds}/{minWatchSeconds}s
-              </p>
-            </div>
-            <Button
-              onClick={() => startWatchTimer(minWatchSeconds)}
-              disabled={watchSeconds >= minWatchSeconds}
-              className="w-full"
-            >
-              {watchSeconds >= minWatchSeconds
-                ? "Ready to Submit"
-                : `Start Watching (${minWatchSeconds - watchSeconds}s remaining)`}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const watchData = normalizeWatchRespondTaskData(taskData);
+  const minWatchSeconds = watchData.min_watch_seconds;
+  const watchUnlocked = taskType === "watch_respond" && watchSession !== null && watchSeconds >= minWatchSeconds && !watchForfeited;
 
-  function startWatchTimer(minSeconds: number) {
-    const timer = setInterval(() => {
-      setWatchSeconds((prev) => {
-        if (prev + 1 >= minSeconds) {
-          clearInterval(timer);
-          return minSeconds;
-        }
-        return prev + 1;
-      });
+  useEffect(() => {
+    if (taskType !== "watch_respond" || !watchSession || watchPaused || watchForfeited || watchSeconds >= minWatchSeconds) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setWatchSeconds((current) => Math.min(current + 1, minWatchSeconds));
     }, 1000);
-    setWatchTimer(timer);
+
+    return () => window.clearInterval(timer);
+  }, [minWatchSeconds, taskType, watchForfeited, watchPaused, watchSeconds, watchSession]);
+
+  useEffect(() => {
+    if (taskType !== "watch_respond" || !watchSession || watchForfeited) {
+      return;
+    }
+
+    const activeSession = watchSession;
+
+    async function recordStrike(reason: "tab_hidden" | "window_blur") {
+      const now = Date.now();
+      if (now - lastStrikeAtRef.current < 3000) {
+        return;
+      }
+      lastStrikeAtRef.current = now;
+
+      const response = await fetch("/api/tasks/watch/cheat-strike", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_token: activeSession.session_token, reason }),
+      });
+      const payload = await response.json().catch(() => null);
+      const strikes = Number(payload?.strikes ?? activeSession.cheat_strikes + 1);
+      setWatchSession((current) => current ? { ...current, cheat_strikes: strikes } : current);
+
+      if (payload?.invalidated === true || strikes >= 3) {
+        setWatchForfeited(true);
+        setWatchPaused(true);
+        toast.error("You have left the watch page too many times. This task has been forfeited.");
+        return;
+      }
+
+      toast.warning(`Warning: Leaving the page pauses your progress. Strike ${strikes}/3.`);
+    }
+
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        setWatchPaused(true);
+        void recordStrike("tab_hidden");
+      } else {
+        setWatchPaused(false);
+      }
+    }
+
+    function handleWindowBlur() {
+      setWatchPaused(true);
+      void recordStrike("window_blur");
+    }
+
+    // FIXED: Watch anti-cheat now listens for tab hiding and window blur, with server-side strike recording.
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
+  }, [taskType, watchForfeited, watchSession]);
+
+  async function startWatchSession() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/tasks/watch/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_id: task.id }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        toast.error(payload?.error?.message ?? payload?.error ?? "Could not start watch session");
+        return;
+      }
+
+      setWatchSession({
+        session_token: payload.session_token,
+        started_at: payload.started_at,
+        min_watch_seconds: payload.min_watch_seconds,
+        cheat_strikes: 0,
+        content_url: payload.content_url,
+      });
+      setWatchSeconds(0);
+      setWatchPaused(false);
+      setWatchForfeited(false);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSubmit() {
     setLoading(true);
     try {
+      let submissionAnswers = answers;
+      if (taskType === "content_creation") {
+        const content = typeof answers.content === "string" ? answers.content : "";
+        submissionAnswers = {
+          content,
+          word_count: countWords(content),
+        };
+      }
+      if (taskType === "watch_respond") {
+        submissionAnswers = {
+          watch_session_token: watchSession?.session_token ?? "",
+          watch_completed: watchUnlocked,
+          watch_duration_seconds: watchSeconds,
+          cheat_strikes: watchSession?.cheat_strikes ?? 0,
+          answers: watchData.questions.map((question) => ({
+            question_id: question.id,
+            answer: String(answers[question.id] ?? ""),
+          })),
+        };
+      }
+
       const payload: Record<string, unknown> = {
         taskId: task.id,
-        answers,
+        answers: submissionAnswers,
         screenshotUrl: task.requires_screenshot ? (screenshotUrl || null) : null,
         submittedUrl: task.requires_url ? (submittedUrl || null) : null,
       };
@@ -186,7 +273,8 @@ export function TaskSubmissionForm({
       }
 
       setSubmitted(true);
-      toast.success("Task submitted successfully!");
+      // FIXED: Content creation users only see a review message, never AI score or flags.
+      toast.success(taskType === "content_creation" ? "Your content is being reviewed" : "Task submitted successfully!");
       router.push("/tasks");
     } finally {
       setLoading(false);
@@ -247,17 +335,15 @@ export function TaskSubmissionForm({
     if (taskType === "content_creation") {
       const answer = answers.content as string;
       if (!answer) return false;
-      const minWords = (taskData.min_words as number) ?? 0;
-      if (minWords > 0) {
-        return answer.trim().split(/\s+/).length >= minWords;
+      // FIXED: Client UX now uses tasks.min_word_count, matching the server-side enforcement column.
+      if (task.min_word_count > 0) {
+        return countWords(answer) >= task.min_word_count;
       }
       return true;
     }
     if (taskType === "watch_respond") {
-      const minWatchSeconds = (taskData.min_watch_seconds as number) ?? 60;
-      if (watchSeconds < minWatchSeconds) return false;
-      const questions = (taskData.questions as Array<{ id: string }>) ?? [];
-      return questions.every((q) => answers[q.id] !== undefined);
+      if (!watchUnlocked || watchForfeited) return false;
+      return watchData.questions.every((q) => String(answers[q.id] ?? "").trim().length > 0);
     }
     return true;
   }
@@ -358,6 +444,7 @@ export function TaskSubmissionForm({
           )}
           {taskType === "content_creation" && (
             <ContentCreationForm
+              task={task}
               taskData={taskData}
               answers={answers}
               setAnswers={setAnswers}
@@ -365,7 +452,13 @@ export function TaskSubmissionForm({
           )}
           {taskType === "watch_respond" && (
             <WatchRespondForm
-              questions={taskData.questions as Array<Record<string, unknown>>}
+              taskData={watchData}
+              session={watchSession}
+              watchSeconds={watchSeconds}
+              watchUnlocked={watchUnlocked}
+              watchPaused={watchPaused}
+              forfeited={watchForfeited}
+              onStart={startWatchSession}
               answers={answers}
               setAnswers={setAnswers}
             />
@@ -706,24 +799,39 @@ function VerificationForm({
 }
 
 function ContentCreationForm({
+  task,
   taskData,
   answers,
   setAnswers,
 }: {
+  task: Task;
   taskData: Record<string, unknown>;
   answers: Record<string, unknown>;
   setAnswers: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
 }) {
   const content = (answers.content as string) ?? "";
-  const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
-  const minWords = (taskData.min_words as number) ?? 0;
-  const maxWords = (taskData.max_words as number) ?? 500;
+  const wordCount = countWords(content);
+  const minWords = task.min_word_count ?? 0;
+  const maxCharacters = typeof taskData.max_characters === "number" ? taskData.max_characters : undefined;
+  const contentType = getContentCreationLabel(String(taskData.content_type ?? taskData.subtype ?? "review"));
+  const exampleOutput = typeof taskData.example_output === "string" ? taskData.example_output.trim() : "";
+  const languageHint = typeof taskData.language_hint === "string" ? taskData.language_hint.trim() : "";
+  const minimumMet = minWords === 0 || wordCount >= minWords;
 
   return (
     <div className="space-y-4">
+      {/* FIXED: Content creation UI now shows the required type label, prompt, example, live word count, and character cap. */}
+      <Badge variant="outline">{contentType}</Badge>
       <div className="rounded-lg bg-muted p-4">
         <p className="text-sm font-medium">{String(taskData.prompt)}</p>
+        {languageHint && <p className="mt-2 text-xs text-muted-foreground">{languageHint}</p>}
       </div>
+      {exampleOutput && (
+        <blockquote className="rounded-lg border-l-4 border-pesatrix-blue bg-muted/50 p-4 text-sm text-muted-foreground">
+          <p className="mb-1 font-medium text-foreground">Example (do not copy)</p>
+          {exampleOutput}
+        </blockquote>
+      )}
       <div>
         <Label htmlFor="content">Your Content</Label>
         <Textarea
@@ -732,17 +840,15 @@ function ContentCreationForm({
           onChange={(e) => setAnswers((a) => ({ ...a, content: e.target.value }))}
           placeholder="Write your content here..."
           rows={6}
+          maxLength={maxCharacters}
         />
         <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-          <span>
-            {wordCount} words
-            {minWords > 0 && wordCount < minWords && (
-              <span className="text-destructive ml-2">
-                (minimum {minWords} required)
-              </span>
-            )}
+          <span className={minimumMet ? "text-green-700" : "text-destructive"}>
+            {wordCount} / {minWords} words minimum
           </span>
-          <span>Max: {maxWords}</span>
+          <span>
+            {maxCharacters ? `${content.length} / ${maxCharacters} characters` : `${content.length} characters`}
+          </span>
         </div>
       </div>
     </div>
@@ -750,43 +856,263 @@ function ContentCreationForm({
 }
 
 function WatchRespondForm({
-  questions,
+  taskData,
+  session,
+  watchSeconds,
+  watchUnlocked,
+  watchPaused,
+  forfeited,
+  onStart,
   answers,
   setAnswers,
 }: {
-  questions: Array<Record<string, unknown>>;
+  taskData: NormalizedWatchData;
+  session: WatchSessionState | null;
+  watchSeconds: number;
+  watchUnlocked: boolean;
+  watchPaused: boolean;
+  forfeited: boolean;
+  onStart: () => void;
   answers: Record<string, unknown>;
   setAnswers: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
 }) {
+  const contentError = validateWatchContent(taskData);
+  const effectiveTaskData = session?.content_url ? { ...taskData, content_url: session.content_url } : taskData;
+
   return (
     <div className="space-y-4">
-      {questions?.map((q) => (
-        <div key={String(q.id)} className="space-y-2">
-          <Label>
-            {String(q.text)}
-            {(q.min_words as number) > 0 && (
-              <span className="text-xs text-muted-foreground ml-1">
-                (min {(q.min_words as number)} words)
-              </span>
-            )}
-          </Label>
-          <Textarea
-            value={String(answers[q.id as string] ?? "")}
-            onChange={(e) => setAnswers((a) => ({ ...a, [q.id as string]: e.target.value }))}
-            placeholder="Your answer"
-            rows={3}
-          />
+      {contentError ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          {contentError}
         </div>
-      ))}
+      ) : (
+        <>
+          <div className="rounded-lg border p-4">
+            {!session ? (
+              <Button onClick={onStart} className="w-full">
+                Start Watching
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {watchPaused ? "Progress paused while the watch page is not active." : "Watch progress"}
+                  </span>
+                  <span className="font-medium">
+                    {watchSeconds}/{taskData.min_watch_seconds}s
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-pesatrix-blue transition-all"
+                    style={{ width: `${Math.min(100, (watchSeconds / taskData.min_watch_seconds) * 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Strikes: {session.cheat_strikes}/3
+                </p>
+              </div>
+            )}
+          </div>
+
+          {session && (
+            <>
+              {/* FIXED: Content rendering happens after session start so Supabase videos use the server-issued signed URL. */}
+              <WatchContentRenderer taskData={effectiveTaskData} />
+            </>
+          )}
+
+          {!watchUnlocked && !forfeited && (
+            <div className="rounded-lg border border-dashed bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+              Complete watching to unlock questions.
+            </div>
+          )}
+
+          {watchUnlocked && (
+            <div className="space-y-4">
+              {/* VERIFIED: OK - all questions must be answered before the shared submit button enables. */}
+              {taskData.questions.map((q) => (
+                <div key={q.id} className="space-y-2">
+                  <Label>{q.question}</Label>
+                  {q.type === "multiple_choice" ? (
+                    <RadioGroup
+                      value={String(answers[q.id] ?? "")}
+                      onValueChange={(value) => setAnswers((a) => ({ ...a, [q.id]: value }))}
+                      className="space-y-2"
+                    >
+                      {(q.options ?? []).map((option, index) => (
+                        <Label
+                          key={`${q.id}-${index}`}
+                          htmlFor={`${q.id}-${index}`}
+                          className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border p-3 font-normal"
+                        >
+                          <RadioGroupItem value={option} id={`${q.id}-${index}`} />
+                          <span>{option}</span>
+                        </Label>
+                      ))}
+                    </RadioGroup>
+                  ) : (
+                    <Textarea
+                      value={String(answers[q.id] ?? "")}
+                      onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+                      placeholder="Your answer"
+                      rows={3}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Dialog open={forfeited}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                  Task forfeited
+                </DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                You have left the watch page too many times. This task has been forfeited.
+              </p>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
     </div>
   );
 }
 
-function getYouTubeEmbedUrl(url: string): string {
-  if (!url) return "";
-  const videoId = url.match(/(?:youtu\.be\/|youtube\.com(?:\/embed\/|\/v\/|\/watch\?v=|\/watch\?.+&v=))([\w-]{11})/);
-  if (videoId) {
-    return `https://www.youtube.com/embed/${videoId[1]}?autoplay=1`;
+function WatchContentRenderer({ taskData }: { taskData: NormalizedWatchData }) {
+  if (taskData.content_type === "youtube") {
+    const embedUrl = getYouTubeEmbedUrl(taskData.content_url);
+    if (!embedUrl) {
+      return <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Invalid YouTube URL.</div>;
+    }
+
+    return (
+      <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
+        <iframe
+          src={embedUrl}
+          className="h-full w-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    );
   }
-  return url;
+
+  if (taskData.content_type === "supabase_video") {
+    return (
+      <video className="aspect-video w-full rounded-lg bg-black" src={taskData.content_url} controls>
+        Your browser does not support the video tag.
+      </video>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border p-4 text-sm">
+      <p className="mb-3 text-muted-foreground">
+        Open the link, watch the content, then return here to answer.
+      </p>
+      <Button asChild variant="outline">
+        <a href={taskData.content_url} target="_blank" rel="noopener noreferrer">
+          <ExternalLink className="mr-2 h-4 w-4" />
+          Open Content in New Tab
+        </a>
+      </Button>
+    </div>
+  );
+}
+
+function normalizeWatchRespondTaskData(taskData: Record<string, unknown>): NormalizedWatchData {
+  const rawQuestions = Array.isArray(taskData.questions) ? taskData.questions : [];
+  return {
+    content_type: isWatchContentType(taskData.content_type) ? taskData.content_type : "youtube",
+    content_url: String(taskData.content_url ?? taskData.video_url ?? ""),
+    min_watch_seconds: Number(taskData.min_watch_seconds ?? 60),
+    questions: rawQuestions.map((question, index) => {
+      const q = question as Record<string, unknown>;
+      const type = q.type === "multiple_choice" ? "multiple_choice" : "open_ended";
+      return {
+        id: String(q.id ?? `q-${index}`),
+        type,
+        question: String(q.question ?? q.text ?? ""),
+        options: Array.isArray(q.options) ? q.options.map(String).filter(Boolean) : undefined,
+        correct_option: typeof q.correct_option === "string" ? q.correct_option : undefined,
+      };
+    }),
+  };
+}
+
+function validateWatchContent(taskData: NormalizedWatchData) {
+  if (!taskData.content_url) {
+    return "This watch task has an invalid or missing content URL.";
+  }
+
+  if (taskData.content_type === "supabase_video") {
+    return null;
+  }
+
+  if (!isValidHttpUrl(taskData.content_url)) {
+    return "This watch task has an invalid or missing content URL.";
+  }
+
+  if (taskData.content_type === "youtube" && !getYouTubeVideoId(taskData.content_url)) {
+    return "This watch task has an invalid YouTube URL.";
+  }
+
+  return null;
+}
+
+function getYouTubeEmbedUrl(url: string): string | null {
+  const videoId = getYouTubeVideoId(url);
+  return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+}
+
+function getYouTubeVideoId(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === "youtu.be") {
+      return parsed.pathname.split("/").filter(Boolean)[0] ?? null;
+    }
+    if (parsed.hostname.endsWith("youtube.com")) {
+      if (parsed.pathname === "/watch") return parsed.searchParams.get("v");
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (["embed", "v", "shorts"].includes(parts[0])) return parts[1] ?? null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function countWords(value: string) {
+  return value.trim().split(/\s+/).filter((word) => word.length > 0).length;
+}
+
+function isValidHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isWatchContentType(value: unknown): value is NormalizedWatchData["content_type"] {
+  return value === "youtube" || value === "supabase_video" || value === "external_url";
+}
+
+function getContentCreationLabel(value: string) {
+  const labels: Record<string, string> = {
+    short_text: "Write short text",
+    paragraph: "Write a paragraph",
+    article: "Write an article",
+    tweet: "Write a tweet",
+    caption: "Write a caption",
+    review: "Write a short review",
+    social_post: "Write a social post",
+  };
+  return labels[value] ?? "Write content";
 }

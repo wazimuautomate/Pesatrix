@@ -83,7 +83,8 @@ export function TaskCreationForm() {
         return !!taskData.prompt;
       }
       if (meta.category === "watch_respond") {
-        return !!taskData.video_url && taskData.questions?.length > 0;
+        // FIXED: Watch & Respond creation validates content_url from the required task_data contract.
+        return !!taskData.content_url && taskData.questions?.length > 0;
       }
       return true;
     }
@@ -804,25 +805,28 @@ function ContentCreationBuilder({
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <div>
-        <Label>Subtype</Label>
+        <Label>Content Type</Label>
         <Select
-          value={(taskData.subtype as string) ?? "review"}
-          onValueChange={(v) => setTaskData((d: any) => ({ ...d, subtype: v }))}
+          value={(taskData.content_type as string) ?? "review"}
+          onValueChange={(v) => setTaskData((d: any) => ({ ...d, content_type: v }))}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="short_text">Short Text</SelectItem>
+            <SelectItem value="paragraph">Paragraph</SelectItem>
+            <SelectItem value="tweet">Tweet</SelectItem>
             <SelectItem value="review">Review</SelectItem>
-            <SelectItem value="social_post">Social Post</SelectItem>
             <SelectItem value="article">Article</SelectItem>
             <SelectItem value="caption">Caption</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div>
-        <Label>Language</Label>
+        <Label>Language Hint</Label>
         <Input
-          value={(taskData.language as string) ?? "english"}
-          onChange={(e) => setTaskData((d: any) => ({ ...d, language: e.target.value }))}
+          value={(taskData.language_hint as string) ?? ""}
+          onChange={(e) => setTaskData((d: any) => ({ ...d, language_hint: e.target.value }))}
+          placeholder="English or Swahili accepted"
         />
       </div>
       <div className="sm:col-span-2">
@@ -835,21 +839,23 @@ function ContentCreationBuilder({
         />
       </div>
       <div>
-        <Label>Min Words</Label>
+        <Label>Max Characters (optional)</Label>
         <Input
           type="number"
-          value={(taskData.min_words as number) ?? 30}
-          onChange={(e) => setTaskData((d: any) => ({ ...d, min_words: Number(e.target.value) }))}
+          value={(taskData.max_characters as number) ?? ""}
+          onChange={(e) => setTaskData((d: any) => ({ ...d, max_characters: e.target.value ? Number(e.target.value) : undefined }))}
         />
       </div>
-      <div>
-        <Label>Max Words</Label>
-        <Input
-          type="number"
-          value={(taskData.max_words as number) ?? 150}
-          onChange={(e) => setTaskData((d: any) => ({ ...d, max_words: Number(e.target.value) }))}
+      <div className="sm:col-span-2">
+        <Label>Example Output (optional)</Label>
+        <Textarea
+          value={(taskData.example_output as string) ?? ""}
+          onChange={(e) => setTaskData((d: any) => ({ ...d, example_output: e.target.value }))}
+          placeholder="Shown as Example (do not copy)"
+          rows={2}
         />
       </div>
+      {/* VERIFIED: OK - min_word_count stays in the shared task meta field and is enforced by the submit API. */}
     </div>
   );
 }
@@ -861,12 +867,12 @@ function WatchRespondBuilder({
   taskData: any;
   setTaskData: React.Dispatch<React.SetStateAction<any>>;
 }) {
-  const questions = (taskData.questions as Array<{ id: string; text: string; type: string; min_words?: number }>) ?? [];
+  const questions = (taskData.questions as Array<{ id: string; question?: string; text?: string; type: string; options?: string[]; correct_option?: string }>) ?? [];
 
   function addQuestion() {
     setTaskData((d: any) => ({
       ...d,
-      questions: [...questions, { id: `w${Date.now()}`, text: "", type: "open_text", min_words: 10 }],
+      questions: [...questions, { id: `w${Date.now()}`, question: "", type: "open_ended" }],
     }));
   }
 
@@ -883,13 +889,29 @@ function WatchRespondBuilder({
 
   return (
     <div className="space-y-4">
-      <div>
-        <Label>Video URL</Label>
-        <Input
-          value={(taskData.video_url as string) ?? ""}
-          onChange={(e) => setTaskData((d: any) => ({ ...d, video_url: e.target.value }))}
-          placeholder="https://youtube.com/..."
-        />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Content Type</Label>
+          <Select
+            value={(taskData.content_type as string) ?? "youtube"}
+            onValueChange={(value) => setTaskData((d: any) => ({ ...d, content_type: value }))}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="youtube">YouTube</SelectItem>
+              <SelectItem value="supabase_video">Supabase Video</SelectItem>
+              <SelectItem value="external_url">External URL</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Content URL</Label>
+          <Input
+            value={(taskData.content_url as string) ?? ""}
+            onChange={(e) => setTaskData((d: any) => ({ ...d, content_url: e.target.value }))}
+            placeholder="YouTube URL, storage path, or external URL"
+          />
+        </div>
       </div>
       <div>
         <Label>Min Watch Seconds</Label>
@@ -910,25 +932,43 @@ function WatchRespondBuilder({
         <Card key={q.id}>
           <CardContent className="space-y-2 pt-4">
             <Input
-              value={q.text}
-              onChange={(e) => updateQuestion(i, { text: e.target.value })}
+              value={q.question ?? q.text ?? ""}
+              onChange={(e) => updateQuestion(i, { question: e.target.value })}
               placeholder="Question about the video"
             />
             <div className="flex gap-2">
-              <Input
-                type="number"
-                value={q.min_words ?? 10}
-                onChange={(e) => updateQuestion(i, { min_words: Number(e.target.value) })}
-                placeholder="Min words"
-                className="w-24"
-              />
+              <Select
+                value={q.type ?? "open_ended"}
+                onValueChange={(value) => updateQuestion(i, { type: value })}
+              >
+                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open_ended">Open Ended</SelectItem>
+                  <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
+                </SelectContent>
+              </Select>
               <Button variant="ghost" size="sm" onClick={() => removeQuestion(i)}>
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </div>
+            {q.type === "multiple_choice" && (
+              <div className="space-y-2">
+                <Input
+                  value={(q.options ?? []).join(", ")}
+                  onChange={(e) => updateQuestion(i, { options: e.target.value.split(",").map((option) => option.trim()).filter(Boolean) })}
+                  placeholder="Options (comma separated)"
+                />
+                <Input
+                  value={q.correct_option ?? ""}
+                  onChange={(e) => updateQuestion(i, { correct_option: e.target.value })}
+                  placeholder="Correct option (optional)"
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}
+      {/* FIXED: Admin builder now captures content_type, content_url, question type, options, and optional correct_option. */}
     </div>
   );
 }

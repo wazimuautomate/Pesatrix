@@ -61,7 +61,7 @@ export async function POST(request: Request) {
 
   const { data: task } = await admin
     .from("tasks")
-    .select("slots_remaining, status, ai_grading_enabled, task_data, category")
+    .select("id, title, instructions, ai_rubric, min_word_count, slots_remaining, status, ai_grading_enabled, task_data, category")
     .eq("id", taskId)
     .single();
 
@@ -199,6 +199,53 @@ export async function POST(request: Request) {
     );
   }
 
+  let submissionAnswers = answers;
+
+  if (task.category === "content_creation") {
+    // FIXED: Server enforces tasks.min_word_count for content creation instead of trusting client-side UX.
+    const content = typeof answers.content === "string" ? answers.content : "";
+    const wordCount = countWords(content);
+    if (Number(task.min_word_count ?? 0) > 0 && wordCount < Number(task.min_word_count)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "WORD_COUNT_TOO_LOW",
+            message: `Minimum ${task.min_word_count} words required. You submitted ${wordCount}.`,
+          },
+        },
+        { status: 422 }
+      );
+    }
+    submissionAnswers = { content, word_count: wordCount };
+  }
+
+  let completedWatchSessionId: string | null = null;
+  let completedWatchDuration: number | null = null;
+  let completedWatchStrikes = 0;
+  if (task.category === "watch_respond") {
+    const watchValidation = await validateWatchRespondSubmission({
+      admin,
+      userId: user.id,
+      task,
+      answers,
+    });
+    const validationError = "error" in watchValidation ? watchValidation.error : null;
+    if (validationError) {
+      return NextResponse.json(validationError.body, { status: validationError.status });
+    }
+
+    const validatedWatch = watchValidation as {
+      sessionId: string;
+      durationSeconds: number;
+      cheatStrikes: number;
+      answers: Record<string, unknown>;
+    };
+    completedWatchSessionId = validatedWatch.sessionId;
+    completedWatchDuration = validatedWatch.durationSeconds;
+    completedWatchStrikes = validatedWatch.cheatStrikes;
+    submissionAnswers = validatedWatch.answers;
+  }
+
   if (isSocialTask) {
     const { data: bannedSubmission } = await admin
       .from("task_submissions")
@@ -276,7 +323,7 @@ export async function POST(request: Request) {
     .insert({
       task_id: taskId,
       user_id: user.id,
-      answers,
+      answers: submissionAnswers,
       screenshot_url: socialScreenshotUrl ?? normalizedScreenshotUrl ?? null,
       submitted_url: normalizedSubmittedUrl ?? null,
       status: initialStatus,
@@ -308,6 +355,21 @@ export async function POST(request: Request) {
       { error: "This task is now full. Check back for more tasks." },
       { status: 409 }
     );
+  }
+
+  if (completedWatchSessionId) {
+    // FIXED: Mark the persisted watch session completed only after submission and slot reservation succeed.
+    await admin
+      .from("watch_sessions")
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        duration_seconds: completedWatchDuration,
+        cheat_strikes: completedWatchStrikes,
+      })
+      .eq("id", completedWatchSessionId)
+      .eq("user_id", user.id)
+      .eq("task_id", taskId);
   }
 
   if (task.ai_grading_enabled) {
@@ -481,6 +543,108 @@ function validateDataLabelingAnswers(taskData: unknown, answers: Record<string, 
   return null;
 }
 
+async function validateWatchRespondSubmission({
+  admin,
+  userId,
+  task,
+  answers,
+}: {
+  admin: ReturnType<typeof createAdminSupabaseClient>;
+  userId: string;
+  task: {
+    id: string;
+    task_data: Record<string, unknown>;
+  };
+  answers: Record<string, unknown>;
+}) {
+  const sessionToken = typeof answers.watch_session_token === "string" ? answers.watch_session_token.trim() : "";
+  const submittedAnswers = Array.isArray(answers.answers) ? answers.answers : [];
+
+  if (!sessionToken) {
+    return {
+      error: {
+        status: 422,
+        body: { error: { code: "WATCH_SESSION_REQUIRED", message: "Watch session token is required." } },
+      },
+    };
+  }
+
+  const { data: watchSession } = await admin
+    .from("watch_sessions")
+    .select("id, started_at, cheat_strikes, status")
+    .eq("id", sessionToken)
+    .eq("user_id", userId)
+    .eq("task_id", task.id)
+    .maybeSingle();
+
+  if (!watchSession) {
+    return {
+      error: {
+        status: 422,
+        body: { error: { code: "INVALID_WATCH_SESSION", message: "Invalid watch session." } },
+      },
+    };
+  }
+
+  if (watchSession.status === "invalidated" || Number(watchSession.cheat_strikes ?? 0) >= 3) {
+    return {
+      error: {
+        status: 403,
+        body: { error: { code: "WATCH_SESSION_FORFEITED", message: "Task forfeited due to repeated cheating" } },
+      },
+    };
+  }
+
+  const minWatchSeconds = Number(task.task_data.min_watch_seconds ?? 60);
+  const durationSeconds = Math.floor((Date.now() - new Date(watchSession.started_at as string).getTime()) / 1000);
+  if (durationSeconds < minWatchSeconds) {
+    return {
+      error: {
+        status: 422,
+        body: { error: { code: "WATCH_TIME_TOO_LOW", message: "Watch time requirement not met" } },
+      },
+    };
+  }
+
+  const requiredQuestionIds = new Set(
+    (Array.isArray(task.task_data.questions) ? task.task_data.questions : [])
+      .map((question) => isRecord(question) ? String(question.id ?? "") : "")
+      .filter(Boolean)
+  );
+  const normalizedAnswers = submittedAnswers
+    .map((answer) => isRecord(answer)
+      ? {
+          question_id: String(answer.question_id ?? ""),
+          answer: String(answer.answer ?? "").trim(),
+        }
+      : null)
+    .filter((answer): answer is { question_id: string; answer: string } => Boolean(answer?.question_id));
+
+  const answeredQuestionIds = new Set(normalizedAnswers.filter((answer) => answer.answer.length > 0).map((answer) => answer.question_id));
+  if ([...requiredQuestionIds].some((id) => !answeredQuestionIds.has(id))) {
+    return {
+      error: {
+        status: 422,
+        body: { error: { code: "VALIDATION_ERROR", message: "Please answer all watch questions." } },
+      },
+    };
+  }
+
+  return {
+    sessionId: watchSession.id as string,
+    durationSeconds,
+    cheatStrikes: Number(watchSession.cheat_strikes ?? 0),
+    answers: {
+      // VERIFIED: OK - final payload stores server-derived duration and strikes alongside user answers.
+      watch_session_token: watchSession.id,
+      watch_completed: true,
+      watch_duration_seconds: durationSeconds,
+      cheat_strikes: Number(watchSession.cheat_strikes ?? 0),
+      answers: normalizedAnswers,
+    },
+  };
+}
+
 function validateVerificationSubmission({
   taskData,
   answers,
@@ -553,4 +717,12 @@ function isValidHttpUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+function countWords(value: string) {
+  return value.trim().split(/\s+/).filter((word) => word.length > 0).length;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
