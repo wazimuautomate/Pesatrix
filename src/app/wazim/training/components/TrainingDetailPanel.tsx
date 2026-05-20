@@ -55,7 +55,7 @@ type EditFormState = {
   stageAttempt: string;
 };
 
-export function TrainingDetailPanel({ userId, adminRole }: { userId: string; adminRole: string }) {
+export function TrainingDetailPanel({ userId }: { userId: string }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(false);

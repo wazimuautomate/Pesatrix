@@ -31,9 +31,16 @@
     @apply border-border;
   }
 
+  html {
+    @apply bg-background;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    min-height: 100vh;
+    background:
+      linear-gradient(180deg, hsl(var(--background)) 0%, #eef3ff 52%, hsl(var(--background)) 100%);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -73,5 +80,14 @@
 
   .animate-pulse-dot {
     animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  .dashboard-canvas {
+    background:
+      linear-gradient(180deg, rgba(241, 243, 255, 0.94) 0%, rgba(249, 249, 255, 0.98) 44%, rgba(249, 249, 255, 1) 100%);
+  }
+
+  .dashboard-glass {
+    @apply border border-outline-variant/40 bg-white/90 shadow-[0_20px_60px_rgba(11,31,59,0.08)] backdrop-blur-xl;
   }
 }

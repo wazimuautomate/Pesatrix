@@ -67,7 +67,7 @@ type Submission = {
 export default function SubmissionDetailPage() {
   return (
     <AdminPageShell
-      admin={{ userId: "", email: null, role: "", adminUserId: "" }}
+      admin={{ userId: "", email: null, role: "admin", adminUserId: "" }}
       title="Submission Detail"
       description="Review submission details, AI grading, and take admin action."
     >

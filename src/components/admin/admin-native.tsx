@@ -49,25 +49,25 @@ export function AdminPageShell({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-background lg:flex">
+    <div className="dashboard-canvas min-h-screen lg:flex">
       <AdminSidebar />
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 border-b border-outline-variant/40 bg-background/95 backdrop-blur">
-          <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-3 lg:px-8">
+        <header className="sticky top-0 z-20 border-b border-outline-variant/30 bg-white/80 shadow-sm shadow-navy/5 backdrop-blur-xl">
+          <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-3 lg:min-h-20 lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
               <BrandLogo size="topbar" className="lg:hidden" />
               <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-pesatrix-blue">
-                Wazim Control
-              </p>
-              <h1 className="mt-1 truncate text-xl font-bold text-navy lg:text-2xl">
-                {title}
-              </h1>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-pesatrix-blue">
+                  Wazim Control
+                </p>
+                <h1 className="mt-1 truncate text-xl font-bold text-navy lg:text-2xl">
+                  {title}
+                </h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
               {actions}
-              <Badge variant="outline" className="hidden border-outline-variant/60 bg-white text-navy sm:inline-flex">
+              <Badge variant="outline" className="hidden border-outline-variant/60 bg-white/80 text-navy sm:inline-flex">
                 {admin.role}
               </Badge>
             </div>
@@ -77,7 +77,7 @@ export function AdminPageShell({
               <Link
                 key={link.href}
                 href={link.href}
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-outline-variant/50 bg-white px-3 py-2 text-xs font-semibold text-on-surface"
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-outline-variant/50 bg-white/80 px-3 py-2 text-xs font-semibold text-on-surface shadow-sm"
               >
                 <link.icon className="h-3.5 w-3.5" />
                 {link.label}
@@ -85,10 +85,12 @@ export function AdminPageShell({
             ))}
           </nav>
         </header>
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 lg:px-8">
-          <p className="mb-6 max-w-3xl text-sm leading-6 text-muted-foreground">
-            {description}
-          </p>
+        <main className="mx-auto w-full max-w-[1440px] px-4 py-6 lg:px-8 lg:py-8">
+          <div className="mb-6 rounded-2xl border border-outline-variant/40 bg-white/70 px-5 py-4 shadow-sm shadow-navy/5">
+            <p className="max-w-4xl text-sm leading-6 text-muted-foreground">
+              {description}
+            </p>
+          </div>
           {children}
         </main>
       </div>
@@ -115,7 +117,7 @@ export function MetricCard({
   }[tone];
 
   return (
-    <Card className="border border-outline-variant/40 shadow-sm">
+    <Card className="overflow-hidden border border-outline-variant/40 shadow-sm">
       <CardContent className="p-5">
         <div className={cn("mb-4 h-2 w-14 rounded-full", toneClass)} />
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
@@ -128,7 +130,7 @@ export function MetricCard({
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-outline-variant/70 bg-white p-8 text-center text-sm text-muted-foreground">
+    <div className="rounded-2xl border border-dashed border-outline-variant/70 bg-white/70 p-8 text-center text-sm text-muted-foreground">
       {children}
     </div>
   );

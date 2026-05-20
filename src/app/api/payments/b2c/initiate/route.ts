@@ -12,7 +12,6 @@ const schema = z.object({
 export async function POST(request: Request) {
   const { error, userId, adminUser } = await requireAdmin({
     request,
-    allowedRoles: ["finance", "super_admin"],
   });
 
   if (error) return error;

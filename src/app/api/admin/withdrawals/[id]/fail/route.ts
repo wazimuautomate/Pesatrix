@@ -14,7 +14,6 @@ const schema = z.object({
 export async function POST(request: Request, { params }: RouteContext) {
   const { error, userId } = await requireAdmin({
     request,
-    allowedRoles: ["finance", "super_admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
