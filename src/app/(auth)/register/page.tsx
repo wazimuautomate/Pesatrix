@@ -28,10 +28,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { KENYA_COUNTIES } from "@/lib/auth/counties";
-import {
-  buildRegisterSignUpInput,
-  mapRegisterErrorMessage,
-} from "@/lib/auth/register";
+import { mapRegisterErrorMessage } from "@/lib/auth/register";
 import { captureAndSendFingerprint, getFingerprint, sendFingerprint } from "@/lib/fraud/fingerprint";
 import { createClient } from "@/lib/supabase/client";
 
@@ -137,23 +134,20 @@ export default function RegisterPage() {
 
   async function onSubmit(data: RegisterForm) {
     try {
-      const payload = buildRegisterSignUpInput(
-        {
-          fullName: data.fullName,
-          phone: data.phone,
-          county: data.county,
-          email: data.email,
-          password: data.password,
-          referralCode: data.referralCode,
-          humanVerified: data.confirmHuman,
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        window.location.origin
-      );
+        body: JSON.stringify(data),
+      });
+      const result = await response.json().catch(() => null);
 
-      const { error } = await supabase.auth.signUp(payload);
-
-      if (error) {
-        toast.error(mapRegisterErrorMessage(error.message));
+      if (!response.ok) {
+        const message =
+          result?.error?.message ??
+          mapRegisterErrorMessage("Signup failed due to a server setup error. Please try again.");
+        toast.error(message);
         return;
       }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, Loader2, Pencil, PlugZap, Save, Trash2 } from "lucide-react";
+import { CheckCircle2, Loader2, Pencil, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -90,7 +90,6 @@ export function AiProviderManager({
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const activeProvider = useMemo(
@@ -116,29 +115,6 @@ export function AiProviderManager({
     const payload = await response.json();
     if (response.ok) {
       setProviders(payload.providers ?? []);
-    }
-  }
-
-  async function testConnection() {
-    setTesting(true);
-    try {
-      const response = await fetch("/api/admin/ai-providers/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const payload = await response.json();
-
-      if (!response.ok || !payload.ok) {
-        toast.error(payload.error ?? "Connection test failed");
-        return;
-      }
-
-      toast.success(payload.preview || "Connection test succeeded");
-    } catch {
-      toast.error("Connection test failed");
-    } finally {
-      setTesting(false);
     }
   }
 
@@ -399,10 +375,6 @@ export function AiProviderManager({
           </label>
 
           <div className="flex flex-wrap items-end gap-3">
-            <Button type="button" variant="outline" onClick={() => void testConnection()} disabled={testing || !form.apiKey}>
-              {testing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlugZap className="mr-2 h-4 w-4" />}
-              Test connection
-            </Button>
             <Button type="button" onClick={() => void saveProvider()} disabled={saving || (!editingId && !form.apiKey)}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               {editingId ? "Update provider" : "Save provider"}

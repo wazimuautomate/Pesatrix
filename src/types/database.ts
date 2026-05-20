@@ -43,7 +43,7 @@ export type WithdrawalStatus =
 
 export type TicketStatus = "open" | "in_progress" | "resolved" | "closed";
 
-export type AdminRole = "admin";
+export type AdminRole = "admin" | "finance" | "super_admin";
 
 export type RewardSpinType = "free" | "paid";
 
@@ -160,6 +160,10 @@ export interface Database {
           mpesa_receipt: string | null;
           checkout_request_id: string | null;
           callback_raw: Record<string, unknown> | null;
+          callback_validation_error: string | null;
+          stk_initiated_at: string | null;
+          stk_completed_at: string | null;
+          safaricom_ip: string | null;
           status: "pending" | "paid" | "failed" | "reversed";
           paid_at: string | null;
           created_at: string;
@@ -290,6 +294,14 @@ export interface Database {
           phone: string;
           status: WithdrawalStatus;
           mpesa_txn_id: string | null;
+          b2c_request_id: string | null;
+          b2c_conversation_id: string | null;
+          b2c_originator_id: string | null;
+          b2c_result_code: string | null;
+          b2c_result_desc: string | null;
+          b2c_raw_callback: Record<string, unknown> | null;
+          b2c_initiated_at: string | null;
+          last_reconciled_at: string | null;
           processed_at: string | null;
           failure_reason: string | null;
           created_at: string;
@@ -334,11 +346,15 @@ export interface Database {
       };
       admin_users: {
         Row: {
+          id: string;
           user_id: string;
           role: AdminRole;
+          status: string;
           created_at: string;
+          updated_at: string;
+          last_login_at: string | null;
         };
-        Insert: Omit<Database["public"]["Tables"]["admin_users"]["Row"], "created_at">;
+        Insert: Omit<Database["public"]["Tables"]["admin_users"]["Row"], "id" | "created_at" | "updated_at">;
         Update: Partial<Database["public"]["Tables"]["admin_users"]["Insert"]>;
       };
       audit_log: {

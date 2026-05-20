@@ -15,7 +15,7 @@ const schema = z.object({
 export async function POST(request: Request, { params }: RouteContext) {
   const { error, userId, adminUser } = await requireAdmin({
     request,
-    allowedRoles: ["admin"],
+    allowedRoles: ["finance", "super_admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -65,6 +65,8 @@ export async function POST(request: Request, { params }: RouteContext) {
       status: "sent",
       mpesa_txn_id: generatedTxnId,
       processed_at: now,
+      b2c_result_code: "manual_override",
+      b2c_result_desc: parsed.data.reason?.trim() || "Manually marked as sent",
     })
     .eq("id", id);
 
@@ -85,7 +87,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     entityId: id,
     before,
     after: { status: "sent", mpesa_txn_id: generatedTxnId, processed_at: now },
-    reason: parsed.data.reason ?? "Withdrawal approved with mock payout completion",
+    reason: parsed.data.reason ?? "Withdrawal marked as sent manually",
     ip: getRequestMeta(request).ip ?? undefined,
     userAgent: getRequestMeta(request).userAgent ?? undefined,
   });

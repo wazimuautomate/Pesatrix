@@ -21,6 +21,6 @@ export const config = {
      * - Public assets
      * - API callback routes (M-Pesa callbacks must be public)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api/payments/mpesa/callback).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api/payments/mpesa/callback|api/payments/b2c/result|api/payments/b2c/timeout).*)",
   ],
 };

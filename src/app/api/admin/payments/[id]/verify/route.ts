@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireAdmin, auditLog } from "../../../_lib";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+
+const verifyPaymentSchema = z.object({
+  mpesaReceipt: z.string().trim().min(1, "M-Pesa receipt is required").max(80),
+  note: z.string().trim().max(500).optional(),
+});
 
 export async function POST(
   request: Request,
@@ -15,15 +21,14 @@ export async function POST(
   if (error || !adminUser) return error;
 
   try {
-    const body = await request.json();
-    const { mpesaReceipt, note } = body;
-
-    if (!mpesaReceipt || typeof mpesaReceipt !== "string") {
+    const parsed = verifyPaymentSchema.safeParse(await request.json());
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "M-Pesa receipt is required" },
-        { status: 400 }
+        { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0]?.message ?? "Invalid request" } },
+        { status: 422 }
       );
     }
+    const { mpesaReceipt, note } = parsed.data;
 
     const supabase = createAdminSupabaseClient();
 
@@ -111,10 +116,11 @@ export async function POST(
     });
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (error) {
+    console.error("[POST /api/admin/payments/:id/verify] error:", error);
     return NextResponse.json(
-      { error: "Invalid request payload" },
-      { status: 400 }
+      { error: { code: "INTERNAL_ERROR", message: "Failed to verify payment" } },
+      { status: 500 }
     );
   }
 }

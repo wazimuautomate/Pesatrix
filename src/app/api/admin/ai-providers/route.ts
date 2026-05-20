@@ -84,8 +84,7 @@ export async function POST(request: Request) {
   if (isActive) {
     const { error: deactivateError } = await admin
       .from("ai_provider_configs")
-      .update({ is_active: false })
-      .neq("id", "00000000-0000-0000-0000-000000000000");
+      .update({ is_active: false });
 
     if (deactivateError) {
       return NextResponse.json({ error: "Failed to deactivate current provider" }, { status: 500 });

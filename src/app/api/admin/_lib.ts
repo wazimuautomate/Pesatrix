@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
-export const ADMIN_ROLES = ["admin"] as const;
+export const ADMIN_ROLES = ["admin", "finance", "super_admin"] as const;
 
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 
@@ -18,7 +18,7 @@ type AdminUserRecord = {
   status: "active" | "disabled";
 };
 
-/** Verify caller has an active admin_users row. Endpoint role allowlists are ignored. */
+/** Verify caller has an active admin_users row and required role. */
 export async function requireAdmin(options: RequireAdminOptions = {}) {
   const supabase = await createServerSupabaseClient();
   const {
@@ -44,6 +44,17 @@ export async function requireAdmin(options: RequireAdminOptions = {}) {
   const normalizedAdminUser = normalizeAdminUser(adminUser);
 
   if (!normalizedAdminUser) {
+    return {
+      error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+      adminUser: null,
+      userId: null,
+    };
+  }
+
+  if (
+    options.allowedRoles?.length &&
+    !options.allowedRoles.includes(normalizedAdminUser.role)
+  ) {
     return {
       error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
       adminUser: null,
@@ -123,7 +134,10 @@ function normalizeAdminUser(value: unknown): AdminUserRecord | null {
   return {
     id: candidate.id,
     user_id: candidate.user_id,
-    role: "admin",
+    role:
+      candidate.role === "finance" || candidate.role === "super_admin"
+        ? candidate.role
+        : "admin",
     status:
       candidate.status === "disabled" ? "disabled" : "active",
   };

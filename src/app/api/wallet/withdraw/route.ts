@@ -16,7 +16,9 @@ import {
   normalizeWithdrawalStoragePhone,
   sendWithdrawalWebhook,
 } from "@/lib/withdrawals";
+import { internalErrorResponse, rateLimitedResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api";
 import { calculateWithdrawalNetAmount } from "@/lib/financial-limits";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 export async function POST(request: Request) {
@@ -29,22 +31,23 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
+      return unauthorizedResponse();
     }
-    const body = await request.json();
 
     const parsed = z
       .object({
         amount: z.coerce.number().int().positive().max(MAX_WITHDRAWAL_AMOUNT),
         phone: z.string().regex(KENYAN_PHONE_REGEX, "Invalid M-Pesa number"),
       })
-      .safeParse(body);
+      .safeParse(await request.json());
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0].message } },
-        { status: 422 }
-      );
+      return validationErrorResponse(parsed.error.errors[0].message);
+    }
+
+    const withdrawLimit = await checkRateLimit(`wallet_withdraw:user:${user.id}`, 3, 24 * 60 * 60);
+    if (!withdrawLimit.allowed) {
+      return rateLimitedResponse("Too many withdrawal requests. Please try again tomorrow.");
     }
 
     const { amount: validAmount, phone } = parsed.data;
@@ -219,11 +222,8 @@ export async function POST(request: Request) {
       amountToReceive: amountAfterFee,
       processingDays,
     });
-  } catch (err) {
-    console.error("[Withdrawal Error]", err);
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "Withdrawal failed" } },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("[POST /api/wallet/withdraw] error:", error);
+    return internalErrorResponse("Withdrawal failed");
   }
 }

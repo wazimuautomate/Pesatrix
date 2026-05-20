@@ -1,11 +1,27 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+
+const b2cCallbackSchema = z.object({
+  Result: z
+    .object({
+      ConversationID: z.string().optional(),
+      ResultCode: z.number().optional(),
+      ResultDesc: z.string().optional(),
+    })
+    .passthrough()
+    .optional(),
+});
 
 export async function POST(request: Request) {
   const acceptedResponse = NextResponse.json({ ok: true });
 
   try {
-    const raw = await request.json();
+    const parsed = b2cCallbackSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return acceptedResponse;
+    }
+    const raw = parsed.data;
 
     const result = raw?.Result;
     if (!result) {
@@ -45,8 +61,11 @@ export async function POST(request: Request) {
     if (ResultCode === 0) {
       let transactionId: string | undefined;
 
-      if (Array.isArray(ResultParameters?.ResultParameter)) {
-        for (const param of ResultParameters.ResultParameter) {
+      const resultParameters = (ResultParameters as { ResultParameter?: Array<{ Key?: string; Value?: unknown }> } | undefined)
+        ?.ResultParameter;
+
+      if (Array.isArray(resultParameters)) {
+        for (const param of resultParameters) {
           if (param?.Key === "TransactionID" || param?.Key === "TransactionReceipt") {
             transactionId = String(param.Value);
             break;
@@ -68,7 +87,6 @@ export async function POST(request: Request) {
         .eq("reference_id", withdrawal.id)
         .eq("direction", "debit");
 
-      console.log("[B2C Callback] Withdrawal succeeded:", withdrawal.id, "TXN:", transactionId);
     } else {
       const failureReason = ResultDesc ?? "B2C failed with ResultCode: " + ResultCode;
 
@@ -98,7 +116,6 @@ export async function POST(request: Request) {
         reference_id: withdrawal.id,
       });
 
-      console.log("[B2C Callback] Withdrawal failed:", withdrawal.id, "Reason:", failureReason);
     }
 
     return acceptedResponse;

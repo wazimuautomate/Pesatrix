@@ -68,5 +68,12 @@ export function mapRegisterErrorMessage(message: string) {
     return "Registration is disabled in the backend. Enable sign-ups in Supabase Auth settings.";
   }
 
-  return message;
+  if (
+    msg.includes("already registered") ||
+    msg.includes("user already registered")
+  ) {
+    return "An account with this email already exists.";
+  }
+
+  return "Registration failed. Please review your details and try again.";
 }

@@ -122,7 +122,7 @@ export default function WithdrawalsPage() {
   async function triggerB2C(withdrawal: Withdrawal) {
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/admin/withdrawals/${withdrawal.id}/b2c`, {
+      const res = await fetch(`/api/admin/withdrawals/${withdrawal.id}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -253,7 +253,7 @@ export default function WithdrawalsPage() {
         adminUserId: "",
       }}
       title="Withdrawals"
-      description="Review and process withdrawal requests. Approve to complete the temporary mock payout flow or decline to reverse the reserved debit."
+      description="Review and process withdrawal requests. Trigger live Daraja B2C payouts or use the manual override actions when reconciliation requires it."
     >
       {counts && (
         <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -553,7 +553,7 @@ export default function WithdrawalsPage() {
               Approve Withdrawal
             </DialogTitle>
             <DialogDescription>
-              Approve this withdrawal. You can enter a transaction ID or leave it blank to use a mock payout reference.
+              Mark this withdrawal as sent manually. Use this only when the payout was completed outside the automated Daraja callback flow.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -563,7 +563,7 @@ export default function WithdrawalsPage() {
                 id="mpesa-txn-id"
                 value={mpesaTxnId}
                 onChange={(e) => setMpesaTxnId(e.target.value)}
-                placeholder="Leave blank to generate a mock payout reference"
+                placeholder="Leave blank to generate a manual payout reference"
                 className="font-mono"
               />
             </div>

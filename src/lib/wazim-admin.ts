@@ -35,7 +35,10 @@ export async function requireWazimAdmin(): Promise<WazimAdminSession> {
   return {
     userId: user.id,
     email: user.email ?? null,
-    role: "admin",
+    role:
+      typeof adminUser.role === "string" && adminUser.role.trim()
+        ? adminUser.role
+        : "admin",
     adminUserId: String(adminUser.id),
   };
 }

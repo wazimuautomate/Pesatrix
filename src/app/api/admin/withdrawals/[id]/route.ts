@@ -18,6 +18,12 @@ const updateSchema = z.object({
   reason: z.string().trim().optional(),
 });
 
+const withdrawalActionSchema = z.object({
+  action: z.enum(["mark-sent", "fail"]),
+  mpesaTxnId: z.string().trim().optional(),
+  reason: z.string().trim().optional(),
+});
+
 async function getWithdrawal(admin: ReturnType<typeof createAdminSupabaseClient>, id: string) {
   const { data: withdrawal, error } = await (admin.from("withdrawal_requests" as never) as any)
     .select("*")
@@ -49,7 +55,20 @@ export async function GET(request: Request, { params }: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const body = await request.json().catch(() => ({}));
+  const { error } = await requireAdmin({
+    request,
+    allowedRoles: ["admin"],
+  });
+  if (error) return error;
+
+  const parsed = withdrawalActionSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0]?.message ?? "Invalid request" } },
+      { status: 422 }
+    );
+  }
+  const body = parsed.data;
 
   if (body?.action === "mark-sent") {
     const { POST: markSent } = await import("./send/route");
@@ -114,6 +133,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     patch.mpesa_txn_id = null;
     patch.b2c_conversation_id = null;
     patch.b2c_originator_id = null;
+    patch.b2c_request_id = null;
+    patch.b2c_result_code = null;
+    patch.b2c_result_desc = null;
+    patch.b2c_raw_callback = null;
+    patch.b2c_initiated_at = null;
+    patch.last_reconciled_at = null;
 
     await (admin.from("wallet_transactions" as never) as any)
       .update({ status: "reversed" })
@@ -123,7 +148,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       .eq("direction", "credit");
 
     await (admin.from("wallet_transactions" as never) as any)
-      .update({ status: "locked", bucket: "available" })
+      .update({ status: "locked", bucket: "locked" })
       .eq("reference_table", "withdrawal_requests")
       .eq("reference_id", id)
       .eq("type", "withdrawal")

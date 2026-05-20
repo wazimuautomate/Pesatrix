@@ -15,6 +15,7 @@ import {
   DEFAULT_WITHDRAWAL_HOLD_DAYS,
   WITHDRAWAL_HOLD_DAYS_KEY,
 } from "@/lib/platform-settings";
+import { getEnvironmentReadiness } from "@/lib/environment-readiness";
 import { requireWazimAdmin } from "@/lib/wazim-admin";
 
 async function getPlatformSettings() {
@@ -57,19 +58,11 @@ export default async function AdminSettingsPage() {
   const holdSetting = settings.find((s: { key: string }) => s.key === WITHDRAWAL_HOLD_DAYS_KEY);
   const dailyTaskLimitSetting = settings.find((s: { key: string }) => s.key === DAILY_TASK_LIMIT_KEY);
   const referralLevel1Setting = settings.find((s: { key: string }) => s.key === REFERRAL_LEVEL_1_REWARD_KEY);
+  const environmentSettings = getEnvironmentReadiness();
   const dailyTaskLimit = Number.isInteger(Number(dailyTaskLimitSetting?.value))
     ? Number(dailyTaskLimitSetting?.value)
     : DEFAULT_DAILY_TASK_LIMIT;
   const referralReward = referralLevel1Setting?.value ?? DEFAULT_REFERRAL_REWARD_KSH;
-
-  const environmentSettings = [
-    { label: "Supabase URL", configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) },
-    { label: "Service role key", configured: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY) },
-    { label: "M-Pesa shortcode", configured: Boolean(process.env.MPESA_SHORTCODE) },
-    { label: "Withdrawal n8n webhook", configured: Boolean(process.env.WITHDRAWAL_N8N_WEBHOOK_URL) },
-    { label: "NVIDIA API key fallback", configured: Boolean(process.env.NVIDIA_API_KEY) },
-    { label: "Cron secret", configured: Boolean(process.env.CRON_SECRET) },
-  ];
 
   return (
     <AdminPageShell

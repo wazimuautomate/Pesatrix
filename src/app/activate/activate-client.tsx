@@ -29,7 +29,7 @@ const schema = z.object({
   phone: z
     .string()
     .min(10, "Enter a valid phone number")
-    .regex(/^(?:\+?254|0)7\d{8}$/, "Enter a valid Kenyan M-Pesa number"),
+    .regex(/^(?:\+?254|0)[17]\d{8}$/, "Enter a valid Kenyan M-Pesa number"),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -155,11 +155,8 @@ export default function ActivateClientPage({
         return;
       }
 
-      setStep("success");
-      toast.success("Activation complete");
-      window.setTimeout(() => {
-        window.location.href = "/dashboard";
-      }, 1800);
+      setStep("pending");
+      toast.success(json.message || "Check your phone for the M-Pesa prompt");
     } catch {
       setStep("form");
       toast.error("Could not complete activation right now");
@@ -293,7 +290,7 @@ export default function ActivateClientPage({
                   <div>
                     <p className="text-lg font-semibold text-navy">Check your phone</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Confirm the M-Pesa prompt to finish reserving your account.
+                      Confirm the M-Pesa prompt to finish activating your account. This page will stay pending until Safaricom confirms the payment.
                     </p>
                   </div>
                 </div>
