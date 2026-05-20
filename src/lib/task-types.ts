@@ -121,26 +121,37 @@ export const verificationTaskDataSchema = z.object({
 
 export const contentCreationTaskDataSchema = z.object({
   type: z.literal("content_creation"),
-  subtype: z.enum(["review", "social_post", "article", "caption"]).default("review"),
+  // FIXED: Use the task_data shape required by content creation tasks instead of legacy subtype/min_words fields.
+  content_type: z.enum(["short_text", "paragraph", "article", "tweet", "caption", "review"]).default("review"),
   prompt: z.string().min(1),
-  media_url: z.string().url().nullable().default(null),
-  min_words: z.number().int().min(0).default(0),
-  max_words: z.number().int().min(1).default(500),
-  language: z.string().default("english"),
+  max_characters: z.number().int().min(1).optional(),
+  language_hint: z.string().optional(),
+  example_output: z.string().optional(),
+  // VERIFIED: OK - legacy fields remain optional so existing draft tasks still validate while admins migrate them.
+  subtype: z.enum(["review", "social_post", "article", "caption"]).optional(),
+  media_url: z.string().url().nullable().optional(),
+  min_words: z.number().int().min(0).optional(),
+  max_words: z.number().int().min(1).optional(),
+  language: z.string().optional(),
 });
 
 export const watchRespondQuestionSchema = z.object({
   id: z.string().min(1),
-  text: z.string().min(1),
-  type: z.enum(["open_text", "multiple_choice"]).default("open_text"),
-  min_words: z.number().int().min(0).default(0),
+  // FIXED: Match the WatchRespondTaskData contract while tolerating legacy question text/type during edits.
+  question: z.string().min(1).optional(),
+  text: z.string().min(1).optional(),
+  type: z.enum(["multiple_choice", "open_ended", "open_text"]).default("open_ended"),
   options: z.array(z.string().min(1)).optional(),
+  correct_option: z.string().optional(),
+  min_words: z.number().int().min(0).optional(),
 });
 
 export const watchRespondTaskDataSchema = z.object({
   type: z.literal("watch_respond"),
-  video_url: z.string().url(),
-  video_duration_seconds: z.number().int().min(1).optional().nullable(),
+  // FIXED: Persist content_type/content_url so the renderer can distinguish YouTube, Supabase videos, and external links.
+  content_type: z.enum(["youtube", "supabase_video", "external_url"]).default("youtube"),
+  content_url: z.string().optional(),
+  video_url: z.string().optional(),
   min_watch_seconds: z.number().int().min(1).default(60),
   questions: z.array(watchRespondQuestionSchema),
 });
@@ -285,19 +296,19 @@ export function createEmptyVerificationTaskData(): VerificationTaskData {
 export function createEmptyContentCreationTaskData(): ContentCreationTaskData {
   return {
     type: "content_creation",
-    subtype: "review",
+    content_type: "review",
     prompt: "",
-    media_url: null,
-    min_words: 30,
-    max_words: 150,
-    language: "english",
+    max_characters: undefined,
+    language_hint: "English, Swahili, or Sheng accepted",
+    example_output: undefined,
   };
 }
 
 export function createEmptyWatchRespondTaskData(): WatchRespondTaskData {
   return {
     type: "watch_respond",
-    video_url: "",
+    content_type: "youtube",
+    content_url: "",
     min_watch_seconds: 60,
     questions: [],
   };

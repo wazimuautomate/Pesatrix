@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { creditReferralChain } from "@/lib/referral";
+import { creditDirectReferralBonus } from "@/lib/referral";
 import {
   MPESA_STK_AMOUNT,
   parseStkCallbackMetadata,
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
       throw activationError;
     }
 
-    await creditReferralChain(payment.user_id);
+    await creditDirectReferralBonus(payment.user_id);
 
     return acceptedResponse;
   } catch (err) {

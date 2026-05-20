@@ -91,22 +91,48 @@ export async function getWalletSummaryForUser(userId: string) {
 
 export async function getWalletSummary(userId: string) {
   const admin = createAdminSupabaseClient();
-  const { data: wallet, error } = await admin
-    .from("wallets")
-    .select("available_balance, pending_balance, total_earned")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const [{ data: wallet, error: walletError }, { data: ledgerRows, error: ledgerError }] =
+    await Promise.all([
+      admin
+        .from("wallets")
+        .select("available_balance, pending_balance, total_earned")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      admin
+        .from("wallet_transactions")
+        .select("amount, direction, status, bucket")
+        .eq("user_id", userId),
+    ]);
 
-  if (error) {
-    throw error;
+  if (walletError) {
+    throw walletError;
+  }
+
+  if (ledgerError) {
+    throw ledgerError;
+  }
+
+  const ledgerSummary = computeWalletSummary((ledgerRows ?? []) as WalletLedgerRow[]);
+
+  if ((ledgerRows?.length ?? 0) > 0) {
+    if (
+      wallet &&
+      (Number(wallet.available_balance ?? 0) !== ledgerSummary.available ||
+        Number(wallet.pending_balance ?? 0) !== ledgerSummary.pending ||
+        Number(wallet.total_earned ?? 0) !== ledgerSummary.totalEarned)
+    ) {
+      console.warn("[Wallet] wallets table is out of sync with ledger", {
+        userId,
+        wallet,
+        ledgerSummary,
+      });
+    }
+
+    return ledgerSummary;
   }
 
   if (wallet) {
     const available = Number(wallet.available_balance ?? 0);
-    if (available < 0) {
-      console.error("[Wallet] available_balance is below zero", { userId, available });
-    }
-
     return {
       available: Math.max(0, available),
       pending: Number(wallet.pending_balance ?? 0),
@@ -115,7 +141,7 @@ export async function getWalletSummary(userId: string) {
     };
   }
 
-  return { available: 0, pending: 0, total: 0, totalEarned: 0 };
+  return ledgerSummary;
 }
 
 export async function creditTaskEarning(

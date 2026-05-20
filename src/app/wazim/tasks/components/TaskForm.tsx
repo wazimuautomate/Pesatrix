@@ -739,9 +739,8 @@ function WatchRespondEditor({
         ...questions,
         {
           id: `w${Date.now()}`,
-          text: "",
-          type: "open_text",
-          min_words: 10,
+          question: "",
+          type: "open_ended",
         },
       ],
     }));
@@ -767,28 +766,28 @@ function WatchRespondEditor({
     <div className="space-y-4">
       <h3 className="font-medium text-navy">Watch & Respond Settings</h3>
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <Label>Video URL</Label>
-          <Input
-            value={String(taskData.video_url ?? "")}
-            onChange={(e) =>
-              setTaskData((d) => ({ ...d, video_url: e.target.value }))
-            }
-            placeholder="https://youtube.com/..."
-          />
-        </div>
         <div>
-          <Label>Video Duration (seconds)</Label>
+          <Label>Content Type</Label>
+          <Select
+            value={String(taskData.content_type ?? "youtube")}
+            onValueChange={(value) => setTaskData((d) => ({ ...d, content_type: value }))}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="youtube">YouTube</SelectItem>
+              <SelectItem value="supabase_video">Supabase Video</SelectItem>
+              <SelectItem value="external_url">External URL</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Content URL</Label>
           <Input
-            type="number"
-            value={String(taskData.video_duration_seconds ?? "")}
+            value={String(taskData.content_url ?? taskData.video_url ?? "")}
             onChange={(e) =>
-              setTaskData((d) => ({
-                ...d,
-                video_duration_seconds: Number(e.target.value),
-              }))
+              setTaskData((d) => ({ ...d, content_url: e.target.value }))
             }
-            placeholder="300"
+            placeholder="YouTube URL, storage path, or external URL"
           />
         </div>
         <div>
@@ -823,38 +822,25 @@ function WatchRespondEditor({
           className="rounded-lg border p-4 space-y-2"
         >
           <Input
-            value={String(q.text ?? "")}
-            onChange={(e) => updateQuestion(i, { text: e.target.value })}
+            value={String(q.question ?? q.text ?? "")}
+            onChange={(e) => updateQuestion(i, { question: e.target.value })}
             placeholder="Question about the video"
           />
           <div className="flex gap-2">
             <div>
               <Label className="text-xs">Type</Label>
               <Select
-                value={String(q.type ?? "open_text")}
+                value={String(q.type ?? "open_ended")}
                 onValueChange={(v) => updateQuestion(i, { type: v })}
               >
                 <SelectTrigger className="w-36">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="open_text">Open Text</SelectItem>
+                  <SelectItem value="open_ended">Open Ended</SelectItem>
                   <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
-                  <SelectItem value="yes_no">Yes/No</SelectItem>
-                  <SelectItem value="rating">Rating</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Min Words</Label>
-              <Input
-                type="number"
-                value={String(q.min_words ?? 10)}
-                onChange={(e) =>
-                  updateQuestion(i, { min_words: Number(e.target.value) })
-                }
-                className="w-24"
-              />
             </div>
             <Button
               variant="ghost"
@@ -865,8 +851,23 @@ function WatchRespondEditor({
               <Trash2 className="h-3.5 w-3.5 text-destructive" />
             </Button>
           </div>
+          {q.type === "multiple_choice" && (
+            <div className="space-y-2">
+              <Input
+                value={((q.options as string[]) ?? []).join(", ")}
+                onChange={(e) => updateQuestion(i, { options: e.target.value.split(",").map((option) => option.trim()).filter(Boolean) })}
+                placeholder="Options (comma separated)"
+              />
+              <Input
+                value={String(q.correct_option ?? "")}
+                onChange={(e) => updateQuestion(i, { correct_option: e.target.value })}
+                placeholder="Correct option (optional)"
+              />
+            </div>
+          )}
         </div>
       ))}
+      {/* FIXED: Watch & Respond admin fields now match content_type/content_url and question builder requirements. */}
     </div>
   );
 }
@@ -1621,31 +1622,34 @@ function ContentCreationEditor({
       <h3 className="font-medium text-navy">Content Creation Settings</h3>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label>Subtype</Label>
+          <Label>Content Type</Label>
           <Select
-            value={String(taskData.subtype ?? "review")}
+            value={String(taskData.content_type ?? taskData.subtype ?? "review")}
             onValueChange={(v) =>
-              setTaskData((d) => ({ ...d, subtype: v }))
+              setTaskData((d) => ({ ...d, content_type: v }))
             }
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="short_text">Short Text</SelectItem>
+              <SelectItem value="paragraph">Paragraph</SelectItem>
+              <SelectItem value="tweet">Tweet</SelectItem>
               <SelectItem value="review">Review</SelectItem>
-              <SelectItem value="social_post">Social Post</SelectItem>
               <SelectItem value="article">Article</SelectItem>
               <SelectItem value="caption">Caption</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>Language</Label>
+          <Label>Language Hint</Label>
           <Input
-            value={String(taskData.language ?? "english")}
+            value={String(taskData.language_hint ?? taskData.language ?? "")}
             onChange={(e) =>
-              setTaskData((d) => ({ ...d, language: e.target.value }))
+              setTaskData((d) => ({ ...d, language_hint: e.target.value }))
             }
+            placeholder="English or Swahili accepted"
           />
         </div>
         <div className="sm:col-span-2">
@@ -1660,32 +1664,34 @@ function ContentCreationEditor({
           />
         </div>
         <div>
-          <Label>Min Words</Label>
+          <Label>Max Characters (optional)</Label>
           <Input
             type="number"
-            value={String(taskData.min_words ?? 30)}
+            value={String(taskData.max_characters ?? "")}
             onChange={(e) =>
               setTaskData((d) => ({
                 ...d,
-                min_words: Number(e.target.value),
+                max_characters: e.target.value ? Number(e.target.value) : undefined,
               }))
             }
           />
         </div>
-        <div>
-          <Label>Max Words</Label>
-          <Input
-            type="number"
-            value={String(taskData.max_words ?? 150)}
+        <div className="sm:col-span-2">
+          <Label>Example Output (optional)</Label>
+          <Textarea
+            value={String(taskData.example_output ?? "")}
             onChange={(e) =>
               setTaskData((d) => ({
                 ...d,
-                max_words: Number(e.target.value),
+                example_output: e.target.value,
               }))
             }
+            placeholder="Shown as Example (do not copy)"
+            rows={2}
           />
         </div>
       </div>
+      {/* FIXED: Content creation admin fields now use content_type, max_characters, language_hint, and example_output. */}
     </div>
   );
 }

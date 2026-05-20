@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { captureAndSendFingerprint, getFingerprint, sendFingerprint } from "@/lib/fraud/fingerprint";
 import { createClient } from "@/lib/supabase/client";
 
 const phoneSchema = z.object({
@@ -51,6 +52,7 @@ function LoginPageContent() {
   const callbackError = searchParams.get("error") === "auth_callback_failed";
   const [showPassword, setShowPassword] = useState(false);
   const [tab, setTab] = useState<"phone" | "email">("phone");
+  const [visitorId, setVisitorId] = useState<string | null>(null);
   const [supabase] = useState(() => createClient());
 
   useEffect(() => {
@@ -62,6 +64,14 @@ function LoginPageContent() {
       setTab(tabParam);
     }
   }, [tabParam]);
+
+  useEffect(() => {
+    void getFingerprint()
+      .then(setVisitorId)
+      .catch((error) => {
+        console.error("[login] Failed to collect fingerprint", error);
+      });
+  }, []);
 
   const phoneForm = useForm<PhoneForm>({
     resolver: zodResolver(phoneSchema),
@@ -114,6 +124,8 @@ function LoginPageContent() {
         return;
       }
 
+      await recordFingerprint(visitorId);
+
       const nextRoute = await getPostLoginRedirect(redirect);
       router.push(nextRoute);
       router.refresh();
@@ -133,6 +145,8 @@ function LoginPageContent() {
         toast.error(error.message);
         return;
       }
+
+      await recordFingerprint(visitorId);
 
       const nextRoute = await getPostLoginRedirect(redirect);
       router.push(nextRoute);
@@ -333,6 +347,18 @@ function LoginPageContent() {
       </CardContent>
     </Card>
   );
+}
+
+async function recordFingerprint(visitorId: string | null) {
+  try {
+    if (visitorId) {
+      await sendFingerprint(visitorId);
+    } else {
+      await captureAndSendFingerprint();
+    }
+  } catch (error) {
+    console.error("[login] Failed to record fingerprint", error);
+  }
 }
 
 function LoginPageFallback() {

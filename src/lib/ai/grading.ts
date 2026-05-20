@@ -57,11 +57,16 @@ type GradingResult = {
   reasoning: string;
   criteria_scores: Record<string, number>;
   grading_detail?: Record<string, unknown>;
+  admin_note?: string | null;
 };
 
 const FALLBACK_NVIDIA_MODEL = "minimaxai/minimax-m2.7";
 const FALLBACK_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const OPENROUTER_TEXT_MODELS = [
+  "qwen/qwen3-235b-a22b:free",
+  "meta-llama/llama-4-maverick:free",
+] as const;
 const TASK_SCREENSHOT_BUCKET = "task-screenshots";
 
 type VisionModelConfig = {
@@ -152,6 +157,18 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
       },
       grading_detail: verificationResult.gradingDetail,
     });
+    return;
+  }
+
+  if (task.category === "content_creation") {
+    const result = await gradeContentCreationSubmission(supabaseAdmin, submission, task);
+    await writeGradingResultAndCredit(supabaseAdmin, submission, task, result);
+    return;
+  }
+
+  if (task.category === "watch_respond") {
+    const result = await gradeWatchRespondSubmission(supabaseAdmin, submission, task);
+    await writeGradingResultAndCredit(supabaseAdmin, submission, task, result);
     return;
   }
 
@@ -272,6 +289,7 @@ async function writeGradingResultAndCredit(
       ai_reviewed_at: now,
       status: mappedStatus,
       ...(result.grading_detail ? { grading_detail: result.grading_detail } : {}),
+      ...(result.admin_note ? { admin_note: result.admin_note } : {}),
     })
     .eq("id", submission.id)
     .is("ai_reviewed_at", null)
@@ -564,6 +582,208 @@ function gradeDataLabelingSubmission(
   };
 }
 
+async function gradeContentCreationSubmission(
+  supabaseAdmin: ReturnType<typeof createAdminSupabaseClient>,
+  submission: {
+    id: string;
+    answers: unknown;
+  },
+  task: {
+    id?: string | null;
+    category?: string | null;
+    task_data?: unknown;
+    ai_rubric?: string | null;
+    min_word_count?: number | string | null;
+  }
+): Promise<GradingResult> {
+  const taskData = isRecord(task.task_data) ? task.task_data : {};
+  const answers = isRecord(submission.answers) ? submission.answers : {};
+  const content = typeof answers.content === "string" ? answers.content.trim() : "";
+  const wordCount = countWords(content);
+
+  const { data: existingSubmissions } = await supabaseAdmin
+    .from("task_submissions")
+    .select("answers")
+    .eq("task_id", task.id)
+    .neq("id", submission.id)
+    .in("status", ["approved", "pending", "ai_reviewing"])
+    .order("submitted_at", { ascending: false })
+    .limit(10);
+
+  const existingContent: string[] = (existingSubmissions ?? [])
+    .map((row: { answers?: unknown }) => isRecord(row.answers) && typeof row.answers.content === "string" ? row.answers.content : null)
+    .filter((value: string | null): value is string => Boolean(value));
+
+  const prompt = `You are grading a content creation task submitted by a Kenyan user on Pesatrix.
+Task type: ${String(taskData.content_type ?? taskData.subtype ?? "content_creation")}
+Task prompt: ${String(taskData.prompt ?? "")}
+Grading rubric: ${task.ai_rubric || "Evaluate based on the task prompt."}
+Minimum word count required: ${Number(task.min_word_count ?? 0)} words
+Language note: The user may write in English, Swahili, or Kenyan Sheng. Do NOT penalize correct Swahili or Sheng - grade for quality and relevance, not language choice.
+User's submission:
+"${content}"
+Word count submitted: ${wordCount}
+Prior submissions on this task (check for copy-paste plagiarism):
+${existingContent.length > 0 ? existingContent.map((c: string, i: number) => `Submission ${i + 1}: "${c.substring(0, 200)}..."`).join("\n") : "None"}
+Grade on these criteria:
+
+Relevance to the task prompt (0-25 points)
+Grammar and clarity - appropriate for the language used (0-25 points)
+Creativity and originality (0-25 points)
+Similarity to prior submissions - penalize heavily if near-identical (0-25 points, 25 = fully unique)
+
+If word count is below ${Number(task.min_word_count ?? 0)}: cap total score at 40 regardless of quality.
+If submission appears AI-generated (repetitive filler, generic phrasing, no personal voice): cap score at 50.
+Respond ONLY with valid JSON (no markdown):
+{
+"score": <0-100>,
+"reasoning": "<2-3 sentences covering each criterion briefly>",
+"passed": <true if score >= 60>,
+"similarity_flag": <true if content is suspiciously similar to a prior submission>,
+"ai_generated_flag": <true if content appears AI-generated>
+}`;
+
+  const ai = await callOpenRouterTextJson(prompt);
+  if (!ai.success) {
+    return {
+      score: 50,
+      decision: "flagged",
+      reasoning: "AI grading unavailable. Manual review required.",
+      criteria_scores: {},
+      grading_detail: { content_ai_error: ai.error },
+    };
+  }
+
+  let parsed: ReturnType<typeof parseContentCreationResult>;
+  try {
+    parsed = parseContentCreationResult(ai.content);
+  } catch (error) {
+    console.error("[Content Grading] Malformed AI JSON:", submission.id, error);
+    return {
+      score: 50,
+      decision: "flagged",
+      reasoning: "AI response could not be parsed. Manual review required.",
+      criteria_scores: {},
+      grading_detail: { content_ai_error: "malformed_json", raw_response: ai.content.slice(0, 2000) },
+    };
+  }
+  const notes: string[] = [];
+  if (parsed.similarity_flag) notes.push("AI flagged: similar to prior submission");
+  if (parsed.ai_generated_flag) notes.push("AI flagged: possible AI-generated content");
+
+  const decision: GradingResult["decision"] =
+    notes.length > 0
+      ? "flagged"
+      : parsed.passed
+        ? "approved"
+        : parsed.score >= 50
+          ? "flagged"
+          : "declined";
+
+  return {
+    score: parsed.score,
+    decision,
+    reasoning: parsed.reasoning,
+    criteria_scores: { content_quality: parsed.score },
+    // FIXED: Similarity/AI-generated flags are stored for admins only, not returned to the user UI.
+    admin_note: notes.length ? notes.join("; ") : null,
+    grading_detail: {
+      type: "content_creation",
+      similarity_flag: parsed.similarity_flag,
+      ai_generated_flag: parsed.ai_generated_flag,
+      model_used: ai.modelUsed,
+      prior_submission_count: existingContent.length,
+    },
+  };
+}
+
+async function gradeWatchRespondSubmission(
+  _supabaseAdmin: ReturnType<typeof createAdminSupabaseClient>,
+  submission: {
+    id: string;
+    answers: unknown;
+  },
+  task: {
+    task_data?: unknown;
+    instructions?: string | null;
+  }
+): Promise<GradingResult> {
+  const taskData = normalizeWatchTaskData(task.task_data);
+  const submissionAnswers = isRecord(submission.answers) && Array.isArray(submission.answers.answers)
+    ? submission.answers.answers
+    : [];
+  const byQuestion = new Map(
+    submissionAnswers
+      .filter(isRecord)
+      .map((answer) => [String(answer.question_id ?? ""), String(answer.answer ?? "")])
+  );
+
+  if (Number(isRecord(submission.answers) ? submission.answers.cheat_strikes ?? 0 : 0) >= 3) {
+    return {
+      score: 0,
+      decision: "declined",
+      reasoning: "The watch session was forfeited due to repeated cheating strikes.",
+      criteria_scores: { watch_integrity: 0 },
+      grading_detail: { type: "watch_respond", forfeited: true },
+    };
+  }
+
+  const scores: number[] = [];
+  const details: Record<string, unknown>[] = [];
+
+  for (const question of taskData.questions) {
+    const answer = byQuestion.get(question.id) ?? "";
+    if (question.type === "multiple_choice" && question.correct_option) {
+      // VERIFIED: OK - exact multiple-choice answers with correct_option are graded in code without AI.
+      const correct = answer.trim() === question.correct_option.trim();
+      scores.push(correct ? 100 : 0);
+      details.push({ question_id: question.id, score: correct ? 100 : 0, exact_match: correct });
+      continue;
+    }
+
+    const prompt = `You are grading a Watch & Respond task answer for Pesatrix.
+Task instructions: ${task.instructions || "Watch the content and answer the questions."}
+Content type: ${taskData.content_type}
+Content URL/context: ${taskData.content_url}
+Question: ${question.question}
+User answer: "${answer}"
+
+Grade answer relevance and quality from 0-100. For multiple choice without a correct option, grade whether the answer is plausible for the question. For open-ended answers, grade relevance, specificity, and comprehension. Respond ONLY with valid JSON:
+{"score": <0-100>, "reasoning": "<one sentence>"}`;
+
+    const ai = await callOpenRouterTextJson(prompt);
+    if (!ai.success) {
+      scores.push(50);
+      details.push({ question_id: question.id, score: 50, error: ai.error });
+      continue;
+    }
+
+    try {
+      const parsed = parseWatchAnswerResult(ai.content);
+      scores.push(parsed.score);
+      details.push({ question_id: question.id, score: parsed.score, reasoning: parsed.reasoning, model_used: ai.modelUsed });
+    } catch (error) {
+      scores.push(50);
+      details.push({ question_id: question.id, score: 50, error: "malformed_json" });
+    }
+  }
+
+  const score = scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : 0;
+  const decision: GradingResult["decision"] = score >= 70 ? "approved" : score >= 50 ? "flagged" : "declined";
+
+  return {
+    score,
+    decision,
+    reasoning: `Watch & Respond answers scored ${score}%. ${decision === "approved" ? "Answers met the comprehension threshold." : "Manual review or decline is needed based on answer quality."}`,
+    criteria_scores: { comprehension: score },
+    // FIXED: Watch & Respond uses free OpenRouter text models for open-ended grading and exact code checks for known MC answers.
+    grading_detail: {
+      type: "watch_respond",
+      question_results: details,
+    },
+  };
+}
+
 async function getActiveProviderConfig(supabaseAdmin: ReturnType<typeof createAdminSupabaseClient>) {
   const { data: providerConfig, error } = await supabaseAdmin
     .from("ai_provider_configs")
@@ -591,6 +811,119 @@ async function getActiveProviderConfig(supabaseAdmin: ReturnType<typeof createAd
   }
 
   return null;
+}
+
+async function callOpenRouterTextJson(prompt: string): Promise<{
+  success: boolean;
+  content: string;
+  modelUsed?: string;
+  error?: string;
+}> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    return { success: false, content: "", error: "Missing OPENROUTER_API_KEY" };
+  }
+
+  for (const model of OPENROUTER_TEXT_MODELS) {
+    try {
+      const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://pesatrix.com",
+          "X-Title": "Pesatrix",
+        },
+        body: JSON.stringify({
+          // FIXED: Category-specific text grading uses free OpenRouter models, not Anthropic/Claude or paid providers.
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.2,
+          max_tokens: 1200,
+          stream: false,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        console.warn("[OpenRouter Grading] Model failed:", model, response.status, errorText.slice(0, 200));
+        continue;
+      }
+
+      const payload = await response.json();
+      const content = payload?.choices?.[0]?.message?.content;
+      if (typeof content === "string" && content.trim()) {
+        return { success: true, content, modelUsed: model };
+      }
+    } catch (error) {
+      console.warn("[OpenRouter Grading] Request failed:", model, error);
+    }
+  }
+
+  return { success: false, content: "", error: "All free OpenRouter text models failed" };
+}
+
+function parseContentCreationResult(content: string) {
+  const candidate = parseJsonObject(content);
+  const score = Math.max(0, Math.min(100, Math.round(Number(candidate.score))));
+  if (!Number.isFinite(score) || typeof candidate.reasoning !== "string") {
+    throw new Error("Content grading response missing required fields.");
+  }
+
+  return {
+    score,
+    reasoning: candidate.reasoning.trim(),
+    passed: candidate.passed === true || score >= 60,
+    similarity_flag: candidate.similarity_flag === true,
+    ai_generated_flag: candidate.ai_generated_flag === true,
+  };
+}
+
+function parseWatchAnswerResult(content: string) {
+  const candidate = parseJsonObject(content);
+  const score = Math.max(0, Math.min(100, Math.round(Number(candidate.score))));
+  if (!Number.isFinite(score)) {
+    throw new Error("Watch grading response missing score.");
+  }
+
+  return {
+    score,
+    reasoning: typeof candidate.reasoning === "string" ? candidate.reasoning.trim() : "",
+  };
+}
+
+function parseJsonObject(content: string) {
+  const cleaned = content
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const parsed = JSON.parse(cleaned);
+  if (!isRecord(parsed)) {
+    throw new Error("AI response was not a JSON object.");
+  }
+  return parsed;
+}
+
+function normalizeWatchTaskData(taskData: unknown) {
+  const data = isRecord(taskData) ? taskData : {};
+  const questions = Array.isArray(data.questions) ? data.questions : [];
+  return {
+    content_type: String(data.content_type ?? "youtube"),
+    content_url: String(data.content_url ?? data.video_url ?? ""),
+    questions: questions
+      .filter(isRecord)
+      .map((question, index) => ({
+        id: String(question.id ?? `q-${index}`),
+        type: question.type === "multiple_choice" ? "multiple_choice" : "open_ended",
+        question: String(question.question ?? question.text ?? ""),
+        options: Array.isArray(question.options) ? question.options.map(String) : undefined,
+        correct_option: typeof question.correct_option === "string" ? question.correct_option : undefined,
+      })),
+  };
+}
+
+function countWords(value: string) {
+  return value.trim().split(/\s+/).filter((word) => word.length > 0).length;
 }
 
 async function getProviderApiKey(

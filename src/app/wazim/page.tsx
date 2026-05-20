@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AdminPageShell, MetricCard, StatusBadge } from "@/components/admin/admin-native";
+import { getAdminWithdrawals } from "@/lib/admin-withdrawals";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { asArray, money, requireWazimAdmin, shortDate } from "@/lib/wazim-admin";
 
@@ -44,10 +45,7 @@ export default async function AdminOverviewPage() {
       .select("id, amount, phone, status, mpesa_receipt, created_at, profiles(full_name, email)")
       .order("created_at", { ascending: false })
       .limit(5),
-    (admin.from("withdrawal_requests" as never) as any)
-      .select("id, amount, phone, status, created_at, profiles(full_name, email)")
-      .order("created_at", { ascending: false })
-      .limit(5),
+    getAdminWithdrawals({ limit: 5 }),
   ]);
 
   const revenue = asArray<{ amount?: number }>(paidPayments.data).reduce(
@@ -118,7 +116,7 @@ export default async function AdminOverviewPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {asArray<any>(recentWithdrawals.data).map((withdrawal) => (
+                {asArray<any>(recentWithdrawals).map((withdrawal) => (
                   <TableRow key={withdrawal.id}>
                     <TableCell>{withdrawal.profiles?.full_name ?? withdrawal.profiles?.email ?? withdrawal.phone}</TableCell>
                     <TableCell>{money(withdrawal.amount)}</TableCell>

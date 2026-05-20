@@ -2,7 +2,6 @@ type ReferralEmailArgs = {
   to: string;
   beneficiaryName?: string | null;
   amount: number;
-  level: number;
   activatedUserName?: string | null;
 };
 
@@ -36,7 +35,7 @@ export async function sendReferralBonusEmail(args: ReferralEmailArgs) {
         <div style="padding:28px 32px; color:#20324d;">
           <p style="margin:0 0 14px;">Hi ${beneficiaryLabel},</p>
           <p style="margin:0 0 14px;">
-            A level ${args.level} referral activation from ${activatedUserLabel} has now cleared, and your wallet has been credited.
+            A direct referral activation from ${activatedUserLabel} has now cleared, and your wallet has been credited.
           </p>
           <p style="margin:0 0 20px;">
             You can view the updated balance from your Pesatrix wallet and referral dashboard immediately.

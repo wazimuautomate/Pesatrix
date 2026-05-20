@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Check,
   Coins,
@@ -26,7 +26,7 @@ import { formatKSh } from "@/lib/utils";
 
 type ReferralRow = {
   id: string;
-  level: 1 | 2 | 3;
+  level: 1;
   referred_id: string;
   referredName: string;
   created_at: string;
@@ -35,7 +35,7 @@ type ReferralRow = {
 type ReferralBonusRow = {
   id: string;
   amount: number;
-  level: 1 | 2 | 3;
+  level: 1;
   created_at: string;
   status: "pending" | "available" | "revoked";
   referee_id: string;
@@ -64,32 +64,11 @@ function shareUrl(kind: "email" | "whatsapp" | "facebook", link: string) {
 
 export function ReferralsClient({ referralCode, referralLink, referrals, bonuses }: Props) {
   const [copied, setCopied] = useState(false);
-
-  const levelStats = useMemo(() => {
-    return [1, 2, 3].map((level) => {
-      const totalReferrals = referrals.filter((row) => row.level === level).length;
-      const activatedBonuses = bonuses.filter(
-        (row) => row.level === level && row.status === "available"
-      ).length;
-      const totalBonus = bonuses
-        .filter((row) => row.level === level && row.status === "available")
-        .reduce((sum, row) => sum + row.amount, 0);
-
-      return {
-        level: level as 1 | 2 | 3,
-        totalReferrals,
-        activatedBonuses,
-        pendingActivations: Math.max(0, totalReferrals - activatedBonuses),
-        totalBonus,
-      };
-    });
-  }, [bonuses, referrals]);
-
+  const activatedBonuses = bonuses.filter((row) => row.status === "available").length;
   const totalEarned = bonuses
     .filter((row) => row.status === "available")
     .reduce((sum, row) => sum + row.amount, 0);
-
-  const directPending = levelStats.find((row) => row.level === 1)?.pendingActivations ?? 0;
+  const directPending = Math.max(0, referrals.length - activatedBonuses);
 
   async function handleCopy() {
     try {
@@ -130,18 +109,18 @@ export function ReferralsClient({ referralCode, referralLink, referrals, bonuses
           <div className="max-w-3xl space-y-3">
             <Badge className="w-fit bg-white/12 px-3 py-1 text-white" variant="outline">
               <Users className="mr-1.5 h-3.5 w-3.5" />
-              3-level activation rewards
+              Direct activation rewards
             </Badge>
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-white/70">
                 Referral Program
               </p>
               <h1 className="mt-2 text-3xl font-bold tracking-tight">
-                Track pending signups now, then get paid the moment activation lands
+                Track pending signups, then earn KSh 100 when direct referrals activate
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-white/78">
                 Referral relationships are captured at signup and kept pending until activation. Once the account is
-                activated, level 1, 2, and 3 bonuses credit to the wallet immediately and queue an email notification.
+                activated, the direct referrer earns KSh 100 after the 7-day hold.
               </p>
             </div>
           </div>
@@ -210,7 +189,7 @@ export function ReferralsClient({ referralCode, referralLink, referrals, bonuses
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Card className="border-outline-variant/40">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -221,20 +200,28 @@ export function ReferralsClient({ referralCode, referralLink, referrals, bonuses
           </CardContent>
         </Card>
 
-        {levelStats.map((row) => (
-          <Card key={row.level} className="border-outline-variant/40">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Users className="h-4 w-4 text-primary" />
-                Level {row.level}
-              </div>
-              <p className="mt-2 text-2xl font-bold text-navy">{row.totalReferrals}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {row.activatedBonuses} activated · {row.pendingActivations} pending
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+        <Card className="border-outline-variant/40">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Users className="h-4 w-4 text-primary" />
+              Direct referrals
+            </div>
+            <p className="mt-2 text-2xl font-bold text-navy">{referrals.length}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {activatedBonuses} activated - {directPending} pending
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-outline-variant/40">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Coins className="h-4 w-4 text-primary" />
+              Referral Bonus
+            </div>
+            <p className="mt-2 text-2xl font-bold text-navy">KSh 100</p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.92fr,1.08fr]">
@@ -243,24 +230,18 @@ export function ReferralsClient({ referralCode, referralLink, referrals, bonuses
             <CardTitle className="text-base text-navy">Commission Structure</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-on-surface-variant">
-            {[
-              { level: "L1", title: "20% of KSh 500", body: "KSh 100 when your direct referral activates." },
-              { level: "L2", title: "10% of KSh 500", body: "KSh 50 when your referral's referral activates." },
-              { level: "L3", title: "5% of KSh 500", body: "KSh 25 when third-level activations land." },
-            ].map((item) => (
-              <div key={item.level} className="rounded-2xl border border-outline-variant/40 p-4">
-                <div className="flex items-center gap-3">
-                  <Badge variant="default">{item.level}</Badge>
-                  <div>
-                    <p className="font-medium text-foreground">{item.title}</p>
-                    <p className="mt-1">{item.body}</p>
-                  </div>
+            <div className="rounded-2xl border border-outline-variant/40 p-4">
+              <div className="flex items-center gap-3">
+                <Badge variant="default">Direct</Badge>
+                <div>
+                  <p className="font-medium text-foreground">Referral Bonus - KSh 100</p>
+                  <p className="mt-1">Earn KSh 100 when your direct referral activates.</p>
                 </div>
               </div>
-            ))}
+            </div>
 
             <div className="rounded-2xl border border-dashed border-outline-variant/50 p-4 text-muted-foreground">
-              Email delivery is now queued in-app on activation. A sender worker/provider still needs to process the outbox.
+              Email delivery is queued in-app on activation. A sender worker/provider still needs to process the outbox.
             </div>
           </CardContent>
         </Card>
@@ -276,9 +257,7 @@ export function ReferralsClient({ referralCode, referralLink, referrals, bonuses
           <CardContent className="space-y-3">
             {referrals.length > 0 ? (
               referrals.map((row) => {
-                const bonus = bonuses.find(
-                  (entry) => entry.level === row.level && entry.referee_id === row.referred_id
-                );
+                const bonus = bonuses.find((entry) => entry.referee_id === row.referred_id);
 
                 return (
                   <div key={row.id} className="rounded-2xl border border-outline-variant/40 bg-white px-4 py-3">
@@ -286,7 +265,7 @@ export function ReferralsClient({ referralCode, referralLink, referrals, bonuses
                       <div>
                         <p className="font-semibold text-navy">{row.referredName}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Level {row.level} referral · joined{" "}
+                          Direct referral - joined{" "}
                           {new Date(row.created_at).toLocaleDateString("en-KE", {
                             month: "short",
                             day: "numeric",
@@ -308,7 +287,7 @@ export function ReferralsClient({ referralCode, referralLink, referrals, bonuses
               })
             ) : (
               <div className="rounded-2xl border border-dashed border-outline-variant/50 px-4 py-8 text-center text-sm text-muted-foreground">
-                No referrals yet. Share your link to start building the activation pipeline.
+                No referrals yet. Share your link to start earning from direct referrals.
               </div>
             )}
           </CardContent>

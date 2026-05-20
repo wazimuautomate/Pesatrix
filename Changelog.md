@@ -1,5 +1,34 @@
 # Changelog
 
+## [fix] Harden Watch Respond And Content Creation Tasks - 2026-05-20
+- Added persisted Watch & Respond sessions with server-side start, elapsed-time validation, cheat-strike tracking, forfeiture at three strikes, and Supabase video signed URL issuing
+- Updated the user Watch & Respond UI for YouTube embeds, HTML5 video playback, external link instructions, debounced tab/window anti-cheat, locked questions, radio-card multiple choice, and required-answer gating
+- Enforced Content Creation minimum word counts on both client and server, added live word and character counters, example output display, and user-safe post-submit messaging
+- Added category-specific free OpenRouter grading for Content Creation and Watch & Respond, including exact multiple-choice checks, Swahili/Sheng-aware content prompts, prior-submission similarity context, and admin-only AI/similarity flags
+- Updated admin task forms to create the expected `content_type`, `content_url`, `question`, `correct_option`, `max_characters`, `language_hint`, and `example_output` task data fields
+
+## [feat] Task Cards Now Include A Preview Action - 2026-05-20
+- Added a `View` button on user task cards so users can open a task preview before starting work
+- Added a preview-only task details mode that shows overview, instructions, payout, slots, and submission requirements without exposing the task questions or answer form
+
+## [fix] Task Unlock Delay Now Follows Admin Settings Exactly - 2026-05-20
+- Removed the task unlock logic that treated `task_unlock_delay_hours` as whole hours and silently fell back to a hardcoded 24-hour delay, so minute-based test values like `0.0167` now work correctly
+- Updated task unlock snapshots to always derive the user timer from the current admin-configured delay plus any referral acceleration, which means admin delay changes are reflected immediately instead of staying stuck on older stored values
+- Wired direct referral activation into the task wait window so a successful referral can shorten the remaining lock period using the configured reduction value
+- Refreshed the user task gate UI with more reassuring copy and added live polling/no-store fetches so countdown changes from admin updates or referral rewards appear without stale caching
+- Clarified the admin setting descriptions for task delay and referral reduction so fractional hours and percentage-style reduction values are easier to configure safely
+
+## [fix] Admin Withdrawal Role Access - 2026-05-20
+- Fixed withdrawal admin API authorization so active `admin` users can open and operate the withdrawal dashboard instead of being blocked by finance-only route guards
+- Expanded read access for withdrawal list/detail endpoints to match the rest of the admin payment tooling, while keeping mutation routes limited to write-capable admin roles
+
+## [fix] Withdrawal Balance Rebuild And Admin Queue Recovery - 2026-05-20
+- Fixed wallet summary logic to derive available balance from ledger bucket state instead of relying on a narrow `status = 'available'` rule that could collapse older available credits to zero after a withdrawal request
+- Added a repair migration to rebuild `wallets.available_balance`, `pending_balance`, and `total_earned` from the transaction ledger for all users and keep future syncs aligned with the corrected bucket-based accounting
+- Updated runtime wallet summary reads to fall back to live ledger computation and log any `wallets` table drift
+- Fixed the admin withdrawals API and detail views to load real request data with explicit profile hydration instead of the broken nested `profiles(...)` select that caused the dashboard fetch failure
+- Added inline retry/error handling on the admin withdrawals page and expanded wallet tests to cover the `200 -> 125` withdrawal reservation case
+
 ## [fix] Wallet History And Withdrawal Flow Hardening - 2026-05-20
 - Replaced the wallet transaction history with live `wallet_transactions` data, added server-seeded initial state, user-friendly `Money In` and `Money Out` filters, and clearer loading/error handling
 - Fixed withdrawal request creation by storing M-Pesa numbers in the database format expected by `withdrawal_requests`, enforcing account-phone-only withdrawals on both the client and server, and returning the configured processing timeframe in the success response

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { TaskSubmissionForm } from "@/components/tasks/task-submission-form";
+import { TaskDetailsPreview, TaskSubmissionForm } from "@/components/tasks/task-submission-form";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { sanitizeTaskForClient } from "@/lib/task-data";
 
@@ -12,10 +12,13 @@ export const metadata = {
 
 type RouteContext = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ view?: string }>;
 };
 
-export default async function TaskDetailPage({ params }: RouteContext) {
+export default async function TaskDetailPage({ params, searchParams }: RouteContext) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const previewOnly = resolvedSearchParams?.view === "details";
   const supabase = await createServerSupabaseClient();
 
   const {
@@ -77,10 +80,14 @@ export default async function TaskDetailPage({ params }: RouteContext) {
       user={{ full_name: profile?.full_name ?? "Pesatrix User", phone: "" }}
     >
       <div className="mx-auto w-full max-w-3xl px-4 py-6">
-        <TaskSubmissionForm
-          task={sanitizeTaskForClient(task)}
-          existingSubmission={socialRetryOpen ? null : latestSubmission}
-        />
+        {previewOnly ? (
+          <TaskDetailsPreview task={sanitizeTaskForClient(task)} />
+        ) : (
+          <TaskSubmissionForm
+            task={sanitizeTaskForClient(task)}
+            existingSubmission={socialRetryOpen ? null : latestSubmission}
+          />
+        )}
       </div>
     </DashboardShell>
   );

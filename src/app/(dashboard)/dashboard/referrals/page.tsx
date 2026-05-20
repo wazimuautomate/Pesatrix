@@ -65,7 +65,7 @@ export default async function ReferralsPage() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="border-outline-variant/40">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -86,17 +86,25 @@ export default async function ReferralsPage() {
             </CardContent>
           </Card>
 
-          {([1, 2, 3] as const).map((level) => (
-            <Card key={level} className="border-outline-variant/40">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Users className="h-4 w-4 text-primary" />
-                  Level {level}
-                </div>
-                <p className="mt-2 text-2xl font-bold tabular-nums text-navy">{data.levelCounts[level]}</p>
-              </CardContent>
-            </Card>
-          ))}
+          <Card className="border-outline-variant/40">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Users className="h-4 w-4 text-primary" />
+                Direct Referrals
+              </div>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-navy">{data.referralCount}</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-outline-variant/40">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Users className="h-4 w-4 text-primary" />
+                Referral Bonus
+              </div>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-navy">{formatKSh(data.rules.rewardAmount)}</p>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
@@ -105,12 +113,10 @@ export default async function ReferralsPage() {
               <CardTitle className="text-base text-navy">Referral payout rules</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-on-surface-variant">
-              {data.rules.levels.map((rule) => (
-                <div key={rule.level} className="rounded-xl border border-outline-variant/40 p-4">
-                  <p className="font-medium text-foreground">Level {rule.level}</p>
-                  <p className="mt-1">Activation clears: earn {formatKSh(rule.amount)}.</p>
-                </div>
-              ))}
+              <div className="rounded-xl border border-outline-variant/40 p-4">
+                <p className="font-medium text-foreground">Referral Bonus - {formatKSh(data.rules.rewardAmount)}</p>
+                <p className="mt-1">Earn KSh 100 when your direct referral completes paid activation.</p>
+              </div>
             </CardContent>
           </Card>
 
@@ -127,7 +133,7 @@ export default async function ReferralsPage() {
                         <div>
                           <p className="font-semibold text-navy">{row.referredName}</p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Level {row.level} referral joined {formatReferralDate(row.createdAt)}
+                            Direct referral joined {formatReferralDate(row.createdAt)}
                           </p>
                         </div>
                         <div className="text-left sm:text-right">
@@ -159,7 +165,6 @@ export default async function ReferralsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Referred user</TableHead>
-                    <TableHead>Level</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created</TableHead>
@@ -169,7 +174,6 @@ export default async function ReferralsPage() {
                   {data.latestBonuses.map((bonus) => (
                     <TableRow key={bonus.id}>
                       <TableCell>{bonus.referredUser}</TableCell>
-                      <TableCell>Level {bonus.level}</TableCell>
                       <TableCell>{formatKSh(bonus.amount)}</TableCell>
                       <TableCell>
                         <Badge variant={bonus.status === "available" ? "success" : "warning"}>{bonus.status}</Badge>
@@ -180,7 +184,7 @@ export default async function ReferralsPage() {
                 </TableBody>
               </Table>
             ) : (
-              <p className="text-sm text-muted-foreground">No referral bonuses yet. Share your link to start building the chain.</p>
+              <p className="text-sm text-muted-foreground">No referral bonuses yet. Share your link to start earning from direct referrals.</p>
             )}
           </CardContent>
         </Card>

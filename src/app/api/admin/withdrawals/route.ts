@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "../_lib";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getAdminWithdrawals } from "@/lib/admin-withdrawals";
 
 export async function GET(request: Request) {
   const { error } = await requireAdmin({
-    allowedRoles: ["super_admin", "finance"],
+    allowedRoles: ["super_admin", "finance", "admin", "support"],
   });
   if (error) return error;
 
@@ -13,30 +14,22 @@ export async function GET(request: Request) {
 
   const admin = createAdminSupabaseClient();
 
-  let query = (admin.from("withdrawal_requests" as never) as any)
-    .select(
-      "id, user_id, amount, phone, status, mpesa_txn_id, failure_reason, b2c_conversation_id, b2c_originator_id, created_at, processed_at, profiles(full_name, email)"
-    )
-    .order("created_at", { ascending: false });
-
-  if (status && status !== "all") {
-    query = query.eq("status", status);
-  }
-
-  const { data: withdrawals, error: fetchError } = await query;
-
-  if (fetchError) {
+  let withdrawals;
+  try {
+    withdrawals = await getAdminWithdrawals({ status });
+  } catch (fetchError) {
+    console.error("[GET /api/admin/withdrawals] Failed to fetch withdrawals", fetchError);
     return NextResponse.json({ error: "Failed to fetch withdrawals" }, { status: 500 });
   }
 
-  const [{ data: counts }, { data: summary }] = await Promise.all([
-    (admin.from("withdrawal_requests" as never) as any)
-      .select("status, amount")
-      .in("status", ["requested", "processing", "sent", "failed", "held"]),
-    (admin.from("wallets" as never) as any)
-      .select("user_id, available_balance")
-      .limit(1000),
-  ]);
+  const { data: counts, error: countsError } = await (admin.from("withdrawal_requests" as never) as any)
+    .select("status, amount")
+    .in("status", ["requested", "processing", "sent", "failed", "held"]);
+
+  if (countsError) {
+    console.error("[GET /api/admin/withdrawals] Failed to fetch counts", countsError);
+    return NextResponse.json({ error: "Failed to fetch withdrawals" }, { status: 500 });
+  }
 
   const statusCounts: Record<string, { count: number; total: number }> = {
     requested: { count: 0, total: 0 },
@@ -54,7 +47,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    withdrawals: withdrawals ?? [],
+    withdrawals,
     counts: statusCounts,
   });
 }

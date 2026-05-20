@@ -20,7 +20,7 @@ type ReferralRow = {
   id: string;
   referrer_id: string;
   referee_id: string;
-  level: 1 | 2 | 3;
+  level: 1;
   source: "signup" | "admin" | "import";
   created_at: string;
 };
@@ -29,7 +29,7 @@ type ReferralBonusRow = {
   id: string;
   referrer_id: string;
   referee_id: string;
-  level: 1 | 2 | 3;
+  level: 1;
   amount: number;
   status: "pending" | "available" | "revoked";
   available_at: string | null;
@@ -56,7 +56,6 @@ export default async function AdminReferralsPage() {
 
   const [
     referralCounts,
-    level1Counts,
     recentReferralResult,
     recentBonusResult,
     referralLinksCountResult,
@@ -67,14 +66,13 @@ export default async function AdminReferralsPage() {
       .select("id", { count: "exact", head: true })
       .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     (admin.from("referrals" as never) as any)
-      .select("id", { count: "exact", head: true })
-      .eq("level", 1),
-    (admin.from("referrals" as never) as any)
       .select("id, referrer_id, referee_id, level, source, created_at")
+      .eq("level", 1)
       .order("created_at", { ascending: false })
       .limit(100),
     (admin.from("referral_bonuses" as never) as any)
       .select("id, referrer_id, referee_id, level, amount, status, available_at, created_at")
+      .eq("level", 1)
       .order("created_at", { ascending: false })
       .limit(100),
     (admin.from("profiles" as never) as any)
@@ -120,7 +118,7 @@ export default async function AdminReferralsPage() {
     <AdminPageShell
       admin={adminSession}
       title="Referrals"
-      description="Track direct signups, multi-level bonuses, and the live payout configuration for the referral program."
+      description="Track direct signups, referral bonuses, and the live payout configuration for the referral program."
     >
       <section className="grid gap-4 md:grid-cols-5">
         <MetricCard label="Referral Links" value={referralLinksCountResult.count ?? 0} detail="Profiles with generated referral codes" />
@@ -137,7 +135,7 @@ export default async function AdminReferralsPage() {
           detail={money(availableBonuses.reduce((sum, row) => sum + Number(row.amount ?? 0), 0))}
           tone="teal"
         />
-        <MetricCard label="Level 1 Referrals" value={level1Counts.count ?? 0} detail="Direct referrals only" />
+        <MetricCard label="Direct Referrals" value={referrals.length} detail="Latest records shown below" />
       </section>
 
       <Card className="mt-6 border border-outline-variant/40 shadow-sm">
@@ -147,7 +145,7 @@ export default async function AdminReferralsPage() {
         <CardContent className="space-y-4">
           <ReferralCreateForm />
           <p className="text-sm text-muted-foreground">
-            Direct referral assignment accepts a user ID, referral code, email, or phone for both people. If the referee is already activated, any missing referral bonus is credited immediately without duplicate payout.
+            Direct referral assignment accepts a user ID, referral code, email, or phone for both people. If the referee is already activated, any missing referral bonus is created with the standard 7-day hold without duplicate payout.
           </p>
         </CardContent>
       </Card>
@@ -157,13 +155,11 @@ export default async function AdminReferralsPage() {
           <CardTitle className="text-lg text-navy">Referral Settings</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
-          {rules.levels.map((rule) => (
-            <div key={rule.level} className="rounded-lg border border-outline-variant/40 bg-white p-4">
-              <p className="text-sm font-medium text-navy">Level {rule.level}</p>
-              <p className="mt-2 text-2xl font-bold text-navy">{money(rule.amount)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Unlock rule: paid activation</p>
-            </div>
-          ))}
+          <div className="rounded-lg border border-outline-variant/40 bg-white p-4">
+            <p className="text-sm font-medium text-navy">Referral Bonus</p>
+            <p className="mt-2 text-2xl font-bold text-navy">{money(rules.rewardAmount)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Paid activation by a direct referral</p>
+          </div>
         </CardContent>
       </Card>
 
@@ -179,7 +175,6 @@ export default async function AdminReferralsPage() {
                   <TableHead>Referrer</TableHead>
                   <TableHead>Referrer Link</TableHead>
                   <TableHead>Referee</TableHead>
-                  <TableHead>Level</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Operations</TableHead>
@@ -204,7 +199,6 @@ export default async function AdminReferralsPage() {
                           {labelForProfile(referee, row.referee_id)}
                         </Link>
                       </TableCell>
-                      <TableCell>Level {row.level}</TableCell>
                       <TableCell>{row.source}</TableCell>
                       <TableCell>{shortDate(row.created_at)}</TableCell>
                       <TableCell>
@@ -232,7 +226,6 @@ export default async function AdminReferralsPage() {
                 <TableRow>
                   <TableHead>Referrer</TableHead>
                   <TableHead>Referee</TableHead>
-                  <TableHead>Level</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Available</TableHead>
@@ -251,7 +244,6 @@ export default async function AdminReferralsPage() {
                         {labelForProfile(profiles.get(bonus.referee_id), bonus.referee_id)}
                       </Link>
                     </TableCell>
-                    <TableCell>Level {bonus.level}</TableCell>
                     <TableCell>{money(bonus.amount)}</TableCell>
                     <TableCell><StatusBadge status={bonus.status} /></TableCell>
                     <TableCell>{shortDate(bonus.available_at ?? bonus.created_at)}</TableCell>

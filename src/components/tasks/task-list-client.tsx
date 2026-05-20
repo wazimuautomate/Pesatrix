@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { Loader2, Clock, Users, CheckCircle, Search, Lock, ChevronRight } from "lucide-react";
+import { Loader2, Clock, Users, CheckCircle, Search, Lock, ChevronRight, Eye } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -131,12 +131,12 @@ function LockBanner({
           </div>
 
           <h2 className="text-2xl font-bold leading-tight text-navy sm:text-3xl">
-            Task starts are currently locked
+            {isTaskUnlock ? "Your personalized tasks are being prepared" : "Your training journey is still in progress"}
           </h2>
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-on-surface-variant sm:text-base">
             {isTaskUnlock
-              ? "Refer a friend who activates to cut your wait in half."
-              : "Complete the remaining training steps to unlock live tasks."}
+              ? "We’re organizing your task dashboard now. A successful activation referral can shorten the remaining wait."
+              : "Complete the remaining training steps to unlock your live task dashboard."}
           </p>
 
           {isTaskUnlock && (
@@ -295,9 +295,17 @@ function TaskCard({
               Locked
             </Button>
           ) : (
-            <Link href={`/tasks/${task.id}`} className="block">
-              <Button className="w-full">Start Task</Button>
-            </Link>
+            <div className="flex gap-2">
+              <Link href={`/tasks/${task.id}?view=details`} className="flex-1">
+                <Button variant="outline" className="w-full">
+                  <Eye className="mr-2 h-4 w-4" />
+                  View
+                </Button>
+              </Link>
+              <Link href={`/tasks/${task.id}`} className="flex-1">
+                <Button className="w-full">Start Task</Button>
+              </Link>
+            </div>
           )}
         </div>
       </CardContent>
@@ -331,7 +339,6 @@ export function TaskListClient({ userId }: { userId: string }) {
   const [isActivated, setIsActivated] = useState(true);
   const [unlockAt, setUnlockAt] = useState<string | undefined>(undefined);
   const [trainingIncomplete, setTrainingIncomplete] = useState(false);
-  const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
   const [dailySubmissionCount, setDailySubmissionCount] = useState<number | null>(null);
   const [dailyTaskLimit, setDailyTaskLimit] = useState<number | null>(null);
 
@@ -343,11 +350,14 @@ export function TaskListClient({ userId }: { userId: string }) {
   const debouncedSearch = useDebounce(searchQuery, 400);
 
   const fetchTasks = useCallback(
-    async (category?: string, difficulty?: string, sort?: string, search?: string) => {
-      setLoading(true);
+    async (options?: { background?: boolean }) => {
+      const background = options?.background === true;
+      if (!background) {
+        setLoading(true);
+      }
       setError(null);
       try {
-        const response = await fetch("/api/tasks");
+        const response = await fetch("/api/tasks", { cache: "no-store" });
         const data = await response.json();
 
         if (!response.ok) {
@@ -366,17 +376,29 @@ export function TaskListClient({ userId }: { userId: string }) {
       } catch {
         setError("Failed to fetch tasks");
       } finally {
-        setLoading(false);
-        setHasFetchedOnce(true);
+        if (!background) {
+          setLoading(false);
+        }
       }
     },
     []
   );
 
   useEffect(() => {
-    const categoryParam = selectedCategories.length > 0 ? selectedCategories.join(",") : undefined;
-    fetchTasks(categoryParam ?? undefined, selectedDifficulty ?? undefined, sortBy, debouncedSearch);
+    fetchTasks();
   }, [selectedCategories, selectedDifficulty, sortBy, debouncedSearch, fetchTasks]);
+
+  useEffect(() => {
+    if (!tasksLocked && !trainingIncomplete) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      fetchTasks({ background: true });
+    }, 15000);
+
+    return () => window.clearInterval(interval);
+  }, [fetchTasks, tasksLocked, trainingIncomplete]);
 
   const handleCategoryToggle = (category: TaskCategory) => {
     setSelectedCategories((prev) =>
@@ -482,7 +504,7 @@ export function TaskListClient({ userId }: { userId: string }) {
           <Button
             variant="outline"
             className="mt-4"
-            onClick={() => fetchTasks(undefined, undefined, sortBy, debouncedSearch)}
+            onClick={() => fetchTasks()}
           >
             Retry
           </Button>

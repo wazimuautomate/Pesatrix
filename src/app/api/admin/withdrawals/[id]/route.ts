@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getAdminWithdrawalById } from "@/lib/admin-withdrawals";
 import { normalizeWithdrawalStoragePhone } from "@/lib/withdrawals";
 import { requireAdmin, auditLog, getRequestMeta } from "../../_lib";
 
@@ -32,21 +33,15 @@ async function getWithdrawal(admin: ReturnType<typeof createAdminSupabaseClient>
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { error } = await requireAdmin({
-    allowedRoles: ["super_admin", "finance"],
+    allowedRoles: ["super_admin", "finance", "admin", "support"],
   });
   if (error) return error;
 
   const { id } = await params;
-  const admin = createAdminSupabaseClient();
 
-  const { data: withdrawal, error: fetchError } = await (admin.from("withdrawal_requests" as never) as any)
-    .select(
-      "id, user_id, amount, phone, status, mpesa_txn_id, failure_reason, b2c_conversation_id, b2c_originator_id, created_at, processed_at, profiles(full_name, email, phone)"
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const withdrawal = await getAdminWithdrawalById(id);
 
-  if (fetchError || !withdrawal) {
+  if (!withdrawal) {
     return NextResponse.json({ error: "Withdrawal not found" }, { status: 404 });
   }
 
@@ -86,7 +81,7 @@ export async function POST(request: Request, context: RouteContext) {
 export async function PATCH(request: Request, { params }: RouteContext) {
   const { error, userId } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "finance"],
+    allowedRoles: ["super_admin", "finance", "admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -165,7 +160,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 export async function DELETE(request: Request, { params }: RouteContext) {
   const { error, userId } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "finance"],
+    allowedRoles: ["super_admin", "finance", "admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

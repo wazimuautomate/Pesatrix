@@ -5,9 +5,6 @@ import {
   DAILY_TASK_LIMIT_KEY,
   REFERRAL_ACTIVATION_RULE_KEY,
   REFERRAL_LEVEL_1_REWARD_KEY,
-  REFERRAL_LEVEL_2_REWARD_KEY,
-  REFERRAL_LEVEL_3_REWARD_KEY,
-  REFERRAL_MAX_LEVELS_KEY,
   TRAINING_REWARD_SETTING_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
@@ -28,20 +25,17 @@ export const DEFAULT_WITHDRAWAL_HOLD_DAYS = 7;
 export const DEFAULT_WITHDRAWAL_PROCESSING_DAYS = 3;
 
 export const TASK_UNLOCK_DELAY_HOURS_KEY = "task_unlock_delay_hours";
-export const DEFAULT_TASK_UNLOCK_DELAY_HOURS = 24;
+export const DEFAULT_TASK_UNLOCK_DELAY_HOURS = 0;
 
 export const REFERRAL_TASK_UNLOCK_REDUCTION_KEY = "referral_task_unlock_reduction";
 export const DEFAULT_REFERRAL_TASK_UNLOCK_REDUCTION = 0.5;
-export { DEFAULT_REFERRAL_ACTIVATION_RULE, DEFAULT_REFERRAL_LEVEL_REWARDS, DEFAULT_REFERRAL_MAX_LEVELS } from "@/lib/referral-program-utils";
+export { DEFAULT_REFERRAL_ACTIVATION_RULE, DEFAULT_REFERRAL_REWARD_KSH } from "@/lib/referral-program-utils";
 
 export const DEFAULT_DAILY_TASK_LIMIT = 3;
 export { DAILY_TASK_LIMIT_KEY };
 export {
   REFERRAL_ACTIVATION_RULE_KEY,
   REFERRAL_LEVEL_1_REWARD_KEY,
-  REFERRAL_LEVEL_2_REWARD_KEY,
-  REFERRAL_LEVEL_3_REWARD_KEY,
-  REFERRAL_MAX_LEVELS_KEY,
 };
 
 export type PlatformSetting = {
@@ -67,6 +61,23 @@ function normalizeNonNegativeNumber(value: unknown, fallback: number) {
   }
 
   return parsed;
+}
+
+function normalizeReductionFraction(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+
+  if (parsed <= 1) {
+    return parsed;
+  }
+
+  if (parsed <= 100) {
+    return parsed / 100;
+  }
+
+  return fallback;
 }
 
 function normalizeIntegerInRange(value: unknown, fallback: number, min: number, max: number) {
@@ -136,12 +147,20 @@ export async function getWithdrawalProcessingDays() {
 
 export async function getTaskUnlockDelayHours() {
   const setting = await getPlatformSetting(TASK_UNLOCK_DELAY_HOURS_KEY);
-  return normalizePositiveInteger(setting?.value, DEFAULT_TASK_UNLOCK_DELAY_HOURS);
+  if (!setting) {
+    warnMissingSetting(TASK_UNLOCK_DELAY_HOURS_KEY, DEFAULT_TASK_UNLOCK_DELAY_HOURS);
+  }
+
+  return normalizeNonNegativeNumber(setting?.value, DEFAULT_TASK_UNLOCK_DELAY_HOURS);
 }
 
 export async function getReferralTaskUnlockReduction() {
   const setting = await getPlatformSetting(REFERRAL_TASK_UNLOCK_REDUCTION_KEY);
-  return normalizeNonNegativeNumber(setting?.value, DEFAULT_REFERRAL_TASK_UNLOCK_REDUCTION);
+  if (!setting) {
+    warnMissingSetting(REFERRAL_TASK_UNLOCK_REDUCTION_KEY, DEFAULT_REFERRAL_TASK_UNLOCK_REDUCTION);
+  }
+
+  return normalizeReductionFraction(setting?.value, DEFAULT_REFERRAL_TASK_UNLOCK_REDUCTION);
 }
 
 export async function getDailyTaskLimit() {
