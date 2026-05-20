@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { gradeSubmission } from "@/lib/ai/grading";
+import { addRiskPoints } from "@/lib/fraud/riskScorer";
 import { getDailyTaskLimit } from "@/lib/platform-settings";
 import { isDataLabelingTaskData, isSocialEngagementTaskData } from "@/lib/task-data";
 import { normalizeSocialTaskData } from "@/lib/social-engagement";
@@ -14,6 +15,7 @@ const submissionSchema = z.object({
   answers: z.record(z.unknown()),
   screenshotUrl: z.string().nullable().optional(),
   submittedUrl: z.string().nullable().optional(),
+  openedAt: z.string().datetime().optional(),
 });
 
 const TASK_SCREENSHOT_BUCKET = "task-screenshots";
@@ -53,7 +55,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { taskId, answers, screenshotUrl, submittedUrl } = parsed.data;
+  const { taskId, answers, screenshotUrl, submittedUrl, openedAt } = parsed.data;
   const normalizedScreenshotUrl = screenshotUrl?.trim() || null;
   let normalizedSubmittedUrl = submittedUrl?.trim() || null;
 
@@ -61,15 +63,91 @@ export async function POST(request: Request) {
 
   const { data: task } = await admin
     .from("tasks")
-    .select("id, title, instructions, ai_rubric, min_word_count, slots_remaining, status, ai_grading_enabled, task_data, category")
+    .select("id, title, instructions, ai_rubric, min_word_count, slots_remaining, status, ai_grading_enabled, task_data, category, min_completion_seconds")
     .eq("id", taskId)
     .single();
+
+  const { data: isAdminUser } = await (admin.from("admin_users" as never) as any)
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!isAdminUser) {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: hourlyCount } = await admin
+      .from("task_submissions")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gte("submitted_at", oneHourAgo);
+
+    if (hourlyCount !== null && hourlyCount >= 10) {
+      return NextResponse.json(
+        { error: { code: "RATE_LIMITED", message: "Too many submissions. Please wait before submitting again." }},
+        { status: 429 }
+      );
+    }
+  }
 
   if (!task || task.slots_remaining <= 0 || task.status !== "active") {
     return NextResponse.json(
       { error: "This task is no longer available" },
       { status: 409 }
     );
+  }
+
+  let submissionStatus = task.ai_grading_enabled ? "ai_reviewing" : "pending";
+  const fraudFlags: Record<string, unknown> = {};
+
+  if (openedAt) {
+    const minCompletionSeconds = Number(task.min_completion_seconds ?? 0);
+    if (minCompletionSeconds > 0) {
+      const openedAtMs = new Date(openedAt).getTime();
+      const completionSeconds = (Date.now() - openedAtMs) / 1000;
+      if (completionSeconds < minCompletionSeconds) {
+        submissionStatus = "flagged";
+        fraudFlags.speed_submission = true;
+        await addRiskPoints(user.id, 15, { speed_submission: true, task_id: taskId });
+      }
+    }
+  }
+
+  if (task.category === "survey" || task.category === "content_creation") {
+    const { count: totalCount } = await admin
+      .from("task_submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("task_id", taskId);
+
+    if (totalCount !== null && totalCount >= 5) {
+      const { data: recentSubmissions } = await admin
+        .from("task_submissions")
+        .select("answers, user_id")
+        .eq("task_id", taskId)
+        .in("status", ["pending", "approved", "ai_reviewing"])
+        .order("submitted_at", { ascending: false })
+        .limit(20);
+
+      if (recentSubmissions && recentSubmissions.length > 0) {
+        const currentAnswerStr = JSON.stringify(answers).toLowerCase().trim();
+        const duplicateCount = recentSubmissions.filter(
+          (s: { answers: unknown }) => JSON.stringify(s.answers).toLowerCase().trim() === currentAnswerStr
+        ).length;
+
+        if (duplicateCount >= 2) {
+          submissionStatus = "flagged";
+          fraudFlags.duplicate_answers = true;
+          await addRiskPoints(user.id, 20, { duplicate_answers: true, task_id: taskId });
+        }
+      }
+
+      const values = Object.values(answers);
+      const allSame = values.length > 3 && values.every((v) => v === values[0]);
+      if (allSame) {
+        submissionStatus = "flagged";
+        fraudFlags.uniform_answers = true;
+        await addRiskPoints(user.id, 10, { uniform_answers: true });
+      }
+    }
   }
 
   if (normalizedSubmittedUrl) {
@@ -316,7 +394,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const initialStatus = task.ai_grading_enabled ? "ai_reviewing" : "pending";
+  if (normalizedSubmittedUrl) {
+    normalizedSubmittedUrl = normalizeSubmittedUrl(normalizedSubmittedUrl);
+    if (!isValidHttpUrl(normalizedSubmittedUrl)) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Submitted URL must be a valid http(s) URL." } },
+        { status: 422 }
+      );
+    }
+  }
 
   const { data: submission, error: insertError } = await admin
     .from("task_submissions")
@@ -326,10 +412,14 @@ export async function POST(request: Request) {
       answers: submissionAnswers,
       screenshot_url: socialScreenshotUrl ?? normalizedScreenshotUrl ?? null,
       submitted_url: normalizedSubmittedUrl ?? null,
-      status: initialStatus,
+      status: submissionStatus,
       screenshot_hash: socialScreenshotHash,
       ip: requestIp,
-      ...(socialAutoFlag ? { grading_detail: { social_auto_flag_reason: "risk_score_above_50" } } : {}),
+      grading_detail: socialAutoFlag
+        ? { social_auto_flag_reason: "risk_score_above_50" }
+        : Object.keys(fraudFlags).length > 0
+        ? { fraud_flags: fraudFlags }
+        : undefined,
     })
     .select("*")
     .single();

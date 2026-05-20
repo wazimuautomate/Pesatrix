@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { creditReferralChain } from "@/lib/referral";
+import { creditDirectReferralBonus } from "@/lib/referral";
 import { KENYAN_PHONE_REGEX, normalizePesaPhone, MPESA_STK_AMOUNT } from "@/lib/mpesa";
 import { z } from "zod";
 
@@ -189,7 +189,7 @@ export async function POST(request: Request) {
       console.warn("[Activation] wallet activation fee insert skipped", walletError);
     }
 
-    await creditReferralChain(userId);
+    await creditDirectReferralBonus(userId);
 
     console.log("[Activation] Successfully activated user:", userId);
 

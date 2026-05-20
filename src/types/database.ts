@@ -104,16 +104,51 @@ export interface Database {
           phone_verified: boolean | null;
           email_verified: boolean | null;
           kyc_status: string | null;
+          risk_score: number;
+          flags: Record<string, unknown>;
+          last_ip: string | null;
+          ip_country: string | null;
+          ip_is_vpn: boolean;
           id_type: string | null;
           id_number_hash: string | null;
           id_verified: boolean;
           selfie_url: string | null;
           selfie_verified: boolean;
           verified_at: string | null;
+          created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["user_verification"]["Row"], "updated_at">;
+        Insert: { user_id: string } & Partial<
+          Omit<
+            Database["public"]["Tables"]["user_verification"]["Row"],
+            "user_id" | "created_at" | "updated_at"
+          >
+        >;
         Update: Partial<Database["public"]["Tables"]["user_verification"]["Insert"]>;
+      };
+      device_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          fingerprint_hash: string;
+          ip_address: string | null;
+          ip_country: string | null;
+          ip_city: string | null;
+          ip_is_vpn: boolean;
+          ip_is_datacenter: boolean;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          fingerprint_hash: string;
+        } & Partial<
+          Omit<
+            Database["public"]["Tables"]["device_sessions"]["Row"],
+            "id" | "user_id" | "fingerprint_hash" | "created_at"
+          >
+        >;
+        Update: Partial<Database["public"]["Tables"]["device_sessions"]["Insert"]>;
       };
       activation_payments: {
         Row: {
@@ -140,7 +175,7 @@ export interface Database {
           id: string;
           referrer_id: string;
           referee_id: string;
-          level: 1 | 2 | 3;
+          level: 1;
           source: "signup" | "admin" | "import";
           created_at: string;
         };
@@ -153,7 +188,7 @@ export interface Database {
           referrer_id: string;
           referee_id: string;
           amount: number;
-          level: 1 | 2 | 3;
+          level: 1;
           status: "pending" | "available" | "revoked";
           available_at: string | null;
           created_at: string;
@@ -309,9 +344,13 @@ export interface Database {
           id: string;
           admin_id: string;
           action: string;
-          target_type: string;
-          target_id: string;
-          details: Record<string, unknown> | null;
+          entity_type: string;
+          entity_id: string;
+          before_json: Record<string, unknown> | null;
+          after_json: Record<string, unknown> | null;
+          reason: string | null;
+          ip: string | null;
+          user_agent: string | null;
           created_at: string;
         };
         Insert: Omit<Database["public"]["Tables"]["audit_log"]["Row"], "id" | "created_at">;

@@ -87,7 +87,7 @@ export default function ActivateClientPage() {
           <ul className="space-y-2 text-sm text-on-surface-variant">
             {[
               "Access to all available earning tasks",
-              "3-level referral programme (earn from your network)",
+              "Referral programme (earn KSh 100 per direct referral)",
               "Withdraw earnings to M-Pesa any time",
               "Priority support access",
             ].map((item) => (

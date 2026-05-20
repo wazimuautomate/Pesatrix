@@ -11,6 +11,7 @@
     "test": "node --test --experimental-strip-types src/lib/auth/register.test.ts src/lib/referral-program.test.ts tests/mpesa-phone.test.mjs tests/task-data-sanitize.test.mjs tests/withdrawal-wallet.test.mjs"
   },
   "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^5.2.0",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "^1.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.4",

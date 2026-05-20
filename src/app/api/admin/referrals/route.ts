@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { creditReferralChain } from "@/lib/referral";
+import { creditDirectReferralBonus } from "@/lib/referral";
 import { auditLog, requireAdmin } from "../_lib";
 
 const referralSchema = z.object({
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
     referral = updatedReferral;
   }
 
-  await creditReferralChain(referee.id);
+  await creditDirectReferralBonus(referee.id);
 
   await auditLog({
     adminId: userId,

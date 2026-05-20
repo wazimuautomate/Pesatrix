@@ -9,14 +9,10 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_DAILY_TASK_LIMIT,
   DAILY_TASK_LIMIT_KEY,
-  DEFAULT_REFERRAL_LEVEL_REWARDS,
-  DEFAULT_REFERRAL_MAX_LEVELS,
   REFERRAL_LEVEL_1_REWARD_KEY,
+  DEFAULT_REFERRAL_REWARD_KSH,
   DEFAULT_TRAINING_REWARD_KSH,
   DEFAULT_WITHDRAWAL_HOLD_DAYS,
-  REFERRAL_LEVEL_2_REWARD_KEY,
-  REFERRAL_LEVEL_3_REWARD_KEY,
-  REFERRAL_MAX_LEVELS_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
 } from "@/lib/platform-settings";
 import { requireWazimAdmin } from "@/lib/wazim-admin";
@@ -61,15 +57,10 @@ export default async function AdminSettingsPage() {
   const holdSetting = settings.find((s: { key: string }) => s.key === WITHDRAWAL_HOLD_DAYS_KEY);
   const dailyTaskLimitSetting = settings.find((s: { key: string }) => s.key === DAILY_TASK_LIMIT_KEY);
   const referralLevel1Setting = settings.find((s: { key: string }) => s.key === REFERRAL_LEVEL_1_REWARD_KEY);
-  const referralLevel2Setting = settings.find((s: { key: string }) => s.key === REFERRAL_LEVEL_2_REWARD_KEY);
-  const referralLevel3Setting = settings.find((s: { key: string }) => s.key === REFERRAL_LEVEL_3_REWARD_KEY);
-  const referralMaxLevelsSetting = settings.find((s: { key: string }) => s.key === REFERRAL_MAX_LEVELS_KEY);
   const dailyTaskLimit = Number.isInteger(Number(dailyTaskLimitSetting?.value))
     ? Number(dailyTaskLimitSetting?.value)
     : DEFAULT_DAILY_TASK_LIMIT;
-  const referralRuleSummary = `L1 KSh ${referralLevel1Setting?.value ?? DEFAULT_REFERRAL_LEVEL_REWARDS[1]}, L2 KSh ${
-    referralLevel2Setting?.value ?? DEFAULT_REFERRAL_LEVEL_REWARDS[2]
-  }, L3 KSh ${referralLevel3Setting?.value ?? DEFAULT_REFERRAL_LEVEL_REWARDS[3]}`;
+  const referralReward = referralLevel1Setting?.value ?? DEFAULT_REFERRAL_REWARD_KSH;
 
   const environmentSettings = [
     { label: "Supabase URL", configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) },
@@ -106,8 +97,8 @@ export default async function AdminSettingsPage() {
         />
         <MetricCard
           label="Referral payouts"
-          value={`${referralMaxLevelsSetting?.value ?? DEFAULT_REFERRAL_MAX_LEVELS} levels`}
-          detail={referralRuleSummary}
+          value={`KSh ${referralReward}`}
+          detail="Per direct activation"
           tone="amber"
         />
       </section>

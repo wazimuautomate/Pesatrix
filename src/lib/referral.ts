@@ -1,11 +1,12 @@
 /**
- * Referral chain utilities.
+ * Referral bonus utilities.
  * All writes happen server-side via Supabase service role.
  */
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { sendReferralBonusEmail } from "@/lib/notifications";
-import { getReferralProgramSettings, getReferralRewardForLevel } from "@/lib/referral-program";
+import { DEFAULT_REFERRAL_REWARD_KSH } from "@/lib/referral-program-utils";
 import { accelerateTaskUnlockForReferral } from "@/lib/training";
+import { SYSTEM_ADMIN_ID, validateReferralPair } from "@/lib/fraud/riskScorer";
 
 type AccountStatusRow = {
   state?: string | null;
@@ -23,6 +24,11 @@ type ReleasableTransactionRow = {
   id: string;
   reference_table: string | null;
   reference_id: string | null;
+};
+
+type VerificationRow = {
+  risk_score?: number | null;
+  flags?: Record<string, unknown> | null;
 };
 
 async function hasActivated(userId: string) {
@@ -61,9 +67,8 @@ async function queueReferralActivationNotification(args: {
   recipient: NotificationRecipient;
   activatedUser: NotificationRecipient;
   bonusAmount: number;
-  level: number;
 }) {
-  const { recipient, activatedUser, bonusAmount, level } = args;
+  const { recipient, activatedUser, bonusAmount } = args;
   if (!recipient.email) return;
 
   const supabase = createAdminSupabaseClient();
@@ -71,7 +76,6 @@ async function queueReferralActivationNotification(args: {
     beneficiary_name: recipient.full_name,
     activated_user_name: activatedUser.full_name,
     amount: bonusAmount,
-    level,
   };
 
   const { data: outboxRow, error: outboxError } = await supabase
@@ -100,7 +104,6 @@ async function queueReferralActivationNotification(args: {
     beneficiaryName: recipient.full_name,
     activatedUserName: activatedUser.full_name,
     amount: bonusAmount,
-    level,
   });
 
   if (!outboxRow?.id) {
@@ -127,14 +130,12 @@ async function queueReferralActivationNotification(args: {
 }
 
 /**
- * Walk up the configured referral depth for a given activated user and
- * create available wallet_transactions + referral_bonuses for each referrer.
+ * Credit the direct referrer for a given activated user.
  *
  * Called once after activation succeeds. Safe to call repeatedly.
  */
-export async function creditReferralChain(activatedUserId: string): Promise<void> {
+export async function creditDirectReferralBonus(activatedUserId: string): Promise<void> {
   const supabase = createAdminSupabaseClient();
-  const settings = await getReferralProgramSettings();
 
   if (!await hasActivated(activatedUserId)) {
     return;
@@ -142,7 +143,7 @@ export async function creditReferralChain(activatedUserId: string): Promise<void
 
   const { data: activatedProfile, error: activatedProfileError } = await supabase
     .from("profiles")
-    .select("id, full_name, email")
+    .select("id, full_name, email, referred_by")
     .eq("id", activatedUserId)
     .maybeSingle();
 
@@ -150,170 +151,239 @@ export async function creditReferralChain(activatedUserId: string): Promise<void
     throw activatedProfileError;
   }
 
-  const { data: directRef, error: directRefError } = await supabase
-    .from("referrals")
-    .select("referrer_id")
-    .eq("referee_id", activatedUserId)
-    .eq("level", 1)
-    .maybeSingle();
+  const referrerId = activatedProfile?.referred_by ?? null;
+  if (!referrerId || referrerId === activatedUserId) return;
 
-  if (directRefError) {
-    throw directRefError;
-  }
-
-  if (!directRef?.referrer_id) return;
-
-  const chain: { referrerId: string; level: number }[] = [];
-  const seen = new Set<string>([activatedUserId]);
-  let currentId: string | null = directRef.referrer_id;
-
-  for (let level = 1; level <= settings.maxLevels; level++) {
-    if (!currentId || seen.has(currentId)) break;
-
-    chain.push({ referrerId: currentId, level });
-    seen.add(currentId);
-
-    const { data: parent, error: parentError } = await supabase
-      .from("referrals")
-      .select("referrer_id")
-      .eq("referee_id", currentId)
-      .eq("level", 1)
-      .maybeSingle();
-
-    if (parentError) {
-      throw parentError;
-    }
-
-    currentId = parent?.referrer_id ?? null;
-  }
-
-  const recipientIds = chain.map((entry) => entry.referrerId);
   const { data: recipientRows, error: recipientError } = await supabase
     .from("profiles")
     .select("id, full_name, email")
-    .in("id", recipientIds);
+    .eq("id", referrerId);
 
   if (recipientError) {
     throw recipientError;
   }
 
-  const recipients = (recipientRows ?? []) as NotificationRecipient[];
-  const recipientMap = new Map(
-    recipients.map((row) => [
-      row.id,
-      {
-        id: row.id,
-        full_name: row.full_name,
-        email: row.email,
-      } satisfies NotificationRecipient,
-    ])
-  );
+  const recipient = (recipientRows?.[0] ?? null) as NotificationRecipient | null;
+  if (!recipient) return;
 
-  for (const { referrerId, level } of chain) {
-    const amount = getReferralRewardForLevel(settings, level);
+  const { error: referralRowError } = await supabase
+    .from("referrals")
+    .insert({
+      referrer_id: referrerId,
+      referee_id: activatedUserId,
+      level: 1,
+      source: "signup",
+    })
+    .select("id")
+    .single();
 
-    const { error: referralRowError } = await supabase
-      .from("referrals")
-      .insert({
-        referrer_id: referrerId,
-        referee_id: activatedUserId,
-        level,
-        source: "signup",
-      })
-      .select("id")
-      .single();
-
-    if (referralRowError && referralRowError.code !== "23505") {
-      throw referralRowError;
-    }
-
-    const { data: existingBonus, error: existingBonusError } = await supabase
-      .from("referral_bonuses")
-      .select("id")
-      .eq("referrer_id", referrerId)
-      .eq("referee_id", activatedUserId)
-      .eq("level", level)
-      .maybeSingle();
-
-    if (existingBonusError) {
-      throw existingBonusError;
-    }
-
-    let bonusRowId = existingBonus?.id ?? null;
-
-    if (level === 1 && !bonusRowId) {
-      await accelerateTaskUnlockForReferral(referrerId);
-    }
-
-    if (amount <= 0) {
-      continue;
-    }
-
-    if (!bonusRowId) {
-      const { data: bonus, error: bonusError } = await supabase
-        .from("referral_bonuses")
-        .insert({
-          referrer_id: referrerId,
-          referee_id: activatedUserId,
-          level,
-          amount,
-          status: "available",
-          available_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-
-      if (bonusError || !bonus) {
-        throw bonusError;
-      }
-
-      bonusRowId = bonus.id;
-    }
-
-    const { data: existingWalletTxn, error: walletLookupError } = await supabase
-      .from("wallet_transactions")
-      .select("id")
-      .eq("reference_table", "referral_bonuses")
-      .eq("reference_id", bonusRowId)
-      .maybeSingle();
-
-    if (walletLookupError) {
-      throw walletLookupError;
-    }
-
-    if (!existingWalletTxn) {
-      const { error: walletInsertError } = await supabase.from("wallet_transactions").insert({
-        user_id: referrerId,
-        type: "referral_bonus",
-        direction: "credit",
-        amount,
-        status: "available",
-        bucket: "available",
-        description: `Level ${level} referral activation bonus`,
-        reference_table: "referral_bonuses",
-        reference_id: bonusRowId,
-        available_at: new Date().toISOString(),
-      });
-
-      if (walletInsertError) {
-        throw walletInsertError;
-      }
-
-      const recipient = recipientMap.get(referrerId);
-      if (recipient && activatedProfile) {
-        await queueReferralActivationNotification({
-          recipient,
-          activatedUser: {
-            id: activatedProfile.id,
-            full_name: activatedProfile.full_name,
-            email: activatedProfile.email,
-          },
-          bonusAmount: amount,
-          level,
-        });
-      }
-    }
+  if (referralRowError && referralRowError.code !== "23505") {
+    throw referralRowError;
   }
+
+  const { data: existingBonus, error: existingBonusError } = await supabase
+    .from("referral_bonuses")
+    .select("id")
+    .eq("referrer_id", referrerId)
+    .eq("referee_id", activatedUserId)
+    .eq("level", 1)
+    .maybeSingle();
+
+  if (existingBonusError) {
+    throw existingBonusError;
+  }
+
+  if (existingBonus?.id) return;
+
+  const validation = await safeValidateReferralPair(referrerId, activatedUserId);
+
+  if (validation.reason === "no_device_data") {
+    await flagReferralCheckSkipped(supabase, referrerId, activatedUserId);
+  }
+
+  if (!validation.valid) {
+    await handleBlockedReferralBonus({
+      supabase,
+      referrerId,
+      refereeId: activatedUserId,
+      amount: DEFAULT_REFERRAL_REWARD_KSH,
+      reason: validation.reason ?? "referral_pair_invalid",
+    });
+    return;
+  }
+
+  await accelerateTaskUnlockForReferral(referrerId);
+
+  const availableAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: bonus, error: bonusError } = await supabase
+    .from("referral_bonuses")
+    .insert({
+      referrer_id: referrerId,
+      referee_id: activatedUserId,
+      level: 1,
+      amount: DEFAULT_REFERRAL_REWARD_KSH,
+      status: "pending",
+      available_at: availableAt,
+    })
+    .select("id")
+    .single();
+
+  if (bonusError || !bonus) {
+    if (bonusError?.code === "23505") return;
+    throw bonusError;
+  }
+
+  const { error: walletInsertError } = await supabase.from("wallet_transactions").insert({
+    user_id: referrerId,
+    type: "referral_bonus",
+    direction: "credit",
+    amount: DEFAULT_REFERRAL_REWARD_KSH,
+    status: "pending",
+    bucket: "pending",
+    description: "Referral activation bonus",
+    reference_table: "referral_bonuses",
+    reference_id: bonus.id,
+    available_at: availableAt,
+  });
+
+  if (walletInsertError) {
+    throw walletInsertError;
+  }
+
+  if (activatedProfile) {
+    await queueReferralActivationNotification({
+      recipient,
+      activatedUser: {
+        id: activatedProfile.id,
+        full_name: activatedProfile.full_name,
+        email: activatedProfile.email,
+      },
+      bonusAmount: DEFAULT_REFERRAL_REWARD_KSH,
+    });
+  }
+}
+
+async function safeValidateReferralPair(referrerId: string, refereeId: string) {
+  try {
+    return await validateReferralPair(referrerId, refereeId);
+  } catch (error) {
+    console.warn("[Referral] Device/IP referral validation skipped", {
+      referrerId,
+      refereeId,
+      error,
+    });
+    return { valid: true, reason: "no_device_data" as const };
+  }
+}
+
+async function flagReferralCheckSkipped(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  referrerId: string,
+  refereeId: string
+) {
+  await Promise.allSettled([
+    mergeVerificationFlags(supabase, referrerId, {
+      referral_check_skipped: "no_device_data",
+      referral_check_skipped_partner_user_id: refereeId,
+    }),
+    mergeVerificationFlags(supabase, refereeId, {
+      referral_check_skipped: "no_device_data",
+      referral_check_skipped_partner_user_id: referrerId,
+    }),
+  ]);
+}
+
+async function handleBlockedReferralBonus({
+  supabase,
+  referrerId,
+  refereeId,
+  amount,
+  reason,
+}: {
+  supabase: ReturnType<typeof createAdminSupabaseClient>;
+  referrerId: string;
+  refereeId: string;
+  amount: number;
+  reason: string;
+}) {
+  await Promise.allSettled([
+    updateReferralFraudRisk(supabase, referrerId, {
+      referral_fraud_attempt: true,
+      reason,
+      partner_user_id: refereeId,
+    }),
+    updateReferralFraudRisk(supabase, refereeId, {
+      referral_fraud_attempt: true,
+      reason,
+      partner_user_id: referrerId,
+    }),
+    (supabase.from("audit_log" as never) as any).insert({
+      admin_id: SYSTEM_ADMIN_ID,
+      action: "referral_fraud_blocked",
+      entity_type: "referral",
+      entity_id: refereeId,
+      after_json: {
+        referrer_id: referrerId,
+        referee_id: refereeId,
+        level: 1,
+        amount,
+        reason,
+      },
+      reason,
+    }),
+  ]);
+}
+
+async function updateReferralFraudRisk(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  userId: string,
+  flag: Record<string, unknown>
+) {
+  const verification = await getVerificationRow(supabase, userId);
+  await (supabase.from("user_verification" as never) as any).upsert({
+    user_id: userId,
+    risk_score: Math.max(0, Number(verification.risk_score ?? 0) + 25),
+    flags: {
+      ...verification.flags,
+      ...flag,
+    },
+    updated_at: new Date().toISOString(),
+  });
+}
+
+async function mergeVerificationFlags(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  userId: string,
+  flag: Record<string, unknown>
+) {
+  const verification = await getVerificationRow(supabase, userId);
+  await (supabase.from("user_verification" as never) as any).upsert({
+    user_id: userId,
+    flags: {
+      ...verification.flags,
+      ...flag,
+    },
+    updated_at: new Date().toISOString(),
+  });
+}
+
+async function getVerificationRow(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  userId: string
+): Promise<VerificationRow> {
+  const { data } = await (supabase.from("user_verification" as never) as any)
+    .select("risk_score, flags")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const flags = data?.flags && typeof data.flags === "object"
+    ? data.flags as Record<string, unknown>
+    : {};
+
+  return {
+    risk_score: data?.risk_score ?? 0,
+    flags,
+  };
 }
 
 /** Release pending transactions whose available_at has passed. Called by scheduled job. */

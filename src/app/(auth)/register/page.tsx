@@ -32,6 +32,7 @@ import {
   buildRegisterSignUpInput,
   mapRegisterErrorMessage,
 } from "@/lib/auth/register";
+import { captureAndSendFingerprint, getFingerprint, sendFingerprint } from "@/lib/fraud/fingerprint";
 import { createClient } from "@/lib/supabase/client";
 
 const registerSchema = z
@@ -84,6 +85,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
+  const [visitorId, setVisitorId] = useState<string | null>(null);
   const [supabase] = useState(() => createClient());
 
   const {
@@ -117,6 +119,14 @@ export default function RegisterPage() {
     }
   }, [setValue, supabase]);
 
+  useEffect(() => {
+    void getFingerprint()
+      .then(setVisitorId)
+      .catch((error) => {
+        console.error("[register] Failed to collect fingerprint", error);
+      });
+  }, []);
+
   async function nextStep() {
     const fieldsToValidate = steps[step].fields;
     const isValid = await trigger(fieldsToValidate as unknown as (keyof RegisterForm)[]);
@@ -145,6 +155,16 @@ export default function RegisterPage() {
       if (error) {
         toast.error(mapRegisterErrorMessage(error.message));
         return;
+      }
+
+      try {
+        if (visitorId) {
+          await sendFingerprint(visitorId);
+        } else {
+          await captureAndSendFingerprint();
+        }
+      } catch (fingerprintError) {
+        console.error("[register] Failed to record fingerprint", fingerprintError);
       }
 
       await supabase.auth.signOut();

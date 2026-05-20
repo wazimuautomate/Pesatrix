@@ -5,9 +5,6 @@ import {
   DAILY_TASK_LIMIT_KEY,
   REFERRAL_ACTIVATION_RULE_KEY,
   REFERRAL_LEVEL_1_REWARD_KEY,
-  REFERRAL_LEVEL_2_REWARD_KEY,
-  REFERRAL_LEVEL_3_REWARD_KEY,
-  REFERRAL_MAX_LEVELS_KEY,
   TRAINING_REWARD_SETTING_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
@@ -56,10 +53,7 @@ export async function PATCH(request: Request) {
     DAILY_TASK_LIMIT_KEY,
     WITHDRAWAL_HOLD_DAYS_KEY,
     WITHDRAWAL_PROCESSING_DAYS_KEY,
-    REFERRAL_MAX_LEVELS_KEY,
     REFERRAL_LEVEL_1_REWARD_KEY,
-    REFERRAL_LEVEL_2_REWARD_KEY,
-    REFERRAL_LEVEL_3_REWARD_KEY,
   ];
 
   if (key === REFERRAL_ACTIVATION_RULE_KEY) {
@@ -71,21 +65,11 @@ export async function PATCH(request: Request) {
     }
   }
 
-  if (key === REFERRAL_MAX_LEVELS_KEY) {
+  if (key === REFERRAL_LEVEL_1_REWARD_KEY) {
     const numValue = Number(value);
-    if (!Number.isInteger(numValue) || numValue < 1 || numValue > 3) {
+    if (numValue !== 100) {
       return NextResponse.json(
-        { error: "Referral max levels must be a whole number between 1 and 3" },
-        { status: 422 }
-      );
-    }
-  }
-
-  if ([REFERRAL_LEVEL_1_REWARD_KEY, REFERRAL_LEVEL_2_REWARD_KEY, REFERRAL_LEVEL_3_REWARD_KEY].includes(key)) {
-    const numValue = Number(value);
-    if (!Number.isInteger(numValue) || numValue < 0 || numValue > 100000) {
-      return NextResponse.json(
-        { error: "Referral reward must be a whole number between 0 and 100000" },
+        { error: "Referral reward must be KSh 100" },
         { status: 422 }
       );
     }
