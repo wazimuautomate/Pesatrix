@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
+import { validateTaskFinancials } from "@/lib/financial-limits";
+import { getMaxTaskBatchValueKsh, getMaxTaskPayoutKsh } from "@/lib/platform-settings";
 import { taskInsertSchema } from "@/lib/task-types";
 import { normalizeTaskDatetimes } from "@/lib/datetime";
 
@@ -93,6 +95,20 @@ export async function POST(request: Request) {
     min_word_count,
     task_data,
   } = parsed.data;
+
+  const [maxTaskPayoutKsh, maxTaskBatchValueKsh] = await Promise.all([
+    getMaxTaskPayoutKsh(),
+    getMaxTaskBatchValueKsh(),
+  ]);
+  const financialError = validateTaskFinancials({
+    payoutKsh: payout_ksh,
+    totalSlots: total_slots,
+    maxTaskPayoutKsh,
+    maxTaskBatchValueKsh,
+  });
+  if (financialError) {
+    return NextResponse.json({ error: financialError }, { status: 422 });
+  }
 
   let status: string = "draft";
   if (publish_at) {

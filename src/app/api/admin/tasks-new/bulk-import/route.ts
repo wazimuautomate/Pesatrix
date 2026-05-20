@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
+import { validateTaskFinancials } from "@/lib/financial-limits";
+import { getMaxTaskBatchValueKsh, getMaxTaskPayoutKsh } from "@/lib/platform-settings";
 import { bulkImportSchema } from "@/lib/task-types";
 import { normalizeTaskDatetimes } from "@/lib/datetime";
 
@@ -27,6 +29,22 @@ export async function POST(request: Request) {
       { error: { code: "VALIDATION_ERROR", message: parsed.error.errors.map((e) => e.message).join(", ") } },
       { status: 422 }
     );
+  }
+
+  const [maxTaskPayoutKsh, maxTaskBatchValueKsh] = await Promise.all([
+    getMaxTaskPayoutKsh(),
+    getMaxTaskBatchValueKsh(),
+  ]);
+  for (const task of parsed.data) {
+    const financialError = validateTaskFinancials({
+      payoutKsh: task.payout_ksh,
+      totalSlots: task.total_slots,
+      maxTaskPayoutKsh,
+      maxTaskBatchValueKsh,
+    });
+    if (financialError) {
+      return NextResponse.json({ error: financialError }, { status: 422 });
+    }
   }
 
   const admin = createAdminSupabaseClient();

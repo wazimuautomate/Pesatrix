@@ -1,11 +1,17 @@
 import "server-only";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { FINANCIAL_LIMITS } from "@/lib/constants";
 import {
   DAILY_TASK_LIMIT_KEY,
+  LEGACY_MIN_WITHDRAWAL_KSH_KEY,
+  MAX_TASK_BATCH_VALUE_KSH_KEY,
+  MAX_TASK_PAYOUT_KSH_KEY,
+  MIN_WITHDRAWAL_KSH_KEY,
   REFERRAL_ACTIVATION_RULE_KEY,
   REFERRAL_LEVEL_1_REWARD_KEY,
   TRAINING_REWARD_SETTING_KEY,
+  WITHDRAWAL_FEE_KSH_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
@@ -93,6 +99,26 @@ function warnMissingSetting(key: string, fallback: number) {
   console.warn(`[PlatformSettings] Missing ${key}; using default ${fallback}`);
 }
 
+async function getFirstPlatformSetting(keys: string[]) {
+  for (const key of keys) {
+    const setting = await getPlatformSetting(key);
+    if (setting) {
+      return setting;
+    }
+  }
+
+  return null;
+}
+
+function normalizeIntegerWithFloor(value: unknown, floor: number) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return floor;
+  }
+
+  return Math.max(parsed, floor);
+}
+
 export async function getPlatformSetting(key: string): Promise<PlatformSetting | null> {
   const admin = createAdminSupabaseClient();
 
@@ -167,6 +193,42 @@ export async function getDailyTaskLimit() {
   const setting = await getPlatformSetting(DAILY_TASK_LIMIT_KEY);
   const limit = normalizePositiveInteger(setting?.value, DEFAULT_DAILY_TASK_LIMIT);
   return Math.min(limit, 100);
+}
+
+export async function getMinWithdrawalKsh() {
+  const setting = await getFirstPlatformSetting([MIN_WITHDRAWAL_KSH_KEY, LEGACY_MIN_WITHDRAWAL_KSH_KEY]);
+  if (!setting) {
+    warnMissingSetting(MIN_WITHDRAWAL_KSH_KEY, FINANCIAL_LIMITS.MIN_WITHDRAWAL_KSH);
+  }
+
+  return normalizeIntegerWithFloor(setting?.value, FINANCIAL_LIMITS.MIN_WITHDRAWAL_KSH);
+}
+
+export async function getWithdrawalFeeKsh() {
+  const setting = await getPlatformSetting(WITHDRAWAL_FEE_KSH_KEY);
+  if (!setting) {
+    warnMissingSetting(WITHDRAWAL_FEE_KSH_KEY, FINANCIAL_LIMITS.WITHDRAWAL_FEE_KSH);
+  }
+
+  return normalizeIntegerWithFloor(setting?.value, FINANCIAL_LIMITS.WITHDRAWAL_FEE_KSH);
+}
+
+export async function getMaxTaskPayoutKsh() {
+  const setting = await getPlatformSetting(MAX_TASK_PAYOUT_KSH_KEY);
+  if (!setting) {
+    warnMissingSetting(MAX_TASK_PAYOUT_KSH_KEY, FINANCIAL_LIMITS.MAX_TASK_PAYOUT_KSH);
+  }
+
+  return normalizeIntegerWithFloor(setting?.value, FINANCIAL_LIMITS.MAX_TASK_PAYOUT_KSH);
+}
+
+export async function getMaxTaskBatchValueKsh() {
+  const setting = await getPlatformSetting(MAX_TASK_BATCH_VALUE_KSH_KEY);
+  if (!setting) {
+    warnMissingSetting(MAX_TASK_BATCH_VALUE_KSH_KEY, FINANCIAL_LIMITS.MAX_TASK_BATCH_VALUE_KSH);
+  }
+
+  return normalizeIntegerWithFloor(setting?.value, FINANCIAL_LIMITS.MAX_TASK_BATCH_VALUE_KSH);
 }
 
 export async function upsertPlatformSetting({

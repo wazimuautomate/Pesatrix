@@ -9,9 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  MAX_TASK_BATCH_VALUE_KSH_KEY,
+  MAX_TASK_PAYOUT_KSH_KEY,
+  MIN_WITHDRAWAL_KSH_KEY,
   REFERRAL_ACTIVATION_RULE_KEY,
   REFERRAL_LEVEL_1_REWARD_KEY,
   TRAINING_REWARD_SETTING_KEY,
+  WITHDRAWAL_FEE_KSH_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
@@ -79,6 +83,22 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       defaultValue: "7",
     },
     {
+      key: MIN_WITHDRAWAL_KSH_KEY,
+      label: "Minimum withdrawal (KSh)",
+      description: "Smallest amount a user can request from the wallet.",
+      type: "number",
+      min: 200,
+      defaultValue: "200",
+    },
+    {
+      key: WITHDRAWAL_FEE_KSH_KEY,
+      label: "Withdrawal processing fee (KSh)",
+      description: "Flat amount deducted from every withdrawal request.",
+      type: "number",
+      min: 30,
+      defaultValue: "30",
+    },
+    {
       key: WITHDRAWAL_PROCESSING_DAYS_KEY,
       label: "Withdrawal processing time (days)",
       description: "Expected admin payout processing time after a withdrawal is requested.",
@@ -112,6 +132,22 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       max: 100,
       defaultValue: "100",
     },
+    {
+      key: MAX_TASK_PAYOUT_KSH_KEY,
+      label: "Maximum task payout (KSh)",
+      description: "Highest allowed payout per single task slot.",
+      type: "number",
+      min: 120,
+      defaultValue: "120",
+    },
+    {
+      key: MAX_TASK_BATCH_VALUE_KSH_KEY,
+      label: "Maximum task batch value (KSh)",
+      description: "Highest allowed total task value using payout multiplied by slots.",
+      type: "number",
+      min: 600,
+      defaultValue: "600",
+    },
   ];
 
   const settingDefinitions = [
@@ -121,12 +157,6 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       description: "Hours after training completion before tasks open. Decimals are supported, so 0.0167 is about 1 minute.",
       type: "number",
       step: "0.0001",
-    },
-    {
-      key: "min_withdrawal_amount_ksh",
-      label: "Minimum Withdrawal Amount",
-      description: "Minimum KSh amount a user must have in available balance to withdraw",
-      type: "number",
     },
     {
       key: "referral_task_unlock_reduction",

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PROOF_REQUIREMENT_DEFAULTS } from "./social-engagement";
+import { MIN_TASK_PAYOUT_KSH } from "./constants";
 
 export type TaskCategory =
   | "survey"
@@ -170,7 +171,7 @@ export const taskInsertSchema = z.object({
   category: z.enum(["survey", "data_labeling", "social_engagement", "verification", "content_creation", "watch_respond"]),
   description: z.string().trim().max(1000).optional().nullable(),
   instructions: z.string().trim().min(10),
-  payout_ksh: z.number().int().min(1),
+  payout_ksh: z.number().int().min(MIN_TASK_PAYOUT_KSH, `Minimum task payout is KSh ${MIN_TASK_PAYOUT_KSH}`),
   total_slots: z.number().int().min(1),
   difficulty: z.enum(["easy", "medium", "hard"]).default("easy"),
   publish_at: z.string().datetime().nullable().default(null),

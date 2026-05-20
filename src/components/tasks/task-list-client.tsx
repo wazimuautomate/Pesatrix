@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyTaskState } from "@/components/tasks/EmptyTaskState";
 import { CATEGORY_LABELS, CATEGORY_COLORS, DIFFICULTY_COLORS, type TaskCategory } from "@/lib/task-types";
 import {
   ACTION_LABELS,
@@ -330,7 +331,7 @@ function SkeletonCard() {
   );
 }
 
-export function TaskListClient({ userId }: { userId: string }) {
+export function TaskListClient({ userId, isAdmin = false }: { userId: string; isAdmin?: boolean }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [submittedTaskIds, setSubmittedTaskIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -595,6 +596,9 @@ export function TaskListClient({ userId }: { userId: string }) {
       </div>
 
       {filteredTasks.length === 0 ? (
+        !hasActiveFilters && !isAdmin ? (
+          <EmptyTaskState completedTaskCount={submittedTaskIds.length} />
+        ) : (
         <Card>
           <CardContent className="py-12 text-center">
             <h3 className="text-lg font-semibold text-navy">
@@ -612,6 +616,7 @@ export function TaskListClient({ userId }: { userId: string }) {
             )}
           </CardContent>
         </Card>
+        )
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredTasks.map((task) => (

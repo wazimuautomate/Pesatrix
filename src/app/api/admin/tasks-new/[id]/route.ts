@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
+import { validateTaskFinancials } from "@/lib/financial-limits";
+import { getMaxTaskBatchValueKsh, getMaxTaskPayoutKsh } from "@/lib/platform-settings";
 import { taskInsertSchema } from "@/lib/task-types";
 import { normalizeTaskDatetimes } from "@/lib/datetime";
 
@@ -62,6 +64,20 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0]?.message } },
       { status: 422 }
     );
+  }
+
+  const [maxTaskPayoutKsh, maxTaskBatchValueKsh] = await Promise.all([
+    getMaxTaskPayoutKsh(),
+    getMaxTaskBatchValueKsh(),
+  ]);
+  const financialError = validateTaskFinancials({
+    payoutKsh: parsed.data.payout_ksh ?? Number(before.payout_ksh ?? 0),
+    totalSlots: parsed.data.total_slots ?? Number(before.total_slots ?? 0),
+    maxTaskPayoutKsh,
+    maxTaskBatchValueKsh,
+  });
+  if (financialError) {
+    return NextResponse.json({ error: financialError }, { status: 422 });
   }
 
   const update: Record<string, unknown> = {};

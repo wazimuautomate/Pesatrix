@@ -3,7 +3,7 @@ import { getWithdrawalHoldDays } from "@/lib/platform-settings";
 import { computeWalletSummary, type WalletSummary } from "@/lib/wallet-math";
 
 export const ACTIVATION_FEE_AMOUNT = 500;
-export const MIN_WITHDRAWAL_AMOUNT = 100;
+export const MIN_WITHDRAWAL_AMOUNT = 200;
 export const MAX_WITHDRAWAL_AMOUNT = 100000;
 
 export type WalletLedgerRow = {

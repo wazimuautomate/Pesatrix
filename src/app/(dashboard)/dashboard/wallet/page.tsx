@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { formatKSh } from "@/lib/utils";
 import { getWithdrawalHoldDays } from "@/lib/platform-settings";
+import { getMinWithdrawalAmount, getWithdrawalFeeAmount } from "@/lib/withdrawals";
 import { getWalletSummaryForUser, getWalletTransactionsForUser } from "@/lib/wallet";
 import {
   Wallet as WalletIcon,
@@ -21,11 +22,14 @@ export default async function WalletPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [wallet, withdrawalHoldDays, initialTransactions] = await Promise.all([
+  const [wallet, withdrawalHoldDays, minWithdrawal, withdrawalFee, initialTransactions] = await Promise.all([
     getWalletSummaryForUser(user!.id),
     getWithdrawalHoldDays(),
+    getMinWithdrawalAmount(),
+    getWithdrawalFeeAmount(),
     getWalletTransactionsForUser(user!.id),
   ]);
+  const canWithdraw = wallet.available >= minWithdrawal;
 
   return (
     <div className="space-y-6">
@@ -38,12 +42,23 @@ export default async function WalletPage() {
             Your earnings and transaction history
           </p>
         </div>
-        <Button asChild>
-          <Link href="/dashboard/wallet/withdraw">
+        {canWithdraw ? (
+          <Button asChild>
+            <Link href="/dashboard/wallet/withdraw">
+              Withdraw to M-Pesa
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Link>
+          </Button>
+        ) : (
+          <Button disabled>
             Withdraw to M-Pesa
             <ChevronRight className="ml-1 h-4 w-4" />
-          </Link>
-        </Button>
+          </Button>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-outline-variant/40 bg-surface-container-low px-4 py-3 text-sm text-muted-foreground">
+        Minimum withdrawal: {formatKSh(minWithdrawal)} | Processing fee: {formatKSh(withdrawalFee)}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
