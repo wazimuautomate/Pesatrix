@@ -129,7 +129,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const { id } = await params;
   const { error, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin", "support", "fraud"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -235,7 +235,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   const { id } = await params;
   const { error, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -245,15 +245,6 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   }
 
   const admin = createAdminSupabaseClient();
-
-  const { data: targetAdmin } = await (admin.from("admin_users" as never) as any)
-    .select("role")
-    .eq("user_id", id)
-    .maybeSingle();
-
-  if (targetAdmin?.role === "super_admin") {
-    return NextResponse.json({ error: "Cannot delete a super_admin account" }, { status: 403 });
-  }
 
   const { data: beforeProfile } = await (admin.from("profiles" as never) as any)
     .select("*")

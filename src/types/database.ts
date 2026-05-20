@@ -43,7 +43,7 @@ export type WithdrawalStatus =
 
 export type TicketStatus = "open" | "in_progress" | "resolved" | "closed";
 
-export type AdminRole = "super_admin" | "support" | "finance" | "viewer";
+export type AdminRole = "admin";
 
 export type RewardSpinType = "free" | "paid";
 
@@ -378,9 +378,10 @@ export interface Database {
           requires_screenshot: boolean;
           requires_url: boolean;
           min_word_count: number;
+          min_completion_seconds: number;
           task_data: Record<string, unknown>;
         };
-        Insert: Omit<Database["public"]["Tables"]["tasks"]["Row"], "id" | "created_at" | "updated_at" | "slots_remaining">;
+        Insert: Omit<Database["public"]["Tables"]["tasks"]["Row"], "id" | "created_at" | "updated_at" | "slots_remaining" | "min_completion_seconds">;
         Update: Partial<Database["public"]["Tables"]["tasks"]["Insert"]>;
       };
       task_submissions: {

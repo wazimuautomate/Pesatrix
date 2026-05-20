@@ -29,7 +29,7 @@ function supabaseErrorResponse(context: string, error: SupabaseErrorLike) {
 export async function GET(request: Request, { params }: RouteContext) {
   const { error } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin", "support"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
 

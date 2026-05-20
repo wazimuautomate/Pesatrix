@@ -8,6 +8,7 @@ import {
   ChevronLeft, ChevronRight, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
@@ -33,16 +34,19 @@ export function AdminSidebar() {
     <aside
       className={cn(
         "hidden flex-shrink-0 border-r border-outline-variant/40 bg-navy text-white transition-all duration-200 lg:flex lg:flex-col",
-        collapsed ? "w-16" : "w-64"
+        collapsed ? "w-20" : "w-64"
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
-        {!collapsed && (
-          <span className="text-base font-bold tracking-tight">
-            Pesatrix Wazim
-          </span>
-        )}
+      <div className={cn("flex h-16 items-center justify-between border-b border-white/10", collapsed ? "gap-1 px-2" : "px-4")}>
+        <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
+          <BrandLogo size={collapsed ? "compact" : "sidebarExpanded"} inverted />
+          {!collapsed && (
+            <span className="text-base font-bold tracking-tight">
+              Pesatrix Wazim
+            </span>
+          )}
+        </div>
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="flex h-8 w-8 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"

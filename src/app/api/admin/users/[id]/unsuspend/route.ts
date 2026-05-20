@@ -16,7 +16,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const { id } = await params;
   const { error, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin", "fraud"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
   if (!userId) {

@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff, Loader2, LockKeyhole } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -60,9 +61,7 @@ export function AdminLoginForm() {
   return (
     <Card className="w-full max-w-md border-outline-variant/40 bg-white shadow-sm">
       <CardHeader className="space-y-3 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-pesatrix-blue text-white">
-          <LockKeyhole className="h-5 w-5" />
-        </div>
+        <BrandLogo size="auth" className="mx-auto" />
         <div>
           <CardTitle className="text-2xl font-bold text-navy">Wazim Login</CardTitle>
           <CardDescription>Restricted Pesatrix operations access</CardDescription>

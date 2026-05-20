@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { BrandLogo } from "@/components/brand-logo";
 
 export function HomepageHeader() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -28,9 +29,7 @@ export function HomepageHeader() {
     >
       <div className="flex items-center justify-between gap-3">
         <Link href="/" className="flex min-w-0 items-center gap-2 sm:gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-navy text-base font-black text-white">
-            P
-          </span>
+          <BrandLogo size="sidebar" />
           <span className="hidden truncate font-display text-xl font-black text-navy min-[360px]:block">
             Pesatrix
           </span>

@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const { userId: targetUserId } = await params;
   const { error, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "fraud"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -7,7 +7,7 @@ import { normalizeTaskDatetimes } from "@/lib/datetime";
 export async function GET(request: Request) {
   const { error, userId } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin", "support"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
 
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const { error, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

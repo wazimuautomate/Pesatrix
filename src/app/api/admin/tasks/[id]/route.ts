@@ -29,7 +29,7 @@ const updateTaskSchema = z.object({
 export async function GET(_request: Request, { params }: RouteContext) {
   const { error: authError } = await requireAdmin({
     request: _request,
-    allowedRoles: ["super_admin", "admin", "support"],
+    allowedRoles: ["admin"],
   });
   if (authError) return authError;
 
@@ -51,7 +51,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
 export async function PATCH(request: Request, { params }: RouteContext) {
   const { error: authError, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (authError) return authError;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -130,7 +130,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 export async function DELETE(request: Request, { params }: RouteContext) {
   const { error: authError, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin"],
+    allowedRoles: ["admin"],
   });
   if (authError) return authError;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

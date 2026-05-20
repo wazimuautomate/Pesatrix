@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 import { AdminPageShell } from "@/components/admin/admin-native";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { asArray, firstRelation, requireWazimAdmin } from "@/lib/wazim-admin";
@@ -10,10 +8,6 @@ const FRAUD_AI_LAST_CRON_RUN_KEY = "fraud_ai_last_cron_run";
 
 export default async function AdminFraudPage() {
   const adminSession = await requireWazimAdmin();
-
-  if (!["super_admin", "fraud"].includes(adminSession.role)) {
-    redirect("/wazim?error=insufficient_role");
-  }
 
   const admin = createAdminSupabaseClient();
   const [settingsResult, adminUsersResult, verificationResult] = await Promise.all([

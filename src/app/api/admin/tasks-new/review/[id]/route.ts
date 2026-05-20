@@ -20,7 +20,7 @@ const reviewDecisionSchema = z.object({
 export async function GET(request: Request, { params }: RouteContext) {
   const { error } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin", "support"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
 
@@ -47,7 +47,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 export async function POST(request: Request, { params }: RouteContext) {
   const { error, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

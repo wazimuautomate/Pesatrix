@@ -94,7 +94,7 @@ export async function PATCH(
 ) {
   const { error, userId: adminAuthId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
 

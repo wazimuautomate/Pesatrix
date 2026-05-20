@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Separator } from "@/components/ui/separator";
+import { BrandLogo } from "@/components/brand-logo";
 
 const footerLinks = {
   Platform: [
@@ -28,9 +28,7 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1 flex flex-col items-start">
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy transition-transform group-hover:scale-105">
-                <span className="text-base font-bold text-white font-display">P</span>
-              </div>
+              <BrandLogo size="footer" className="transition-transform group-hover:scale-105" />
               <span className="text-xl font-semibold tracking-tight text-navy font-display">
                 Pesatrix
               </span>

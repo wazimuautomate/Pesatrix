@@ -70,6 +70,7 @@ export function SocialEngagementTask({
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [completeMessage, setCompleteMessage] = useState<string | null>(null);
+  const [openedAt] = useState(() => new Date().toISOString());
 
   const platformLabel = PLATFORM_LABELS[platform];
   const actionLabel = ACTION_LABELS[action];
@@ -160,6 +161,7 @@ export function SocialEngagementTask({
             platform,
             action,
           },
+          openedAt,
         }),
       });
       const payload = await response.json();

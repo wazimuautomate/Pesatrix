@@ -540,7 +540,8 @@ create table public.admin_users (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null unique references auth.users(id) on delete cascade,
   role text not null
-    check (role in ('super_admin', 'admin', 'support', 'finance', 'fraud')),
+    default 'admin'
+    check (role = 'admin'),
   status text not null default 'active'
     check (status in ('active', 'disabled')),
   created_at timestamptz not null default timezone('utc', now()),

@@ -17,6 +17,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -90,9 +91,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
       >
         {/* Logo */}
         <div className={cn("flex h-16 items-center border-b border-outline-variant/40", collapsed ? "justify-center px-3" : "gap-2 px-6")}>
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-navy">
-            <span className="text-xs font-bold text-white">P</span>
-          </div>
+          <BrandLogo size={collapsed ? "topbar" : "sidebar"} />
           {!collapsed ? (
             <span className="text-base font-bold tracking-tight text-navy">
               Pesatrix
@@ -157,9 +156,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
           {/* Mobile: Logo */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 lg:hidden">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-navy">
-                <span className="text-xs font-bold text-white">P</span>
-              </div>
+              <BrandLogo size="topbar" />
               <span className="text-base font-bold tracking-tight text-navy">
                 Pesatrix
               </span>

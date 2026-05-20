@@ -18,7 +18,7 @@ const providerSchema = z.object({
 export async function GET(request: Request) {
   const authResult = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (authResult.error) return authResult.error;
 
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const authResult = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (authResult.error) return authResult.error;
   if (!authResult.userId || !authResult.adminUser) {

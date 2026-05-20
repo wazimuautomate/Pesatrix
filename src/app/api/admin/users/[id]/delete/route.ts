@@ -13,9 +13,9 @@ const schema = z.object({
 
 export async function POST(request: Request, { params }: RouteContext) {
   const { id } = await params;
-  const { error, userId, adminUser, requestMeta } = await requireAdmin({
+  const { error, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
   if (!userId) {
@@ -33,15 +33,6 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const admin = createAdminSupabaseClient();
-
-  const { data: targetAdmin } = await (admin.from("admin_users" as never) as any)
-    .select("role")
-    .eq("user_id", id)
-    .maybeSingle();
-
-  if (targetAdmin?.role === "super_admin") {
-    return NextResponse.json({ error: "Cannot delete a super_admin account" }, { status: 403 });
-  }
 
   const { data: beforeProfile } = await (admin.from("profiles" as never) as any)
     .select("id, full_name, phone, email, county, created_at, deleted_at")

@@ -44,6 +44,7 @@ export function DataLabelingTask({
   const [submissionStatus, setSubmissionStatus] = useState<string | null>(null);
   const [submissionScore, setSubmissionScore] = useState<number | null>(null);
   const [imageFailed, setImageFailed] = useState<Record<string, boolean>>({});
+  const [openedAt] = useState(() => new Date().toISOString());
   const currentItem = items[currentIndex];
   const selectedLabel = currentItem ? answers[currentItem.id] ?? null : null;
   const isLast = currentIndex >= items.length - 1;
@@ -106,7 +107,7 @@ export function DataLabelingTask({
       const response = await fetch("/api/tasks/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId, answers }),
+        body: JSON.stringify({ taskId, answers, openedAt }),
       });
       const payload = await response.json();
 

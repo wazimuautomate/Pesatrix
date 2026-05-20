@@ -5,6 +5,20 @@ export const SYSTEM_ADMIN_ID =
 
 type RiskFlags = Record<string, unknown>;
 
+type SubmissionFraudCheckInput = {
+  userId: string;
+  taskId: string;
+  category: string;
+  answers: unknown;
+  openedAt?: string;
+  minCompletionSeconds?: number | null;
+};
+
+type SubmissionFraudCheckResult = {
+  shouldFlag: boolean;
+  flags: RiskFlags;
+};
+
 type DeviceSession = {
   id: string;
   user_id: string;
@@ -41,6 +55,73 @@ export async function addRiskPoints(
       risk_score: nextRiskScore,
       updated_at: new Date().toISOString(),
     });
+}
+
+export async function checkSubmissionFraud({
+  userId,
+  taskId,
+  category,
+  answers,
+  openedAt,
+  minCompletionSeconds,
+}: SubmissionFraudCheckInput): Promise<SubmissionFraudCheckResult> {
+  const supabaseAdmin = createAdminSupabaseClient();
+  const flags: RiskFlags = {};
+
+  const minimumSeconds = Number(minCompletionSeconds ?? 0);
+  if (openedAt && minimumSeconds > 0) {
+    const openedAtMs = new Date(openedAt).getTime();
+    const completionSeconds = (Date.now() - openedAtMs) / 1000;
+
+    if (Number.isFinite(completionSeconds) && completionSeconds < minimumSeconds) {
+      flags.speed_submission = true;
+      await addRiskPoints(userId, 15, { speed_submission: true, task_id: taskId });
+    }
+  }
+
+  if (category === "survey" || category === "content_creation") {
+    const { count: totalCount } = await supabaseAdmin
+      .from("task_submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("task_id", taskId);
+
+    if (totalCount !== null && totalCount >= 5) {
+      const { data: recentSubmissions } = await supabaseAdmin
+        .from("task_submissions")
+        .select("answers, user_id")
+        .eq("task_id", taskId)
+        .neq("user_id", userId)
+        .in("status", ["pending", "approved", "ai_reviewing"])
+        .order("submitted_at", { ascending: false })
+        .limit(20);
+
+      const currentAnswerStr = serializeAnswersForDuplicateCheck(answers);
+      const duplicateCount = (recentSubmissions ?? []).filter(
+        (submission: { answers: unknown }) =>
+          serializeAnswersForDuplicateCheck(submission.answers) === currentAnswerStr
+      ).length;
+
+      if (duplicateCount >= 2) {
+        flags.duplicate_answers = true;
+        await addRiskPoints(userId, 20, { duplicate_answers: true, task_id: taskId });
+      }
+    }
+  }
+
+  if (category === "survey") {
+    const values = getAnswerValues(answers);
+    const allSame = values.length > 3 && values.every((value) => value === values[0]);
+
+    if (allSame) {
+      flags.uniform_answers = true;
+      await addRiskPoints(userId, 10, { uniform_answers: true, task_id: taskId });
+    }
+  }
+
+  return {
+    shouldFlag: Object.keys(flags).length > 0,
+    flags,
+  };
 }
 
 export type ReferralPairValidationResult = {
@@ -340,6 +421,22 @@ async function usersRegisteredWithin24Hours(
 
 function uniqueStrings(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function serializeAnswersForDuplicateCheck(answers: unknown) {
+  return String(JSON.stringify(answers) ?? "").toLowerCase().trim();
+}
+
+function getAnswerValues(answers: unknown) {
+  if (Array.isArray(answers)) {
+    return answers;
+  }
+
+  if (isPlainObject(answers)) {
+    return Object.values(answers);
+  }
+
+  return [];
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

@@ -22,7 +22,7 @@ const LEGAL_TRANSITIONS: Record<string, string[]> = {
 export async function PATCH(request: Request, { params }: RouteContext) {
   const { error: authError, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (authError) return authError;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
