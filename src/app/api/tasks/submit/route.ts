@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { gradeSubmission } from "@/lib/ai/grading";
-import { addRiskPoints } from "@/lib/fraud/riskScorer";
+import { checkSubmissionFraud } from "@/lib/fraud/riskScorer";
 import { getDailyTaskLimit } from "@/lib/platform-settings";
 import { isDataLabelingTaskData, isSocialEngagementTaskData } from "@/lib/task-data";
 import { normalizeSocialTaskData } from "@/lib/social-engagement";
@@ -96,59 +96,20 @@ export async function POST(request: Request) {
     );
   }
 
-  let submissionStatus = task.ai_grading_enabled ? "ai_reviewing" : "pending";
-  const fraudFlags: Record<string, unknown> = {};
-
-  if (openedAt) {
-    const minCompletionSeconds = Number(task.min_completion_seconds ?? 0);
-    if (minCompletionSeconds > 0) {
-      const openedAtMs = new Date(openedAt).getTime();
-      const completionSeconds = (Date.now() - openedAtMs) / 1000;
-      if (completionSeconds < minCompletionSeconds) {
-        submissionStatus = "flagged";
-        fraudFlags.speed_submission = true;
-        await addRiskPoints(user.id, 15, { speed_submission: true, task_id: taskId });
-      }
-    }
-  }
-
-  if (task.category === "survey" || task.category === "content_creation") {
-    const { count: totalCount } = await admin
-      .from("task_submissions")
-      .select("id", { count: "exact", head: true })
-      .eq("task_id", taskId);
-
-    if (totalCount !== null && totalCount >= 5) {
-      const { data: recentSubmissions } = await admin
-        .from("task_submissions")
-        .select("answers, user_id")
-        .eq("task_id", taskId)
-        .in("status", ["pending", "approved", "ai_reviewing"])
-        .order("submitted_at", { ascending: false })
-        .limit(20);
-
-      if (recentSubmissions && recentSubmissions.length > 0) {
-        const currentAnswerStr = JSON.stringify(answers).toLowerCase().trim();
-        const duplicateCount = recentSubmissions.filter(
-          (s: { answers: unknown }) => JSON.stringify(s.answers).toLowerCase().trim() === currentAnswerStr
-        ).length;
-
-        if (duplicateCount >= 2) {
-          submissionStatus = "flagged";
-          fraudFlags.duplicate_answers = true;
-          await addRiskPoints(user.id, 20, { duplicate_answers: true, task_id: taskId });
-        }
-      }
-
-      const values = Object.values(answers);
-      const allSame = values.length > 3 && values.every((v) => v === values[0]);
-      if (allSame) {
-        submissionStatus = "flagged";
-        fraudFlags.uniform_answers = true;
-        await addRiskPoints(user.id, 10, { uniform_answers: true });
-      }
-    }
-  }
+  const submissionFraud = await checkSubmissionFraud({
+    userId: user.id,
+    taskId,
+    category: task.category,
+    answers,
+    openedAt,
+    minCompletionSeconds: task.min_completion_seconds,
+  });
+  let submissionStatus = submissionFraud.shouldFlag
+    ? "flagged"
+    : task.ai_grading_enabled
+      ? "ai_reviewing"
+      : "pending";
+  const fraudFlags = submissionFraud.flags;
 
   if (normalizedSubmittedUrl) {
     normalizedSubmittedUrl = normalizeSubmittedUrl(normalizedSubmittedUrl);
@@ -404,6 +365,14 @@ export async function POST(request: Request) {
     }
   }
 
+  const gradingDetail =
+    socialAutoFlag || Object.keys(fraudFlags).length > 0
+      ? {
+          ...(socialAutoFlag ? { social_auto_flag_reason: "risk_score_above_50" } : {}),
+          ...(Object.keys(fraudFlags).length > 0 ? { fraud_flags: fraudFlags } : {}),
+        }
+      : undefined;
+
   const { data: submission, error: insertError } = await admin
     .from("task_submissions")
     .insert({
@@ -415,11 +384,7 @@ export async function POST(request: Request) {
       status: submissionStatus,
       screenshot_hash: socialScreenshotHash,
       ip: requestIp,
-      grading_detail: socialAutoFlag
-        ? { social_auto_flag_reason: "risk_score_above_50" }
-        : Object.keys(fraudFlags).length > 0
-        ? { fraud_flags: fraudFlags }
-        : undefined,
+      grading_detail: gradingDetail,
     })
     .select("*")
     .single();
@@ -462,7 +427,7 @@ export async function POST(request: Request) {
       .eq("task_id", taskId);
   }
 
-  if (task.ai_grading_enabled) {
+  if (task.ai_grading_enabled && submissionStatus !== "flagged") {
     await admin
       .from("task_submissions")
       .update({ status: "ai_reviewing" })
@@ -490,7 +455,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data: reviewedSubmission } = task.ai_grading_enabled && (isDataLabelingTaskData(task.task_data) || isSocialTask || isVerificationTask)
+  const { data: reviewedSubmission } = task.ai_grading_enabled && submissionStatus !== "flagged" && (isDataLabelingTaskData(task.task_data) || isSocialTask || isVerificationTask)
     ? await admin
       .from("task_submissions")
       .select("id, status, submitted_at, ai_score, ai_reasoning")

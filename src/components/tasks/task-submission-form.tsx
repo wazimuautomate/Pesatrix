@@ -90,6 +90,7 @@ export function TaskSubmissionForm({
   const [watchSession, setWatchSession] = useState<WatchSessionState | null>(null);
   const [watchPaused, setWatchPaused] = useState(false);
   const [watchForfeited, setWatchForfeited] = useState(false);
+  const [openedAt] = useState(() => new Date().toISOString());
   const lastStrikeAtRef = useRef(0);
 
   const taskData = task.task_data;
@@ -257,6 +258,7 @@ export function TaskSubmissionForm({
         answers: submissionAnswers,
         screenshotUrl: task.requires_screenshot ? (screenshotUrl || null) : null,
         submittedUrl: task.requires_url ? (submittedUrl || null) : null,
+        openedAt,
       };
 
       const res = await fetch("/api/tasks/submit", {
@@ -295,6 +297,7 @@ export function TaskSubmissionForm({
           },
           screenshotUrl: data.screenshot_url ?? null,
           submittedUrl: data.submitted_url ?? null,
+          openedAt,
         }),
       });
 

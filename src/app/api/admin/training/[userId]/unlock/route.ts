@@ -7,7 +7,7 @@ export async function POST(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   const { error, adminUser, userId: adminAuthId, requestMeta } = await requireAdmin({
-    allowedRoles: ["super_admin", "admin", "support"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
 

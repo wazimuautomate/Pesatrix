@@ -6,7 +6,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 export async function GET(request: Request) {
   const { error } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "fraud"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
 

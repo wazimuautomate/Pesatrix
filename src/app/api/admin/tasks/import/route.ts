@@ -125,7 +125,7 @@ function validateTaskRow(raw: unknown, rowIndex: number): { valid: true; data: R
 export async function POST(request: Request) {
   const { error: authError, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (authError) return authError;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

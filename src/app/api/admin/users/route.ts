@@ -7,7 +7,7 @@ const PAGE_SIZE = 50;
 export async function GET(request: Request) {
   const { error: authError } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin", "support", "finance", "fraud"],
+    allowedRoles: ["admin"],
   });
   if (authError) return authError;
 

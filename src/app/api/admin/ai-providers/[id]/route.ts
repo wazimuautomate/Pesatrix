@@ -26,7 +26,7 @@ const updateProviderSchema = z.object({
 export async function PATCH(request: Request, { params }: RouteContext) {
   const authResult = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (authResult.error) return authResult.error;
   if (!authResult.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -137,7 +137,7 @@ function emptyStringToUndefined(value: unknown) {
 export async function DELETE(request: Request, { params }: RouteContext) {
   const authResult = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (authResult.error) return authResult.error;
   if (!authResult.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

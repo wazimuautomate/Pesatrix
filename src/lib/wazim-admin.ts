@@ -35,7 +35,7 @@ export async function requireWazimAdmin(): Promise<WazimAdminSession> {
   return {
     userId: user.id,
     email: user.email ?? null,
-    role: String(adminUser.role),
+    role: "admin",
     adminUserId: String(adminUser.id),
   };
 }

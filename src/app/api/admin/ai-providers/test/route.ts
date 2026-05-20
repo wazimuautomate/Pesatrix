@@ -14,7 +14,7 @@ const testSchema = z.object({
 export async function POST(request: Request) {
   const authResult = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (authResult.error) return authResult.error;
 

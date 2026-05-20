@@ -75,7 +75,7 @@ begin
         from public.admin_users au
         where au.user_id = auth.uid()
           and au.status = 'active'
-          and au.role in ('super_admin', 'admin', 'support')
+          and au.role = 'admin'
       )
     )
     with check (
@@ -84,7 +84,7 @@ begin
         from public.admin_users au
         where au.user_id = auth.uid()
           and au.status = 'active'
-          and au.role in ('super_admin', 'admin', 'support')
+          and au.role = 'admin'
       )
     );
   end if;

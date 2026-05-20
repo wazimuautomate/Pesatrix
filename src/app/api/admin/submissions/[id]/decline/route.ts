@@ -15,7 +15,7 @@ const declineSchema = z.object({
 export async function POST(request: Request, { params }: RouteContext) {
   const authResult = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (authResult.error) return authResult.error;
   if (!authResult.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

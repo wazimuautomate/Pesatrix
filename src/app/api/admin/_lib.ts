@@ -2,21 +2,13 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
-export const ADMIN_ROLES = [
-  "super_admin",
-  "admin",
-  "support",
-  "finance",
-  "fraud",
-] as const;
+export const ADMIN_ROLES = ["admin"] as const;
 
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 
-const ROLE_SET = new Set<string>(ADMIN_ROLES);
-
 type RequireAdminOptions = {
   request?: Request;
-  allowedRoles?: AdminRole[];
+  allowedRoles?: string[];
 };
 
 type AdminUserRecord = {
@@ -26,7 +18,7 @@ type AdminUserRecord = {
   status: "active" | "disabled";
 };
 
-/** Verify caller is an admin and optionally enforce endpoint-specific roles. */
+/** Verify caller has an active admin_users row. Endpoint role allowlists are ignored. */
 export async function requireAdmin(options: RequireAdminOptions = {}) {
   const supabase = await createServerSupabaseClient();
   const {
@@ -56,20 +48,6 @@ export async function requireAdmin(options: RequireAdminOptions = {}) {
       error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
       adminUser: null,
       userId: null,
-    };
-  }
-
-  if (
-    options.allowedRoles?.length &&
-    !options.allowedRoles.includes(normalizedAdminUser.role)
-  ) {
-    return {
-      error: NextResponse.json(
-        { error: "Forbidden", code: "INSUFFICIENT_ROLE" },
-        { status: 403 }
-      ),
-      adminUser: null,
-      userId: user.id,
     };
   }
 
@@ -135,11 +113,7 @@ function normalizeAdminUser(value: unknown): AdminUserRecord | null {
   }
 
   const candidate = value as Record<string, unknown>;
-  const role = typeof candidate.role === "string" ? candidate.role : null;
-
   if (
-    !role ||
-    !ROLE_SET.has(role) ||
     typeof candidate.id !== "string" ||
     typeof candidate.user_id !== "string"
   ) {
@@ -149,7 +123,7 @@ function normalizeAdminUser(value: unknown): AdminUserRecord | null {
   return {
     id: candidate.id,
     user_id: candidate.user_id,
-    role: role as AdminRole,
+    role: "admin",
     status:
       candidate.status === "disabled" ? "disabled" : "active",
   };

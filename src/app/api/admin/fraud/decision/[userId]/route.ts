@@ -17,7 +17,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const { userId: targetUserId } = await params;
   const { error, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "fraud"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -28,15 +28,6 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const admin = createAdminSupabaseClient();
-  const { data: targetAdmin } = await (admin.from("admin_users" as never) as any)
-    .select("role")
-    .eq("user_id", targetUserId)
-    .maybeSingle();
-
-  if (targetAdmin?.role === "super_admin") {
-    return NextResponse.json({ error: "Cannot modify a super_admin account" }, { status: 403 });
-  }
-
   const warning = await getHeldWithdrawalWarning(admin, targetUserId);
 
   if (parsed.data.action === "clear_flags") {

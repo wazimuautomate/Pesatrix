@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default function AuthLayout({
   children,
@@ -8,10 +9,8 @@ export default function AuthLayout({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-surface-container-low px-4 py-12">
       {/* Logo */}
-      <Link href="/" className="mb-8 flex items-center gap-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-navy">
-          <span className="text-sm font-bold text-white">P</span>
-        </div>
+      <Link href="/" className="mb-8 flex items-center gap-3">
+        <BrandLogo size="auth" />
         <span className="text-xl font-bold tracking-tight text-navy">
           Pesatrix
         </span>

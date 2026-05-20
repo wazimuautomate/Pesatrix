@@ -55,7 +55,7 @@ async function resolveProfileByIdentifier(identifier: string) {
 export async function POST(request: Request) {
   const { error, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

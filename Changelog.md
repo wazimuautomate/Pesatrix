@@ -1,5 +1,19 @@
 # Changelog
 
+## [style] Apply Real Pesatrix Logo Across App Chrome - 2026-05-20
+- Added a shared logo image component using `public/images/pesatrix.webp`
+- Replaced boxed letter marks on auth, admin login, dashboard, admin dashboard, and marketing chrome with uniformly sized unboxed logo images
+
+## [fix] Collapse Admin Roles To Single Admin - 2026-05-20
+- Removed endpoint-specific admin role enforcement so any active `admin_users` record can access admin APIs and Wazim pages
+- Normalized admin session/type handling to expose `admin` as the only admin role
+- Updated admin role database constraints and policies to use only `admin`
+
+## [fix] Task Submission Fraud Controls - 2026-05-20
+- Added per-user hourly submission rate limiting with an admin-user bypass for test submissions
+- Added task minimum-completion timing, duplicate answer detection, and uniform survey answer flags that increase user risk score without hard-rejecting submissions
+- Added `tasks.min_completion_seconds` with a default of 30 seconds and included `openedAt` in task submission payloads
+
 ## [fix] Harden Watch Respond And Content Creation Tasks - 2026-05-20
 - Added persisted Watch & Respond sessions with server-side start, elapsed-time validation, cheat-strike tracking, forfeiture at three strikes, and Supabase video signed URL issuing
 - Updated the user Watch & Respond UI for YouTube embeds, HTML5 video playback, external link instructions, debounced tab/window anti-cheat, locked questions, radio-card multiple choice, and required-answer gating

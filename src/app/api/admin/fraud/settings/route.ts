@@ -20,7 +20,7 @@ type FraudSettingRow = {
 export async function GET(request: Request) {
   const { error } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "fraud"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
 
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const { error, userId, requestMeta } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "fraud"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
   if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

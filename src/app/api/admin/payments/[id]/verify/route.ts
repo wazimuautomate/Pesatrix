@@ -9,7 +9,7 @@ export async function POST(
   const { id } = await params;
   const { error, adminUser } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "finance", "admin"],
+    allowedRoles: ["admin"],
   });
 
   if (error || !adminUser) return error;

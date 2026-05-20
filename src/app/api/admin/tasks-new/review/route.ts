@@ -5,7 +5,7 @@ import { requireAdmin } from "@/app/api/admin/_lib";
 export async function GET(request: Request) {
   const { error } = await requireAdmin({
     request,
-    allowedRoles: ["super_admin", "admin", "support"],
+    allowedRoles: ["admin"],
   });
   if (error) return error;
 

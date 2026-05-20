@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ChevronRight } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 
 const navLinks = [
@@ -22,9 +23,7 @@ export function MarketingHeader() {
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6 lg:px-12">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy transition-transform group-hover:scale-105">
-            <span className="text-base font-bold text-white font-display">P</span>
-          </div>
+          <BrandLogo size="sidebar" className="transition-transform group-hover:scale-105" />
           <span className="text-xl font-semibold tracking-tight text-navy font-display">
             Pesatrix
           </span>
