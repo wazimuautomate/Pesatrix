@@ -5,6 +5,7 @@ const {
   KENYAN_MPESA_PHONE_REGEX,
   normalizeKenyanPhone,
   phonesMatch,
+  validateSafaricomIP,
 } = await import("../src/lib/mpesa/security.ts");
 
 test("activation phone validation accepts Safaricom 07 and 01 formats", () => {
@@ -23,4 +24,54 @@ test("normalizePesaPhone stores activation payment phones in Daraja format", () 
 test("phonesMatch compares database and callback phone formats", () => {
   assert.equal(phonesMatch("+254790295408", "254790295408"), true);
   assert.equal(phonesMatch("254111327204", "+254111327204"), true);
+});
+
+test("production Safaricom IP validation accepts the observed Daraja callback IP", () => {
+  const originalDarajaEnv = process.env.DARAJA_ENV;
+  const originalWhitelist = process.env.SAFARICOM_IP_WHITELIST;
+
+  try {
+    process.env.DARAJA_ENV = "production";
+    delete process.env.SAFARICOM_IP_WHITELIST;
+
+    assert.equal(validateSafaricomIP("196.201.212.74"), true);
+    assert.equal(validateSafaricomIP("8.8.8.8"), false);
+  } finally {
+    if (originalDarajaEnv === undefined) {
+      delete process.env.DARAJA_ENV;
+    } else {
+      process.env.DARAJA_ENV = originalDarajaEnv;
+    }
+
+    if (originalWhitelist === undefined) {
+      delete process.env.SAFARICOM_IP_WHITELIST;
+    } else {
+      process.env.SAFARICOM_IP_WHITELIST = originalWhitelist;
+    }
+  }
+});
+
+test("production Safaricom IP validation supports configured CIDR ranges", () => {
+  const originalDarajaEnv = process.env.DARAJA_ENV;
+  const originalWhitelist = process.env.SAFARICOM_IP_WHITELIST;
+
+  try {
+    process.env.DARAJA_ENV = "production";
+    process.env.SAFARICOM_IP_WHITELIST = "196.201.212.0/24";
+
+    assert.equal(validateSafaricomIP("196.201.212.74"), true);
+    assert.equal(validateSafaricomIP("196.201.213.74"), false);
+  } finally {
+    if (originalDarajaEnv === undefined) {
+      delete process.env.DARAJA_ENV;
+    } else {
+      process.env.DARAJA_ENV = originalDarajaEnv;
+    }
+
+    if (originalWhitelist === undefined) {
+      delete process.env.SAFARICOM_IP_WHITELIST;
+    } else {
+      process.env.SAFARICOM_IP_WHITELIST = originalWhitelist;
+    }
+  }
 });

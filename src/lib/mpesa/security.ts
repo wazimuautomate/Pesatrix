@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 export const KENYAN_MPESA_PHONE_REGEX = /^(?:\+?254|0)[17]\d{8}$/;
 export const DARAJA_PHONE_REGEX = /^254[17]\d{8}$/;
+const DEFAULT_SAFARICOM_CALLBACK_IPS = ["196.201.212.74"];
 
 function getEnvValue(name: string) {
   const value = process.env[name]?.trim();
@@ -97,15 +98,60 @@ export function extractIP(request: Request): string {
   return request.headers.get("x-real-ip")?.trim() ?? "0.0.0.0";
 }
 
+function ipv4ToNumber(ip: string): number | null {
+  const octets = ip.split(".");
+  if (octets.length !== 4) {
+    return null;
+  }
+
+  let value = 0;
+  for (const octet of octets) {
+    if (!/^\d{1,3}$/.test(octet)) {
+      return null;
+    }
+
+    const parsed = Number(octet);
+    if (parsed < 0 || parsed > 255) {
+      return null;
+    }
+
+    value = value * 256 + parsed;
+  }
+
+  return value >>> 0;
+}
+
+function ipMatchesAllowlistEntry(requestIP: string, entry: string): boolean {
+  if (!entry.includes("/")) {
+    return requestIP === entry;
+  }
+
+  const [rangeIP, prefixValue] = entry.split("/");
+  const prefix = Number(prefixValue);
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
+    return false;
+  }
+
+  const requestNumber = ipv4ToNumber(requestIP);
+  const rangeNumber = ipv4ToNumber(rangeIP);
+  if (requestNumber === null || rangeNumber === null) {
+    return false;
+  }
+
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  return (requestNumber & mask) === (rangeNumber & mask);
+}
+
 export function validateSafaricomIP(requestIP: string): boolean {
   if (process.env.DARAJA_ENV !== "production") {
     return true;
   }
 
-  const whitelist = (process.env.SAFARICOM_IP_WHITELIST ?? "")
+  const configuredWhitelist = (process.env.SAFARICOM_IP_WHITELIST ?? "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
+  const whitelist = [...DEFAULT_SAFARICOM_CALLBACK_IPS, ...configuredWhitelist];
 
-  return whitelist.includes(requestIP);
+  return whitelist.some((entry) => ipMatchesAllowlistEntry(requestIP, entry));
 }
