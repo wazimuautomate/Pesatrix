@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/app/api/admin/_lib";
+import { getTaskScreenshotPublicUrlFromStoredUrl } from "@/lib/task-screenshots";
 
 export async function GET(request: Request) {
   const { error } = await requireAdmin({
@@ -70,9 +71,11 @@ export async function GET(request: Request) {
 
   const enriched = await Promise.all(rows.map(async (row: Record<string, unknown>) => {
     const screenshotUrl = typeof row.screenshot_url === "string" ? row.screenshot_url : null;
+    const publicScreenshotUrl = getTaskScreenshotPublicUrlFromStoredUrl(screenshotUrl);
     return {
       ...row,
-      screenshot_signed_url: screenshotUrl ? await createTaskScreenshotSignedUrl(admin, screenshotUrl) : null,
+      screenshot_url: publicScreenshotUrl,
+      screenshot_signed_url: publicScreenshotUrl,
       user_verification: verificationMap.get(row.user_id) ?? null,
       account_status: accountMap.get(row.user_id) ?? null,
     };
@@ -81,37 +84,3 @@ export async function GET(request: Request) {
   return NextResponse.json({ submissions: enriched });
 }
 
-async function createTaskScreenshotSignedUrl(
-  admin: ReturnType<typeof createAdminSupabaseClient>,
-  screenshotUrl: string
-) {
-  const parsed = parseTaskScreenshotUrl(screenshotUrl);
-  if (!parsed) return null;
-
-  const { data, error } = await admin.storage
-    .from("task-screenshots")
-    .createSignedUrl(parsed.path, 60 * 15);
-
-  if (error) {
-    console.error("[Admin review] Failed to sign screenshot URL:", error);
-    return null;
-  }
-
-  return data.signedUrl;
-}
-
-function parseTaskScreenshotUrl(value: string) {
-  try {
-    const url = new URL(value);
-    const supabaseUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!);
-    if (url.origin !== supabaseUrl.origin) return null;
-
-    const prefix = "/storage/v1/object/task-screenshots/";
-    if (!url.pathname.startsWith(prefix)) return null;
-    const path = decodeURIComponent(url.pathname.slice(prefix.length));
-    if (!path || path.includes("..")) return null;
-    return { path };
-  } catch {
-    return null;
-  }
-}

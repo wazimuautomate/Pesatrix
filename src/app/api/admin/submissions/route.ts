@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/app/api/admin/_lib";
+import { getTaskScreenshotPublicUrlFromStoredUrl } from "@/lib/task-screenshots";
 
 type SupabaseErrorLike = {
   message?: string;
@@ -112,7 +113,7 @@ export async function GET(request: Request) {
     const { data: profiles, error: profileSearchError } = await admin
       .from("profiles")
       .select("id")
-      .or(`full_name.ilike.%${searchTrimmed}%,phone.ilike.%${searchTrimmed}%,email.ilike.%${searchTrimmed}%`);
+      .or(`full_name.ilike.*${searchTrimmed}*,phone.ilike.*${searchTrimmed}*,email.ilike.*${searchTrimmed}*`);
 
     if (profileSearchError) {
       return supabaseErrorResponse("Admin submissions profile search", profileSearchError);
@@ -202,6 +203,10 @@ export async function GET(request: Request) {
   const profileMap = new Map((profiles ?? []).map((profile: Record<string, unknown>) => [profile.id, profile]));
   const items = rows.map((row: Record<string, unknown>) => ({
     ...row,
+    screenshot_url:
+      typeof row.screenshot_url === "string"
+        ? getTaskScreenshotPublicUrlFromStoredUrl(row.screenshot_url)
+        : row.screenshot_url,
     tasks: taskMap.get(row.task_id) ?? null,
     profiles: profileMap.get(row.user_id) ?? null,
   }));

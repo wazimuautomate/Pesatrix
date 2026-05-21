@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/app/api/admin/_lib";
+import { getTaskScreenshotPublicUrlFromStoredUrl } from "@/lib/task-screenshots";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -71,6 +72,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   return NextResponse.json({
     submission: {
       ...submission,
+      screenshot_url: getTaskScreenshotPublicUrlFromStoredUrl(submission.screenshot_url),
       tasks: task ?? null,
       profiles: profile ?? null,
     },

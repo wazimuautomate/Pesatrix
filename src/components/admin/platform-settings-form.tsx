@@ -122,10 +122,9 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
     {
       key: WITHDRAWAL_HOLD_DAYS_KEY,
       label: "Withdrawal hold period (days)",
-      description: "Pending funds are held for this many days before becoming withdrawable.",
+      description: "Pending funds are held for this many days before becoming withdrawable. Decimals are allowed for hours or minutes.",
       type: "number",
-      min: 0,
-      max: 30,
+      step: "any",
       defaultValue: "7",
     },
     {
@@ -133,7 +132,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       label: "Minimum withdrawal (KSh)",
       description: "Smallest amount a user can request from the wallet.",
       type: "number",
-      min: 200,
+      step: "any",
       defaultValue: "200",
     },
     {
@@ -141,15 +140,14 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       label: "Withdrawal processing fee (KSh)",
       description: "Flat amount deducted from every withdrawal request.",
       type: "number",
-      min: 30,
+      step: "any",
       defaultValue: "30",
     },
     {
       key: WITHDRAWAL_PROCESSING_DAYS_KEY,
       label: "Withdrawal processing time (days)",
-      description: "Expected admin payout processing time after a withdrawal is requested.",
+      description: "Expected admin payout processing time after a withdrawal is requested. Decimals are allowed for hours or minutes.",
       type: "number",
-      min: 0,
       step: "any",
       defaultValue: "3",
     },
@@ -165,8 +163,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       label: "Training completion reward (KSh)",
       description: "KSh reward credited instantly when user completes training.",
       type: "number",
-      min: 0,
-      max: 10000,
+      step: "any",
       defaultValue: "50",
     },
     {
@@ -174,24 +171,23 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       label: "Referral reward (KSh)",
       description: "Bonus for a direct referral after the referred account activates.",
       type: "number",
-      min: 100,
-      max: 100,
+      step: "any",
       defaultValue: "100",
     },
     {
       key: MAX_TASK_PAYOUT_KSH_KEY,
       label: "Maximum task payout (KSh)",
-      description: "Highest allowed payout per single task slot.",
+      description: "Reference value only. Task creation no longer blocks higher payouts.",
       type: "number",
-      min: 120,
+      step: "any",
       defaultValue: "120",
     },
     {
       key: MAX_TASK_BATCH_VALUE_KSH_KEY,
       label: "Maximum task batch value (KSh)",
-      description: "Highest allowed total task value using payout multiplied by slots.",
+      description: "Reference value only. Task creation no longer blocks higher batch values.",
       type: "number",
-      min: 600,
+      step: "any",
       defaultValue: "600",
     },
   ];
@@ -268,9 +264,8 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
                   <Input
                     id={def.key}
                     type={def.type}
-                    min={def.min}
-                    max={def.max}
-                    step={def.step ?? 1}
+                    min={"min" in def ? def.min : undefined}
+                    step={"step" in def ? def.step : 1}
                     value={currentValue}
                     onChange={(e) => handleChange(def.key, e.target.value)}
                     className="max-w-xs"

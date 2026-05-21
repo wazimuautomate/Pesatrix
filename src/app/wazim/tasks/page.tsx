@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, FileEdit, FileUp, Loader2, Plus, Search, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { CardSkeleton, TableSkeleton, FormSkeleton } from "@/components/ui/skeleton-loaders";
@@ -38,7 +39,17 @@ type Counts = {
   scheduled: number;
 };
 
+type AssignableUser = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  is_activated: boolean;
+};
+
 export default function TasksPage() {
+  const searchParams = useSearchParams();
+  const assignUserId = searchParams.get("assignUser");
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [counts, setCounts] = useState<Counts>({
     total: 0,
@@ -60,6 +71,7 @@ export default function TasksPage() {
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [rowActionLoading, setRowActionLoading] = useState<Record<string, "status" | "delete" | null>>({});
+  const [prefilledAssignedUsers, setPrefilledAssignedUsers] = useState<AssignableUser[]>([]);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -93,6 +105,43 @@ export default function TasksPage() {
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  useEffect(() => {
+    if (!assignUserId) return;
+
+    let cancelled = false;
+
+    async function loadAssignedUser() {
+      try {
+        const res = await fetch(`/api/admin/users/${assignUserId}`);
+        const result = await res.json();
+        if (!res.ok || !result.profile) {
+          toast.error(result?.error ?? "Failed to load selected user");
+          return;
+        }
+
+        if (cancelled) return;
+        setPrefilledAssignedUsers([
+          {
+            id: result.profile.id,
+            full_name: result.profile.full_name,
+            email: result.profile.email,
+            phone: result.profile.phone,
+            is_activated: Boolean(result.status?.is_activated),
+          },
+        ]);
+        setShowNewTask(true);
+      } catch {
+        if (!cancelled) toast.error("Failed to load selected user");
+      }
+    }
+
+    loadAssignedUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assignUserId]);
 
   async function handleSave(payload: Record<string, unknown>, publish: boolean) {
     const method = payload.id ? "PATCH" : "POST";
@@ -257,7 +306,10 @@ export default function TasksPage() {
       headerVariant="logoOnly"
       actions={
         <div className="flex flex-wrap justify-end gap-2">
-          <Button size="sm" onClick={() => setShowNewTask(true)}>
+          <Button size="sm" onClick={() => {
+            setPrefilledAssignedUsers([]);
+            setShowNewTask(true);
+          }}>
             <Plus className="mr-1 h-4 w-4" /> New Task
           </Button>
           <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
@@ -479,12 +531,22 @@ export default function TasksPage() {
         </Table>
       </div>
 
-      <Dialog open={showNewTask} onOpenChange={setShowNewTask}>
+      <Dialog
+        open={showNewTask}
+        onOpenChange={(open) => {
+          setShowNewTask(open);
+          if (!open) setPrefilledAssignedUsers([]);
+        }}
+      >
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogTitle>New Task</DialogTitle>
           <TaskForm
+            initialAssignedUsers={prefilledAssignedUsers}
             onSave={handleSave}
-            onCancel={() => setShowNewTask(false)}
+            onCancel={() => {
+              setShowNewTask(false);
+              setPrefilledAssignedUsers([]);
+            }}
           />
         </DialogContent>
       </Dialog>

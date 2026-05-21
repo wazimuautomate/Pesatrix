@@ -10,6 +10,7 @@ import { getDailyTaskLimit } from "@/lib/platform-settings";
 import { isDataLabelingTaskData, isSocialEngagementTaskData } from "@/lib/task-data";
 import { normalizeSocialTaskData } from "@/lib/social-engagement";
 import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
+import { TASK_SCREENSHOT_BUCKET, parseTaskScreenshotUrl } from "@/lib/task-screenshots";
 
 const submissionSchema = z.object({
   taskId: z.string().uuid(),
@@ -18,8 +19,6 @@ const submissionSchema = z.object({
   submittedUrl: z.string().nullable().optional(),
   openedAt: z.string().datetime().optional(),
 });
-
-const TASK_SCREENSHOT_BUCKET = "task-screenshots";
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -552,23 +551,6 @@ async function downloadScreenshotBytes(
   }
 
   return Buffer.from(await data.arrayBuffer());
-}
-
-function parseTaskScreenshotUrl(value: string) {
-  try {
-    const url = new URL(value);
-    const supabaseUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!);
-    if (url.origin !== supabaseUrl.origin) return null;
-
-    const prefix = `/storage/v1/object/${TASK_SCREENSHOT_BUCKET}/`;
-    if (!url.pathname.startsWith(prefix)) return null;
-
-    const path = decodeURIComponent(url.pathname.slice(prefix.length));
-    if (!path || path.includes("..")) return null;
-    return { path };
-  } catch {
-    return null;
-  }
 }
 
 function getClientIp(request: Request) {

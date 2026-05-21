@@ -4,6 +4,7 @@ import { getWithdrawalHoldDays } from "@/lib/platform-settings";
 import { isDataLabelingTaskData, isSocialEngagementTaskData, isVerificationTaskData } from "@/lib/task-data";
 import { normalizeSocialTaskData } from "@/lib/social-engagement";
 import { gradeVerificationSubmission } from "@/lib/ai/gradeVerificationTask";
+import { TASK_SCREENSHOT_BUCKET, parseTaskScreenshotUrl } from "@/lib/task-screenshots";
 
 const SYSTEM_PROMPT = `You are a strict but fair task submission reviewer for Pesatrix, a Kenyan online earning platform. Your job is to evaluate user task submissions and decide if they meet the required quality standard.
 
@@ -67,8 +68,6 @@ const OPENROUTER_TEXT_MODELS = [
   "qwen/qwen3-235b-a22b:free",
   "meta-llama/llama-4-maverick:free",
 ] as const;
-const TASK_SCREENSHOT_BUCKET = "task-screenshots";
-
 type VisionModelConfig = {
   modelId: string;
   provider: "nvidia" | "openrouter";
@@ -1247,30 +1246,6 @@ async function fetchImageAsBase64(
     base64: bytes.toString("base64"),
     mediaType: parsed.mediaType,
   };
-}
-
-function parseTaskScreenshotUrl(value: string) {
-  try {
-    const url = new URL(value);
-    const supabaseUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!);
-    if (url.origin !== supabaseUrl.origin) return null;
-
-    const prefix = `/storage/v1/object/${TASK_SCREENSHOT_BUCKET}/`;
-    if (!url.pathname.startsWith(prefix)) return null;
-
-    const path = decodeURIComponent(url.pathname.slice(prefix.length));
-    if (!path || path.includes("..")) return null;
-    const ext = path.split(".").pop()?.toLowerCase();
-    const mediaType =
-      ext === "png"
-        ? "image/png"
-        : ext === "webp"
-          ? "image/webp"
-          : "image/jpeg";
-    return { path, mediaType };
-  } catch {
-    return null;
-  }
 }
 
 function buildSocialVisionPrompt(args: {

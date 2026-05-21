@@ -33,7 +33,7 @@ import {
 import { validateTaskFinancials } from "@/lib/financial-limits";
 import { DataLabelingTask } from "@/components/tasks/DataLabelingTask";
 import { VerificationAdminFields } from "@/components/tasks/verification/VerificationAdminFields";
-import { normalizeDatetime } from "@/lib/datetime";
+import { normalizeDatetime, toDatetimeLocalInputValue } from "@/lib/datetime";
 import {
   ACTION_LABELS,
   PLATFORM_ACTIONS,
@@ -50,6 +50,7 @@ import type { TaskRow } from "./TaskCard";
 
 type TaskFormProps = {
   task?: TaskRow | null;
+  initialAssignedUsers?: AssignableUser[];
   onSave: (payload: Record<string, unknown>, publish: boolean) => Promise<void>;
   onCancel: () => void;
 };
@@ -98,7 +99,7 @@ const emptyMeta: MetaState = {
   min_referrals_required: "3",
 };
 
-export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
+export function TaskForm({ task, initialAssignedUsers = [], onSave, onCancel }: TaskFormProps) {
   const [meta, setMeta] = useState<MetaState>(emptyMeta);
   const [taskData, setTaskData] = useState<Record<string, unknown>>(() =>
     createEmptyTaskData("survey") as Record<string, unknown>
@@ -145,11 +146,22 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
       });
       setTaskData(task.task_data ?? {});
       setAssignedUsers(task.assigned_users ?? []);
-      setPublishAt(task.publish_at ? new Date(task.publish_at).toISOString().slice(0, 16) : "");
-      setExpiresAt(task.expires_at ? new Date(task.expires_at).toISOString().slice(0, 16) : "");
+      setPublishAt(toDatetimeLocalInputValue(task.publish_at));
+      setExpiresAt(toDatetimeLocalInputValue(task.expires_at));
       setPublishImmediately(!task.publish_at);
     }
   }, [task]);
+
+  useEffect(() => {
+    if (task || initialAssignedUsers.length === 0) return;
+
+    setAssignedUsers(initialAssignedUsers);
+    setUserResults(initialAssignedUsers);
+    setMeta((current) => ({
+      ...current,
+      visibility_mode: "assigned_only",
+    }));
+  }, [task, initialAssignedUsers]);
 
   function handleCategoryChange(category: TaskCategory) {
     setMeta((m) => ({

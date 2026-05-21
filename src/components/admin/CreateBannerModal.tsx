@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
 
   useEffect(() => {
     if (!search || formData.target !== "specific_user") {
@@ -62,6 +64,7 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
         body: JSON.stringify({
             ...formData,
             expires_at: formData.expires_at || null,
+            target_user_id: formData.target_user_id || null,
         }),
       });
 
@@ -78,6 +81,7 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
         is_dismissible: true,
         expires_at: "",
       });
+      setSelectedUser(null);
       setSearch("");
     } catch (error) {
       console.error(error);
@@ -140,7 +144,10 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
               <Label>Target</Label>
               <Select
                 value={formData.target}
-                onValueChange={(val) => setFormData({ ...formData, target: val, target_user_id: "" })}
+                onValueChange={(val) => {
+                  setFormData({ ...formData, target: val, target_user_id: "" });
+                  setSelectedUser(null);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -171,7 +178,10 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
                       className={`p-2 text-sm border rounded-lg cursor-pointer ${
                         formData.target_user_id === u.id ? "border-pesatrix-blue bg-pesatrix-blue/5" : "hover:bg-muted/50"
                       }`}
-                      onClick={() => setFormData({ ...formData, target_user_id: u.id })}
+                      onClick={() => {
+                        setFormData({ ...formData, target_user_id: u.id });
+                        setSelectedUser(u);
+                      }}
                     >
                       <div className="font-medium">{u.full_name || "Unknown"}</div>
                       <div className="text-xs text-muted-foreground">{u.phone}</div>
@@ -179,8 +189,26 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
                   ))}
                 </div>
               )}
-              {formData.target_user_id && (
-                <p className="text-xs text-green-600 mt-2 font-medium">User selected.</p>
+              {selectedUser && (
+                <div className="mt-3 p-3 bg-green-50/50 border border-green-200 rounded-lg flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-green-700">Selected Recipient</p>
+                    <p className="text-sm font-semibold text-navy mt-0.5 truncate">{selectedUser.full_name || "Unnamed user"}</p>
+                    {selectedUser.phone && <p className="text-xs text-muted-foreground mt-0.5">{selectedUser.phone}</p>}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive flex-shrink-0"
+                    onClick={() => {
+                      setFormData({ ...formData, target_user_id: "" });
+                      setSelectedUser(null);
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               )}
             </div>
           )}

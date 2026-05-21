@@ -1,6 +1,6 @@
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { TASK_SCREENSHOT_BUCKET, parseTaskScreenshotUrl } from "@/lib/task-screenshots";
 
-const TASK_SCREENSHOT_BUCKET = "task-screenshots";
 const FALLBACK_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const VISION_MODEL_TIMEOUT_MS = 30000;
@@ -149,30 +149,4 @@ async function fetchImageAsBase64(
     base64: bytes.toString("base64"),
     mediaType: parsed.mediaType,
   };
-}
-
-function parseTaskScreenshotUrl(value: string) {
-  try {
-    const url = new URL(value);
-    const supabaseUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!);
-    if (url.origin !== supabaseUrl.origin) return null;
-
-    const prefix = `/storage/v1/object/${TASK_SCREENSHOT_BUCKET}/`;
-    if (!url.pathname.startsWith(prefix)) return null;
-
-    const path = decodeURIComponent(url.pathname.slice(prefix.length));
-    if (!path || path.includes("..")) return null;
-
-    const ext = path.split(".").pop()?.toLowerCase();
-    const mediaType =
-      ext === "png"
-        ? "image/png"
-        : ext === "webp"
-          ? "image/webp"
-          : "image/jpeg";
-
-    return { path, mediaType };
-  } catch {
-    return null;
-  }
 }

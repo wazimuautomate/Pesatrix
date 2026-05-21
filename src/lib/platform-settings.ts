@@ -88,15 +88,6 @@ function normalizeReductionFraction(value: unknown, fallback: number) {
   return fallback;
 }
 
-function normalizeIntegerInRange(value: unknown, fallback: number, min: number, max: number) {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
-    return fallback;
-  }
-
-  return parsed;
-}
-
 function warnMissingSetting(key: string, fallback: number) {
   console.warn(`[PlatformSettings] Missing ${key}; using default ${fallback}`);
 }
@@ -110,15 +101,6 @@ async function getFirstPlatformSetting(keys: string[]) {
   }
 
   return null;
-}
-
-function normalizeIntegerWithFloor(value: unknown, floor: number) {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    return floor;
-  }
-
-  return Math.max(parsed, floor);
 }
 
 function normalizeRequiredPositiveInteger(value: unknown, key: string) {
@@ -161,7 +143,7 @@ export async function getTrainingCompletionRewardKsh() {
     warnMissingSetting(TRAINING_REWARD_SETTING_KEY, DEFAULT_TRAINING_REWARD_KSH);
   }
 
-  return normalizeIntegerInRange(setting?.value, DEFAULT_TRAINING_REWARD_KSH, 0, 10000);
+  return normalizeNonNegativeNumber(setting?.value, DEFAULT_TRAINING_REWARD_KSH);
 }
 
 export async function getActivationFeeKsh() {
@@ -179,7 +161,7 @@ export async function getWithdrawalHoldDays() {
     warnMissingSetting(WITHDRAWAL_HOLD_DAYS_KEY, DEFAULT_WITHDRAWAL_HOLD_DAYS);
   }
 
-  return normalizeIntegerInRange(setting?.value, DEFAULT_WITHDRAWAL_HOLD_DAYS, 0, 30);
+  return normalizeNonNegativeNumber(setting?.value, DEFAULT_WITHDRAWAL_HOLD_DAYS);
 }
 
 export async function getWithdrawalProcessingDays() {
@@ -221,7 +203,7 @@ export async function getMinWithdrawalKsh() {
     warnMissingSetting(MIN_WITHDRAWAL_KSH_KEY, FINANCIAL_LIMITS.MIN_WITHDRAWAL_KSH);
   }
 
-  return normalizeIntegerWithFloor(setting?.value, FINANCIAL_LIMITS.MIN_WITHDRAWAL_KSH);
+  return normalizeNonNegativeNumber(setting?.value, FINANCIAL_LIMITS.MIN_WITHDRAWAL_KSH);
 }
 
 export async function getWithdrawalFeeKsh() {
@@ -230,7 +212,7 @@ export async function getWithdrawalFeeKsh() {
     warnMissingSetting(WITHDRAWAL_FEE_KSH_KEY, FINANCIAL_LIMITS.WITHDRAWAL_FEE_KSH);
   }
 
-  return normalizeIntegerWithFloor(setting?.value, FINANCIAL_LIMITS.WITHDRAWAL_FEE_KSH);
+  return normalizeNonNegativeNumber(setting?.value, FINANCIAL_LIMITS.WITHDRAWAL_FEE_KSH);
 }
 
 export async function getMaxTaskPayoutKsh() {
@@ -239,7 +221,7 @@ export async function getMaxTaskPayoutKsh() {
     warnMissingSetting(MAX_TASK_PAYOUT_KSH_KEY, FINANCIAL_LIMITS.MAX_TASK_PAYOUT_KSH);
   }
 
-  return normalizeIntegerWithFloor(setting?.value, FINANCIAL_LIMITS.MAX_TASK_PAYOUT_KSH);
+  return normalizeNonNegativeNumber(setting?.value, FINANCIAL_LIMITS.MAX_TASK_PAYOUT_KSH);
 }
 
 export async function getMaxTaskBatchValueKsh() {
@@ -248,7 +230,7 @@ export async function getMaxTaskBatchValueKsh() {
     warnMissingSetting(MAX_TASK_BATCH_VALUE_KSH_KEY, FINANCIAL_LIMITS.MAX_TASK_BATCH_VALUE_KSH);
   }
 
-  return normalizeIntegerWithFloor(setting?.value, FINANCIAL_LIMITS.MAX_TASK_BATCH_VALUE_KSH);
+  return normalizeNonNegativeNumber(setting?.value, FINANCIAL_LIMITS.MAX_TASK_BATCH_VALUE_KSH);
 }
 
 export async function upsertPlatformSetting({

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Search,
@@ -22,6 +23,9 @@ import {
   Phone,
   Calendar,
   AlertTriangle,
+  ClipboardList,
+  Edit3,
+  MessageCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -120,8 +124,6 @@ export function UserDirectoryClient({
   currentAdminId: string;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-
   const [users, setUsers] = useState<UserRow[]>(initialUsers);
   const [stats, setStats] = useState<Stats>(initialStats);
   const [page, setPage] = useState(initialPage);
@@ -274,6 +276,7 @@ export function UserDirectoryClient({
   };
 
   const isSelf = (userId: string) => userId === currentAdminId;
+  const actionHref = (userId: string) => `/wazim/tasks?assignUser=${encodeURIComponent(userId)}`;
 
   return (
     <>
@@ -365,6 +368,30 @@ export function UserDirectoryClient({
                         <div className="flex flex-wrap justify-end gap-1">
                           <Button size="sm" variant="ghost" onClick={() => openDetail(user.id)}>
                             <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" asChild title="Edit user">
+                            <Link href={`/wazim/users/${user.id}`}>
+                              <Edit3 className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                          {user.phone && (
+                            <>
+                              <Button size="sm" variant="ghost" asChild title="Call user">
+                                <a href={`tel:${normalizePhoneForTel(user.phone)}`}>
+                                  <Phone className="h-4 w-4" />
+                                </a>
+                              </Button>
+                              <Button size="sm" variant="ghost" asChild title="Chat on WhatsApp">
+                                <a href={`https://wa.me/${normalizePhoneForWhatsApp(user.phone)}`} target="_blank" rel="noopener noreferrer">
+                                  <MessageCircle className="h-4 w-4 text-teal" />
+                                </a>
+                              </Button>
+                            </>
+                          )}
+                          <Button size="sm" variant="ghost" asChild title="Assign task">
+                            <Link href={actionHref(user.id)}>
+                              <ClipboardList className="h-4 w-4 text-pesatrix-blue" />
+                            </Link>
                           </Button>
                           {user.status !== "suspended" && user.status !== "banned" && !isSelf(user.id) && (
                             <Button size="sm" variant="ghost" onClick={() => openAction("suspend", user.id, user.full_name ?? "User")}>
@@ -527,6 +554,34 @@ export function UserDirectoryClient({
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-destructive">Actions</h4>
                 <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/wazim/users/${detailUser.id}`}>
+                      <Edit3 className="mr-1 h-4 w-4" />
+                      Edit
+                    </Link>
+                  </Button>
+                  {detailUser.phone && (
+                    <>
+                      <Button size="sm" variant="outline" asChild>
+                        <a href={`tel:${normalizePhoneForTel(detailUser.phone)}`}>
+                          <Phone className="mr-1 h-4 w-4" />
+                          Call
+                        </a>
+                      </Button>
+                      <Button size="sm" variant="outline" asChild>
+                        <a href={`https://wa.me/${normalizePhoneForWhatsApp(detailUser.phone)}`} target="_blank" rel="noopener noreferrer">
+                          <MessageCircle className="mr-1 h-4 w-4" />
+                          WhatsApp
+                        </a>
+                      </Button>
+                    </>
+                  )}
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={actionHref(detailUser.id)}>
+                      <ClipboardList className="mr-1 h-4 w-4" />
+                      Assign Task
+                    </Link>
+                  </Button>
                   {detailUser.status !== "suspended" && detailUser.status !== "banned" && !isSelf(detailUser.id) && (
                     <Button size="sm" variant="destructive" onClick={() => { setDetailOpen(false); openAction("suspend", detailUser.id, detailUser.full_name ?? "User"); }}>
                       <ShieldAlert className="mr-1 h-4 w-4" />
@@ -680,4 +735,14 @@ function formatDate(dateStr: string) {
     timeStyle: "short",
     timeZone: "Africa/Nairobi",
   }).format(date);
+}
+
+function normalizePhoneForTel(phone: string) {
+  return phone.trim();
+}
+
+function normalizePhoneForWhatsApp(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("0")) return `254${digits.slice(1)}`;
+  return digits;
 }

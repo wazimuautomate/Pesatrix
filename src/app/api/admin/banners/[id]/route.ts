@@ -17,6 +17,9 @@ export async function PATCH(
   if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 
   const body = await request.json();
+  if (body.target_user_id === "") {
+    body.target_user_id = null;
+  }
   const admin = createAdminSupabaseClient();
 
   const { data: banner, error: updateError } = await admin

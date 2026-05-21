@@ -91,81 +91,11 @@ export async function PATCH(request: Request) {
     }
   }
 
-  if (key === REFERRAL_LEVEL_1_REWARD_KEY) {
-    const numValue = Number(value);
-    if (numValue !== 100) {
-      return NextResponse.json(
-        { error: "Referral reward must be KSh 100" },
-        { status: 422 }
-      );
-    }
-  }
-
-  if (key === WITHDRAWAL_HOLD_DAYS_KEY) {
-    const numValue = Number(value);
-    if (!Number.isInteger(numValue) || numValue < 0 || numValue > 30) {
-      return NextResponse.json(
-        { error: "Withdrawal hold period must be a whole number between 0 and 30" },
-        { status: 422 }
-      );
-    }
-  }
-
   if (key === ACTIVATION_FEE_KSH_KEY) {
     const numValue = Number(value);
     if (!Number.isInteger(numValue) || numValue < 1) {
       return NextResponse.json(
         { error: "Activation fee must be a whole number of at least KSh 1" },
-        { status: 422 }
-      );
-    }
-  }
-
-  if (key === MIN_WITHDRAWAL_KSH_KEY || key === LEGACY_MIN_WITHDRAWAL_KSH_KEY) {
-    const numValue = Number(value);
-    if (!Number.isInteger(numValue) || numValue < 200) {
-      return NextResponse.json(
-        { error: "Minimum withdrawal must be a whole number of at least KSh 200" },
-        { status: 422 }
-      );
-    }
-  }
-
-  if (key === WITHDRAWAL_FEE_KSH_KEY) {
-    const numValue = Number(value);
-    if (!Number.isInteger(numValue) || numValue < 30) {
-      return NextResponse.json(
-        { error: "Withdrawal fee must be a whole number of at least KSh 30" },
-        { status: 422 }
-      );
-    }
-  }
-
-  if (key === MAX_TASK_PAYOUT_KSH_KEY) {
-    const numValue = Number(value);
-    if (!Number.isInteger(numValue) || numValue < 120) {
-      return NextResponse.json(
-        { error: "Maximum task payout must be a whole number of at least KSh 120" },
-        { status: 422 }
-      );
-    }
-  }
-
-  if (key === MAX_TASK_BATCH_VALUE_KSH_KEY) {
-    const numValue = Number(value);
-    if (!Number.isInteger(numValue) || numValue < 600) {
-      return NextResponse.json(
-        { error: "Maximum task batch value must be a whole number of at least KSh 600" },
-        { status: 422 }
-      );
-    }
-  }
-
-  if (key === WITHDRAWAL_PROCESSING_DAYS_KEY) {
-    const numValue = Number(value);
-    if (!Number.isFinite(numValue) || numValue < 0) {
-      return NextResponse.json(
-        { error: "Withdrawal processing time must be a positive number" },
         { status: 422 }
       );
     }
@@ -189,16 +119,6 @@ export async function PATCH(request: Request) {
     ) {
       return NextResponse.json(
         { error: "Withdrawal webhook URL must be a valid http or https URL" },
-        { status: 422 }
-      );
-    }
-  }
-
-  if (key === TRAINING_REWARD_SETTING_KEY) {
-    const numValue = Number(value);
-    if (!Number.isInteger(numValue) || numValue < 0 || numValue > 10000) {
-      return NextResponse.json(
-        { error: "Training completion reward must be a whole number between 0 and 10000" },
         { status: 422 }
       );
     }

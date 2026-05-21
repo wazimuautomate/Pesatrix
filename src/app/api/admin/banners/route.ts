@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       message,
       type: type ?? "info",
       target: target ?? "all",
-      target_user_id: target_user_id ?? null,
+      target_user_id: target_user_id || null,
       is_dismissible: is_dismissible ?? true,
       expires_at: expires_at ? new Date(expires_at).toISOString() : null,
       created_by: userId,
