@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { AlertCircle, Plus, FileUp, Search, Loader2, X, Trash2, Send, FileEdit } from "lucide-react";
+import { AlertCircle, FileEdit, FileUp, Loader2, Plus, Search, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdminPageShell, MetricCard } from "@/components/admin/admin-native";
@@ -24,8 +23,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { CATEGORY_LABELS, type TaskCategory, type TaskStatus } from "@/lib/task-types";
-import { TaskCard, type TaskRow } from "./components/TaskCard";
+import { type TaskStatus } from "@/lib/task-types";
+import { TaskMobileCard, TaskTableRow, type TaskRow } from "./components/TaskCard";
 import { TaskForm } from "./components/TaskForm";
 import { TaskImportPanel } from "./components/TaskImportPanel";
 
@@ -39,7 +38,6 @@ type Counts = {
 };
 
 export default function TasksPage() {
-  const router = useRouter();
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [counts, setCounts] = useState<Counts>({
     total: 0,
@@ -56,9 +54,11 @@ export default function TasksPage() {
   const [showNewTask, setShowNewTask] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
+  const [editingTaskLoading, setEditingTaskLoading] = useState(false);
   const [filterError, setFilterError] = useState<string | null>(null);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [rowActionLoading, setRowActionLoading] = useState<Record<string, "status" | "delete" | null>>({});
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -122,37 +122,46 @@ export default function TasksPage() {
   }
 
   async function handleStatusChange(id: string, newStatus: TaskStatus) {
-    const res = await fetch(`/api/admin/tasks/${id}/status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
-    });
+    setRowActionLoading((current) => ({ ...current, [id]: "status" }));
+    try {
+      const res = await fetch(`/api/admin/tasks/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-    const result = await res.json();
-    if (!res.ok) {
-      toast.error(result?.error ?? "Failed to change status");
-      return;
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error(result?.error ?? "Failed to change status");
+        return;
+      }
+
+      toast.success(`Task ${newStatus}`);
+      fetchTasks();
+    } finally {
+      setRowActionLoading((current) => ({ ...current, [id]: null }));
     }
-
-    toast.success(`Task ${newStatus}`);
-    fetchTasks();
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this draft task? This cannot be undone.")) return;
+    setRowActionLoading((current) => ({ ...current, [id]: "delete" }));
+    try {
+      const res = await fetch(`/api/admin/tasks/${id}`, {
+        method: "DELETE",
+      });
 
-    const res = await fetch(`/api/admin/tasks/${id}`, {
-      method: "DELETE",
-    });
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error(result?.error ?? "Failed to delete task");
+        return;
+      }
 
-    const result = await res.json();
-    if (!res.ok) {
-      toast.error(result?.error ?? "Failed to delete task");
-      return;
+      toast.success("Task deleted");
+      fetchTasks();
+    } finally {
+      setRowActionLoading((current) => ({ ...current, [id]: null }));
     }
-
-    toast.success("Task deleted");
-    fetchTasks();
   }
 
   async function handleBulkAction(action: "delete" | "publish" | "draft") {
@@ -216,6 +225,24 @@ export default function TasksPage() {
     setSelectedTasks(newSelected);
   }
 
+  async function handleEdit(taskId: string) {
+    setEditingTaskLoading(true);
+    try {
+      const res = await fetch(`/api/admin/tasks/${taskId}`);
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error(result?.error ?? "Failed to load task");
+        return;
+      }
+
+      setEditingTask(result.task ?? null);
+    } catch {
+      toast.error("Failed to load task");
+    } finally {
+      setEditingTaskLoading(false);
+    }
+  }
+
   return (
     <AdminPageShell
       admin={{
@@ -226,13 +253,14 @@ export default function TasksPage() {
       }}
       title="Tasks"
       description="Manage the task catalog: create, import, edit, and publish tasks for users."
+      headerVariant="logoOnly"
       actions={
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button size="sm" onClick={() => setShowNewTask(true)}>
             <Plus className="mr-1 h-4 w-4" /> New Task
           </Button>
           <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
-            <FileUp className="mr-1 h-4 w-4" /> Import JSON
+            <FileUp className="mr-1 h-4 w-4" /> Import
           </Button>
         </div>
       }
@@ -369,7 +397,35 @@ export default function TasksPage() {
         </div>
       )}
 
-      <div className="mt-4 rounded-lg border bg-white">
+      <div className="mt-4 space-y-3 md:hidden">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-40 animate-pulse rounded-2xl border border-outline-variant/40 bg-white" />
+          ))
+        ) : tasks.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-outline-variant/70 bg-white p-8 text-center text-sm text-muted-foreground">
+            {search || (categoryFilter && categoryFilter !== "all") || (statusFilter && statusFilter !== "all")
+              ? "No tasks found"
+              : "No tasks yet. Create one or import from JSON."}
+          </div>
+        ) : (
+          tasks.map((task) => (
+            <TaskMobileCard
+              key={task.id}
+              task={task}
+              onEdit={(row) => handleEdit(row.id)}
+              onStatusChange={handleStatusChange}
+              onDelete={handleDelete}
+              canDelete={task.status === "draft"}
+              selected={selectedTasks.has(task.id)}
+              onToggleSelect={() => toggleSelect(task.id)}
+              actionLoading={rowActionLoading[task.id] ?? null}
+            />
+          ))
+        )}
+      </div>
+
+      <div className="mt-4 hidden rounded-lg border bg-white md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -382,6 +438,7 @@ export default function TasksPage() {
                 />
               </TableHead>
               <TableHead>Title</TableHead>
+              <TableHead>Access</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Payout (KSh)</TableHead>
               <TableHead>Slots</TableHead>
@@ -394,13 +451,13 @@ export default function TasksPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <td colSpan={9} className="p-8 text-center text-muted-foreground">
+                <td colSpan={10} className="p-8 text-center text-muted-foreground">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin" />
                 </td>
               </TableRow>
             ) : tasks.length === 0 ? (
               <TableRow>
-                <td colSpan={9} className="p-8 text-center text-muted-foreground">
+                <td colSpan={10} className="p-8 text-center text-muted-foreground">
                   {search || (categoryFilter && categoryFilter !== "all") || (statusFilter && statusFilter !== "all")
                     ? "No tasks found"
                     : "No tasks yet. Create one or import from JSON."}
@@ -408,15 +465,16 @@ export default function TasksPage() {
               </TableRow>
             ) : (
               tasks.map((task) => (
-                <TaskCard
+                <TaskTableRow
                   key={task.id}
                   task={task}
-                  onEdit={setEditingTask}
+                  onEdit={(row) => handleEdit(row.id)}
                   onStatusChange={handleStatusChange}
                   onDelete={handleDelete}
                   canDelete={task.status === "draft"}
                   selected={selectedTasks.has(task.id)}
                   onToggleSelect={() => toggleSelect(task.id)}
+                  actionLoading={rowActionLoading[task.id] ?? null}
                 />
               ))
             )}
@@ -434,16 +492,28 @@ export default function TasksPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}>
+      <Dialog
+        open={editingTaskLoading || !!editingTask}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingTask(null);
+            setEditingTaskLoading(false);
+          }
+        }}
+      >
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogTitle>Edit Task</DialogTitle>
-          {editingTask && (
+          {editingTaskLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : editingTask ? (
             <TaskForm
               task={editingTask}
               onSave={handleSave}
               onCancel={() => setEditingTask(null)}
             />
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
 

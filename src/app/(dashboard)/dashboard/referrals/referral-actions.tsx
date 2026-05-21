@@ -1,66 +1,69 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Copy, Mail, MessageCircleMore, Share2 } from "lucide-react";
+import { Check, Copy, Share2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-
-type ShareTarget = "email" | "whatsapp" | "facebook";
 
 export function ReferralActions({
   referralLink,
 }: {
   referralLink: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(referralLink);
+    setCopied(true);
+    toast.success("Link copied!");
+    window.setTimeout(() => setCopied(false), 2000);
+  }
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(referralLink);
-      toast.success("Referral link copied.");
+      await copyLink();
     } catch {
       toast.error("Unable to copy the referral link.");
     }
   }
 
-  function openShare(target: ShareTarget) {
-    const encodedLink = encodeURIComponent(referralLink);
-    const text = encodeURIComponent("Join Pesatrix using my referral link:");
-    const href =
-      target === "email"
-        ? `mailto:?subject=Join%20Pesatrix&body=${text}%20${encodedLink}`
-        : target === "whatsapp"
-          ? `https://wa.me/?text=${text}%20${encodedLink}`
-          : `https://www.facebook.com/sharer/sharer.php?u=${encodedLink}`;
+  async function handleShare() {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "Join Pesatrix",
+          text: "Join Pesatrix using my referral link:",
+          url: referralLink,
+        });
+        return;
+      }
 
-    window.open(href, "_blank", "noopener,noreferrer");
+      await copyLink();
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+
+      toast.error("Unable to share the referral link.");
+    }
   }
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="icon" title="Copy link" onClick={handleCopy}>
-        <Copy className="h-4 w-4" />
-      </Button>
-      <Button variant="outline" size="icon" title="Share options" onClick={() => setExpanded((current) => !current)}>
-        <Share2 className="h-4 w-4" />
-      </Button>
-      {expanded ? (
-        <>
-          <Button variant="outline" onClick={() => openShare("email")}>
-            <Mail className="mr-2 h-4 w-4" />
-            Email
-          </Button>
-          <Button variant="outline" onClick={() => openShare("whatsapp")}>
-            <MessageCircleMore className="mr-2 h-4 w-4" />
-            WhatsApp
-          </Button>
-          <Button variant="outline" onClick={() => openShare("facebook")}>
-            <Share2 className="mr-2 h-4 w-4" />
-            Facebook
-          </Button>
-        </>
-      ) : null}
+      <motion.div whileTap={{ scale: 0.95 }}>
+        <Button variant="outline" title="Copy link" onClick={handleCopy}>
+          {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+          Copy
+        </Button>
+      </motion.div>
+      <motion.div whileTap={{ scale: 0.95 }}>
+        <Button variant="outline" onClick={handleShare}>
+          <Share2 className="mr-2 h-4 w-4" />
+          Share
+        </Button>
+      </motion.div>
     </div>
   );
 }

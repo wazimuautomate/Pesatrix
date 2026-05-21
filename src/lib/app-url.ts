@@ -33,10 +33,6 @@ export async function getAppBaseUrl() {
     return `${protocol}://${host}`;
   }
 
-  if (process.env.NODE_ENV === "development") {
-    return "http://localhost:3000";
-  }
-
   return "https://pesatrix.vercel.app";
 }
 

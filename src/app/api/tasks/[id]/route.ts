@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { sanitizeTaskForClient } from "@/lib/task-data";
+import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -30,22 +31,20 @@ export async function GET(request: Request, { params }: RouteContext) {
   }
 
   const admin = createAdminSupabaseClient();
-  const { data: task, error } = await admin
-    .from("tasks")
-    .select("*")
-    .eq("id", id)
-    .in("status", ["active", "scheduled"])
-    .gt("slots_remaining", 0)
-    .or("expires_at.is.null,expires_at.gt.now()")
-    .maybeSingle();
+  const [taskResult, taskAccess] = await Promise.all([
+    admin
+      .from("tasks")
+      .select("*")
+      .eq("id", id)
+      .in("status", ["active", "scheduled"])
+      .gt("slots_remaining", 0)
+      .or("expires_at.is.null,expires_at.gt.now()")
+      .maybeSingle(),
+    getTaskAccessContext(admin, user.id),
+  ]);
 
-  const publishAt = task?.publish_at ? new Date(task.publish_at as string).getTime() : null;
-  const isVisible =
-    task?.status === "active"
-      ? publishAt === null || publishAt <= Date.now()
-      : task?.status === "scheduled" && publishAt !== null && publishAt <= Date.now();
-
-  if (error || !task || !isVisible) {
+  const task = taskResult.data;
+  if (taskResult.error || !task || !isTaskLive(task) || !canUserAccessTask(task, taskAccess)) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
 

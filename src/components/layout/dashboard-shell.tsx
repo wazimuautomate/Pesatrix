@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard,
@@ -13,7 +13,6 @@ import {
   UserCircle,
   Gift,
   GraduationCap,
-  Bell,
   ChevronRight,
   LogOut,
 } from "lucide-react";
@@ -21,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { createClient } from "@/lib/supabase/client";
 
 const sidebarLinks = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -60,7 +60,9 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children, user }: DashboardShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const isImmersiveRoute =
     immersiveDashboardRoutes.has(pathname) ||
@@ -80,6 +82,19 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
         .toUpperCase()
         .slice(0, 2)
     : "U";
+
+  async function handleLogout() {
+    if (isSigningOut) {
+      return;
+    }
+
+    setIsSigningOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    sessionStorage.removeItem("pesatrix_session_active");
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <div className="dashboard-canvas flex min-h-screen">
@@ -155,17 +170,18 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
             ) : null}
           </div>
           <Button
-            asChild
             variant="ghost"
             className={cn(
               "mt-3 w-full justify-start rounded-xl text-white/70 hover:bg-white/10 hover:text-white",
               collapsed && "justify-center px-0"
             )}
+            onClick={() => void handleLogout()}
+            disabled={isSigningOut}
           >
-            <Link href="/login">
+            <span className="flex items-center">
               <LogOut className="h-4 w-4" />
               {!collapsed && <span className="ml-3">Log out</span>}
-            </Link>
+            </span>
           </Button>
         </div>
       </aside>
@@ -173,7 +189,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
       {/* Main Content */}
       <div className="flex flex-1 flex-col">
         {/* Top Bar (Mobile + Desktop) */}
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-outline-variant/30 bg-white/80 px-4 shadow-sm shadow-navy/5 backdrop-blur-xl sm:px-6 lg:h-20 lg:px-8">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between rounded-b-2xl bg-white px-4 shadow-sm shadow-navy/10 sm:px-6 lg:h-20 lg:rounded-none lg:border-b lg:border-outline-variant/30 lg:px-8 lg:shadow-sm lg:backdrop-blur-xl">
           {/* Mobile: Logo */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 lg:hidden">
@@ -199,17 +215,14 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" asChild className="lg:hidden">
-              <Link href="/dashboard/profile">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary/10 text-xs text-primary">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-              </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full text-navy lg:hidden"
+              onClick={() => void handleLogout()}
+              disabled={isSigningOut}
+            >
+              <LogOut className="h-5 w-5" />
             </Button>
           </div>
         </header>
@@ -222,10 +235,11 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
 
       {/* Mobile Bottom Nav */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-outline-variant/30 bg-white/90 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-16px_34px_rgba(11,31,59,0.12)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-gray-100 bg-white/95 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-16px_34px_rgba(11,31,59,0.12)] backdrop-blur-xl lg:hidden"
         aria-label="Dashboard mobile navigation"
       >
-        <div className="flex gap-2 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="relative">
+          <div className="scrollbar-hide flex gap-2 overflow-x-auto px-3">
           {mobileNavLinks.map((link) => {
             const isActive =
               link.href === "/dashboard"
@@ -239,15 +253,23 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
                 className={cn(
                   "flex min-w-[4.75rem] flex-none flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[11px] font-medium leading-tight transition-colors",
                   isActive
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-on-surface-variant hover:bg-accent/60 hover:text-foreground"
+                    ? "text-indigo-600"
+                    : "text-gray-400 hover:bg-accent/60 hover:text-foreground"
                 )}
               >
-                <link.icon className="h-5 w-5" />
+                <link.icon className={cn("h-5 w-5", isActive ? "text-indigo-600" : "text-gray-400")} />
                 <span className="whitespace-nowrap">{link.label}</span>
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full transition-opacity",
+                    isActive ? "bg-indigo-600 opacity-100" : "opacity-0"
+                  )}
+                />
               </Link>
             );
           })}
+          </div>
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white via-white/90 to-transparent" />
         </div>
       </nav>
     </div>

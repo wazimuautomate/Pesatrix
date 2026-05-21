@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PROOF_REQUIREMENT_DEFAULTS } from "./social-engagement";
 import { MIN_TASK_PAYOUT_KSH } from "./constants";
+import { TASK_VISIBILITY_MODES } from "./task-distribution";
 
 export type TaskCategory =
   | "survey"
@@ -12,6 +13,7 @@ export type TaskCategory =
 
 export type TaskStatus = "draft" | "scheduled" | "active" | "paused" | "completed";
 export type TaskDifficulty = "easy" | "medium" | "hard";
+export type TaskVisibilityMode = (typeof TASK_VISIBILITY_MODES)[number];
 export type SubmissionStatus =
   | "pending"
   | "ai_reviewing"
@@ -166,7 +168,7 @@ export const taskDataSchema = z.discriminatedUnion("type", [
   watchRespondTaskDataSchema,
 ]);
 
-export const taskInsertSchema = z.object({
+export const taskInsertSchemaBase = z.object({
   title: z.string().trim().min(3).max(200),
   category: z.enum(["survey", "data_labeling", "social_engagement", "verification", "content_creation", "watch_respond"]),
   description: z.string().trim().max(1000).optional().nullable(),
@@ -181,13 +183,34 @@ export const taskInsertSchema = z.object({
   requires_screenshot: z.boolean().default(false),
   requires_url: z.boolean().default(false),
   min_word_count: z.number().int().min(0).default(0),
+  visibility_mode: z.enum(TASK_VISIBILITY_MODES).default("all"),
+  min_referrals_required: z.number().int().min(0).default(0),
+  assigned_user_ids: z.array(z.string().uuid()).default([]),
   task_data: taskDataSchema,
 });
 
-export const bulkImportTaskSchema = taskInsertSchema.extend({
+function validateTaskDistributionFields(
+  data: { visibility_mode: TaskVisibilityMode; assigned_user_ids: string[] },
+  ctx: z.RefinementCtx
+) {
+  if (
+    ["assigned_only", "proof_tier"].includes(data.visibility_mode) &&
+    data.assigned_user_ids.length === 0
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["assigned_user_ids"],
+      message: "Select at least one user for assigned or proof tier tasks.",
+    });
+  }
+}
+
+export const taskInsertSchema = taskInsertSchemaBase.superRefine(validateTaskDistributionFields);
+
+export const bulkImportTaskSchema = taskInsertSchemaBase.extend({
   publish_at: z.string().datetime().nullable().default(null),
   expires_at: z.string().datetime().nullable().default(null),
-});
+}).superRefine(validateTaskDistributionFields);
 
 export const bulkImportSchema = z.array(bulkImportTaskSchema);
 

@@ -24,8 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   type TaskCategory,
   type TaskDifficulty,
-  type TaskStatus,
-  CATEGORY_LABELS,
+  type TaskVisibilityMode,
   generateItemId,
   generateQuestionId,
   createEmptyTaskData,
@@ -68,6 +67,18 @@ type MetaState = {
   requires_screenshot: boolean;
   requires_url: boolean;
   min_word_count: string;
+  visibility_mode: TaskVisibilityMode;
+  min_referrals_required: string;
+};
+
+type AssignableUser = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  is_activated: boolean;
+  referral_count?: number;
+  assigned_at?: string | null;
 };
 
 const emptyMeta: MetaState = {
@@ -83,6 +94,8 @@ const emptyMeta: MetaState = {
   requires_screenshot: false,
   requires_url: false,
   min_word_count: "0",
+  visibility_mode: "all",
+  min_referrals_required: "3",
 };
 
 export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
@@ -95,6 +108,10 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
   const [publishImmediately, setPublishImmediately] = useState(true);
   const [loading, setLoading] = useState(false);
   const [titleError, setTitleError] = useState("");
+  const [assignedUsers, setAssignedUsers] = useState<AssignableUser[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const [userResults, setUserResults] = useState<AssignableUser[]>([]);
   const taskFinancialError = useMemo(() => {
     const payoutKsh = Number(meta.payout_ksh || 0);
     const totalSlots = Number(meta.total_slots || 0);
@@ -123,8 +140,11 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
         requires_screenshot: task.requires_screenshot ?? false,
         requires_url: task.requires_url ?? false,
         min_word_count: String(task.min_word_count ?? 0),
+        visibility_mode: task.visibility_mode ?? "all",
+        min_referrals_required: String(Math.max(3, Number(task.min_referrals_required ?? 0))),
       });
-      setTaskData((task as Record<string, unknown>).task_data as Record<string, unknown> ?? {});
+      setTaskData(task.task_data ?? {});
+      setAssignedUsers(task.assigned_users ?? []);
       setPublishAt(task.publish_at ? new Date(task.publish_at).toISOString().slice(0, 16) : "");
       setExpiresAt(task.expires_at ? new Date(task.expires_at).toISOString().slice(0, 16) : "");
       setPublishImmediately(!task.publish_at);
@@ -143,12 +163,60 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
     setTaskData(createEmptyTaskData(category) as Record<string, unknown>);
   }
 
+  function handleVisibilityChange(visibilityMode: TaskVisibilityMode) {
+    setMeta((current) => ({
+      ...current,
+      visibility_mode: visibilityMode,
+      min_referrals_required:
+        visibilityMode === "referral_gated"
+          ? String(Math.max(3, Number(current.min_referrals_required || 0)))
+          : current.min_referrals_required,
+    }));
+  }
+
+  async function searchAssignableUsers() {
+    setUserSearchLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (userSearch.trim()) {
+        params.set("search", userSearch.trim());
+      }
+
+      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error(result?.error ?? "Failed to search users");
+        return;
+      }
+
+      setUserResults((result.users ?? []) as AssignableUser[]);
+    } catch {
+      toast.error("Failed to search users");
+    } finally {
+      setUserSearchLoading(false);
+    }
+  }
+
+  function addAssignedUser(user: AssignableUser) {
+    setAssignedUsers((current) => (
+      current.some((item) => item.id === user.id)
+        ? current
+        : [...current, user]
+    ));
+  }
+
+  function removeAssignedUser(userId: string) {
+    setAssignedUsers((current) => current.filter((user) => user.id !== userId));
+  }
+
   function canSubmit(): boolean {
     return (
       meta.title.trim().length >= 3 &&
       meta.instructions.trim().length >= 10 &&
       Number(meta.payout_ksh) > 0 &&
       Number(meta.total_slots) > 0 &&
+      (meta.visibility_mode !== "referral_gated" || Number(meta.min_referrals_required) >= 3) &&
+      (!["assigned_only", "proof_tier"].includes(meta.visibility_mode) || assignedUsers.length > 0) &&
       !taskFinancialError
     );
   }
@@ -170,6 +238,12 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
         requires_screenshot: meta.requires_screenshot,
         requires_url: meta.requires_url,
         min_word_count: Number(meta.min_word_count),
+        visibility_mode: meta.visibility_mode,
+        min_referrals_required:
+          meta.visibility_mode === "referral_gated"
+            ? Math.max(3, Number(meta.min_referrals_required || 0))
+            : 0,
+        assigned_user_ids: assignedUsers.map((user) => user.id),
         task_data: taskData,
         publish_at: publish && publishImmediately ? null : normalizeDatetime(publishAt),
         expires_at: normalizeDatetime(expiresAt),
@@ -186,7 +260,7 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
       }
 
       if (task) {
-        await onSave(parsed.data as Record<string, unknown>, publish);
+        await onSave({ ...parsed.data, id: task.id } as Record<string, unknown>, publish);
       } else {
         const res = await fetch("/api/admin/tasks", {
           method: "POST",
@@ -331,6 +405,134 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
             rows={3}
           />
         </div>
+
+        <div>
+          <Label>Access Tier</Label>
+          <Select
+            value={meta.visibility_mode}
+            onValueChange={(value) => handleVisibilityChange(value as TaskVisibilityMode)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All eligible users</SelectItem>
+              <SelectItem value="referral_gated">Referral gated</SelectItem>
+              <SelectItem value="assigned_only">Assigned only</SelectItem>
+              <SelectItem value="proof_tier">Proof tier</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {meta.visibility_mode === "referral_gated" && (
+          <div>
+            <Label htmlFor="tf-min-referrals">Minimum Referrals</Label>
+            <Input
+              id="tf-min-referrals"
+              type="number"
+              min="3"
+              value={meta.min_referrals_required}
+              onChange={(e) =>
+                setMeta((current) => ({
+                  ...current,
+                  min_referrals_required: e.target.value,
+                }))
+              }
+              placeholder="3"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Users need at least 3 referrals to unlock this pool.
+            </p>
+          </div>
+        )}
+
+        {["assigned_only", "proof_tier"].includes(meta.visibility_mode) && (
+          <div className="sm:col-span-2 lg:col-span-3 rounded-xl border p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-medium text-navy">Assigned Users</p>
+                <p className="text-sm text-muted-foreground">
+                  {meta.visibility_mode === "proof_tier"
+                    ? "Trusted users below get first access to this task."
+                    : "Only the selected users below can see this task."}
+                </p>
+              </div>
+              <Badge variant="outline">{assignedUsers.length} selected</Badge>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <Input
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="Search by name, phone, or email"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={searchAssignableUsers}
+                disabled={userSearchLoading}
+              >
+                {userSearchLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Search
+              </Button>
+            </div>
+
+            {assignedUsers.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {assignedUsers.map((user) => (
+                  <Badge key={user.id} variant="secondary" className="flex items-center gap-2 py-1">
+                    <span>
+                      {user.full_name ?? user.email ?? user.phone ?? user.id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeAssignedUser(user.id)}
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={`Remove ${user.full_name ?? user.email ?? user.id}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 space-y-2">
+              {userResults.map((user) => {
+                const alreadySelected = assignedUsers.some((item) => item.id === user.id);
+                return (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between rounded-lg border px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-navy">
+                        {user.full_name ?? "Unnamed user"}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {user.email ?? user.phone ?? user.id}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={alreadySelected ? "secondary" : "outline"}
+                      onClick={() => addAssignedUser(user)}
+                      disabled={alreadySelected}
+                    >
+                      {alreadySelected ? "Selected" : "Add"}
+                    </Button>
+                  </div>
+                );
+              })}
+              {userResults.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Search to add users to this task.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           <Switch

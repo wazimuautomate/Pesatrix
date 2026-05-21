@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
+  CalendarRange,
   Loader2,
   Search,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  SlidersHorizontal,
 } from "lucide-react";
 
 import { AdminPageShell, StatusBadge } from "@/components/admin/admin-native";
@@ -45,6 +47,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function money(value: unknown) {
   const amount = Number(value ?? 0);
@@ -133,6 +140,12 @@ const CATEGORIES = [
 ];
 
 const PAGE_SIZE = 50;
+const DATE_RANGE_OPTIONS = [
+  { value: "all", label: "All time" },
+  { value: "24h", label: "Last 24 hours" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+] as const;
 
 export default function SubmissionsPage() {
   return (
@@ -162,9 +175,11 @@ function SubmissionsContent() {
   });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [dateRange, setDateRange] = useState<(typeof DATE_RANGE_OPTIONS)[number]["value"]>("all");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
+  const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const statusFilter = searchParams.get("status") ?? "all";
   const categoryFilter = searchParams.get("category") ?? "all";
   const search = searchParams.get("search") ?? "";
@@ -217,6 +232,21 @@ function SubmissionsContent() {
     router.push(`/wazim/submissions?${params.toString()}`);
   }
 
+  function clearFilters() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("status");
+    params.delete("category");
+    params.delete("page");
+    setDateRange("all");
+    router.push(`/wazim/submissions?${params.toString()}`);
+  }
+
+  const filteredItems = items.filter((item) => matchesDateRange(item.submitted_at, dateRange));
+  const activeFilterBadges = [
+    statusFilter !== "all" ? { key: "status", label: statusFilter.replaceAll("_", " ") } : null,
+    categoryFilter !== "all" ? { key: "category", label: categoryFilter.replaceAll("_", " ") } : null,
+    dateRange !== "all" ? { key: "dateRange", label: dateRangeLabel(dateRange) } : null,
+  ].filter(Boolean) as Array<{ key: string; label: string }>;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
@@ -234,40 +264,42 @@ function SubmissionsContent() {
         <CardHeader className="gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="text-lg text-navy">Submission Queue</CardTitle>
-            <div className="flex flex-wrap gap-1">
-              {["all", "pending", "ai_reviewing", "approved", "declined", "flagged"].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setFilter("status", s)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                    statusFilter === s
-                      ? "bg-pesatrix-blue text-white"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  {s === "all" ? "All" : s.replace("_", " ")}
-                </button>
-              ))}
-            </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <Label htmlFor="category-filter" className="text-xs text-muted-foreground">Category</Label>
-              <Select value={categoryFilter} onValueChange={(v) => setFilter("category", v)}>
-                <SelectTrigger id="category-filter" className="h-8 w-44 text-xs">
-                  <SelectValue placeholder="All categories" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>{c.replace("_", " ")}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="min-w-0 flex-1">
+                <SearchInput />
+              </div>
+              <FilterMenu
+                statusFilter={statusFilter}
+                categoryFilter={categoryFilter}
+                dateRange={dateRange}
+                onStatusChange={(value) => setFilter("status", value)}
+                onCategoryChange={(value) => setFilter("category", value)}
+                onDateRangeChange={setDateRange}
+                mobileOpen={mobileFiltersOpen}
+                onMobileOpenChange={setMobileFiltersOpen}
+              />
             </div>
 
-            <SearchInput />
+            {activeFilterBadges.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {activeFilterBadges.map((badge) => (
+                  <Badge key={badge.key} variant="secondary" className="rounded-full px-3 py-1 text-xs capitalize">
+                    {badge.label}
+                  </Badge>
+                ))}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={clearFilters}
+                >
+                  Clear filters
+                </Button>
+              </div>
+            ) : null}
           </div>
         </CardHeader>
 
@@ -283,31 +315,33 @@ function SubmissionsContent() {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : items.length === 0 ? (
+          ) : filteredItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-outline-variant/70 bg-white p-8 text-center text-sm text-muted-foreground">
               No submissions found.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Task</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Submitted</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>AI Score</TableHead>
-                  <TableHead>Payout</TableHead>
-                  <TableHead>Credited</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((sub) => (
-                  <SubmissionRow key={sub.id} sub={sub} onView={() => openDetail(sub.id)} />
-                ))}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Task</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>AI Score</TableHead>
+                    <TableHead>Payout</TableHead>
+                    <TableHead>Credited</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredItems.map((sub) => (
+                    <SubmissionRow key={sub.id} sub={sub} onView={() => openDetail(sub.id)} />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
 
           {totalPages > 1 && (
@@ -358,6 +392,10 @@ function SearchInput() {
   const searchParams = useSearchParams();
   const [value, setValue] = useState(searchParams.get("search") ?? "");
 
+  useEffect(() => {
+    setValue(searchParams.get("search") ?? "");
+  }, [searchParams]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const params = new URLSearchParams(searchParams.toString());
@@ -384,6 +422,177 @@ function SearchInput() {
       <Button type="submit" size="sm" className="h-8 text-xs">Search</Button>
     </form>
   );
+}
+
+function FilterMenu({
+  statusFilter,
+  categoryFilter,
+  dateRange,
+  onStatusChange,
+  onCategoryChange,
+  onDateRangeChange,
+  mobileOpen,
+  onMobileOpenChange,
+}: {
+  statusFilter: string;
+  categoryFilter: string;
+  dateRange: (typeof DATE_RANGE_OPTIONS)[number]["value"];
+  onStatusChange: (value: string) => void;
+  onCategoryChange: (value: string) => void;
+  onDateRangeChange: (value: (typeof DATE_RANGE_OPTIONS)[number]["value"]) => void;
+  mobileOpen: boolean;
+  onMobileOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="icon"
+        className="h-10 w-10 md:hidden"
+        onClick={() => onMobileOpenChange(true)}
+      >
+        <SlidersHorizontal className="h-4 w-4" />
+      </Button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="icon" className="hidden h-10 w-10 md:inline-flex">
+            <SlidersHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[22rem] p-0">
+          <div className="p-4">
+            <FilterPanel
+              statusFilter={statusFilter}
+              categoryFilter={categoryFilter}
+              dateRange={dateRange}
+              onStatusChange={onStatusChange}
+              onCategoryChange={onCategoryChange}
+              onDateRangeChange={onDateRangeChange}
+            />
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={mobileOpen} onOpenChange={onMobileOpenChange}>
+        <DialogContent className="top-auto w-full max-w-none translate-x-[-50%] translate-y-0 rounded-t-[1.75rem] rounded-b-none border border-outline-variant/30 px-5 pb-8 pt-6 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 md:hidden">
+          <div className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-muted" />
+          <DialogTitle className="text-left text-base text-navy">Filters</DialogTitle>
+          <DialogDescription className="text-left">
+            Refine the submissions queue by status, category, and date.
+          </DialogDescription>
+          <div className="mt-3">
+            <FilterPanel
+              statusFilter={statusFilter}
+              categoryFilter={categoryFilter}
+              dateRange={dateRange}
+              onStatusChange={onStatusChange}
+              onCategoryChange={onCategoryChange}
+              onDateRangeChange={onDateRangeChange}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function FilterPanel({
+  statusFilter,
+  categoryFilter,
+  dateRange,
+  onStatusChange,
+  onCategoryChange,
+  onDateRangeChange,
+}: {
+  statusFilter: string;
+  categoryFilter: string;
+  dateRange: (typeof DATE_RANGE_OPTIONS)[number]["value"];
+  onStatusChange: (value: string) => void;
+  onCategoryChange: (value: string) => void;
+  onDateRangeChange: (value: (typeof DATE_RANGE_OPTIONS)[number]["value"]) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Status</Label>
+        <div className="flex flex-wrap gap-2">
+          {["all", "pending", "ai_reviewing", "approved", "declined", "flagged"].map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => onStatusChange(status)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                statusFilter === status
+                  ? "bg-pesatrix-blue text-white"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {status === "all" ? "All" : status.replaceAll("_", " ")}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="category-filter" className="text-xs uppercase tracking-wide text-muted-foreground">Task Category</Label>
+        <Select value={categoryFilter} onValueChange={onCategoryChange}>
+          <SelectTrigger id="category-filter" className="w-full">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {CATEGORIES.map((category) => (
+              <SelectItem key={category} value={category}>
+                {category.replaceAll("_", " ")}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Date Range</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {DATE_RANGE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onDateRangeChange(option.value)}
+              className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                dateRange === option.value
+                  ? "border-pesatrix-blue/30 bg-pesatrix-blue/10 text-pesatrix-blue"
+                  : "border-outline-variant/40 bg-white text-muted-foreground"
+              }`}
+            >
+              <CalendarRange className="h-3.5 w-3.5" />
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function dateRangeLabel(value: (typeof DATE_RANGE_OPTIONS)[number]["value"]) {
+  return DATE_RANGE_OPTIONS.find((option) => option.value === value)?.label ?? "All time";
+}
+
+function matchesDateRange(value: string, range: (typeof DATE_RANGE_OPTIONS)[number]["value"]) {
+  if (range === "all") return true;
+  const submittedAt = new Date(value);
+  if (Number.isNaN(submittedAt.getTime())) return false;
+
+  const now = Date.now();
+  const hours =
+    range === "24h"
+      ? 24
+      : range === "7d"
+        ? 24 * 7
+        : 24 * 30;
+
+  return now - submittedAt.getTime() <= hours * 60 * 60 * 1000;
 }
 
 function MetricBox({ label, value, tone = "blue" }: { label: string; value: number; tone?: "blue" | "teal" | "amber" | "red" }) {

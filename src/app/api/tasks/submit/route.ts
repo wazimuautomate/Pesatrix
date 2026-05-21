@@ -9,6 +9,7 @@ import { checkSubmissionFraud } from "@/lib/fraud/riskScorer";
 import { getDailyTaskLimit } from "@/lib/platform-settings";
 import { isDataLabelingTaskData, isSocialEngagementTaskData } from "@/lib/task-data";
 import { normalizeSocialTaskData } from "@/lib/social-engagement";
+import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 
 const submissionSchema = z.object({
   taskId: z.string().uuid(),
@@ -61,11 +62,15 @@ export async function POST(request: Request) {
 
   const admin = createAdminSupabaseClient();
 
-  const { data: task } = await admin
-    .from("tasks")
-    .select("id, title, instructions, ai_rubric, min_word_count, slots_remaining, status, ai_grading_enabled, task_data, category, min_completion_seconds")
-    .eq("id", taskId)
-    .single();
+  const [taskResult, taskAccess] = await Promise.all([
+    admin
+      .from("tasks")
+      .select("id, title, instructions, ai_rubric, min_word_count, slots_remaining, status, publish_at, expires_at, ai_grading_enabled, task_data, category, min_completion_seconds, visibility_mode, min_referrals_required")
+      .eq("id", taskId)
+      .single(),
+    getTaskAccessContext(admin, user.id),
+  ]);
+  const task = taskResult.data;
 
   const { data: isAdminUser } = await (admin.from("admin_users" as never) as any)
     .select("id")
@@ -89,7 +94,7 @@ export async function POST(request: Request) {
     }
   }
 
-  if (!task || task.slots_remaining <= 0 || task.status !== "active") {
+  if (!task || !isTaskLive(task) || !canUserAccessTask(task, taskAccess) || task.status !== "active") {
     return NextResponse.json(
       { error: "This task is no longer available" },
       { status: 409 }

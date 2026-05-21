@@ -4,14 +4,14 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
 import { validateTaskFinancials } from "@/lib/financial-limits";
 import { getMaxTaskBatchValueKsh, getMaxTaskPayoutKsh } from "@/lib/platform-settings";
-import { taskInsertSchema } from "@/lib/task-types";
+import { taskInsertSchemaBase } from "@/lib/task-types";
 import { normalizeTaskDatetimes } from "@/lib/datetime";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-const updateTaskSchema = taskInsertSchema.partial();
+const updateTaskSchema = taskInsertSchemaBase.partial();
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { error } = await requireAdmin({

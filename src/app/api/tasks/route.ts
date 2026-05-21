@@ -4,6 +4,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { getDailyTaskLimit } from "@/lib/platform-settings";
 import { sanitizeTaskDataForClient } from "@/lib/task-data";
+import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -41,7 +42,7 @@ export async function GET() {
     });
   }
 
-  if (!access.trainingCompleted || access.tasksLocked) {
+  if (access.activated && (!access.trainingCompleted || access.tasksLocked)) {
     return NextResponse.json({
       tasks: [],
       submittedTaskIds: [],
@@ -55,32 +56,29 @@ export async function GET() {
     });
   }
 
-  const { data, error } = await admin
-    .from("tasks")
-    .select("id, title, category, description, instructions, payout_ksh, slots_remaining, difficulty, status, publish_at, expires_at, task_data, requires_screenshot, requires_url, min_word_count")
-    .in("status", ["active", "scheduled"])
-    .gt("slots_remaining", 0)
-    .or("expires_at.is.null,expires_at.gt.now()")
-    .order("created_at", { ascending: false });
+  const [taskResult, submissionsResult, taskAccess] = await Promise.all([
+    admin
+      .from("tasks")
+      .select("id, title, category, description, instructions, payout_ksh, slots_remaining, difficulty, status, publish_at, expires_at, task_data, requires_screenshot, requires_url, min_word_count, visibility_mode, min_referrals_required")
+      .in("status", ["active", "scheduled"])
+      .gt("slots_remaining", 0)
+      .or("expires_at.is.null,expires_at.gt.now()")
+      .order("created_at", { ascending: false }),
+    admin
+      .from("task_submissions")
+      .select("task_id")
+      .eq("user_id", user.id),
+    getTaskAccessContext(admin, user.id),
+  ]);
 
-  if (error) {
+  if (taskResult.error) {
     return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 });
   }
 
-  const { data: submissions } = await admin
-    .from("task_submissions")
-    .select("task_id")
-    .eq("user_id", user.id);
-
-  const submittedTaskIds = (submissions ?? []).map((s: { task_id: string }) => s.task_id);
-  const now = Date.now();
-  const visibleTasks = (data ?? []).filter((task: Record<string, unknown>) => {
-    if (task.status === "active") {
-      return !task.publish_at || new Date(task.publish_at as string).getTime() <= now;
-    }
-
-    return task.status === "scheduled" && Boolean(task.publish_at) && new Date(task.publish_at as string).getTime() <= now;
-  });
+  const submittedTaskIds = (submissionsResult.data ?? []).map((s: { task_id: string }) => s.task_id);
+  const visibleTasks = (taskResult.data ?? []).filter((task: Record<string, unknown>) => (
+    isTaskLive(task) && canUserAccessTask(task as { id: string }, taskAccess)
+  ));
 
   const formattedTasks = visibleTasks.map((task: Record<string, unknown>) => ({
     id: task.id as string,
@@ -104,7 +102,7 @@ export async function GET() {
     dailySubmissionCount: todaySubmissionCount ?? 0,
     dailyTaskLimit: dailyLimit,
     total: formattedTasks.length,
-    isActivated: true,
+    isActivated: access.activated,
     trainingStatus: access.training.status,
     taskUnlockAt: access.taskUnlockAt,
     tasksLocked: false,

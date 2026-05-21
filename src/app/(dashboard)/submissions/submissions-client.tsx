@@ -3,18 +3,30 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
+import { motion } from "framer-motion";
 import {
   AlertCircle,
   CheckCircle2,
   ClipboardList,
   Clock3,
+  Filter,
   FileSearch,
   Loader2,
+  Search,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { PageTransition } from "@/components/ui/PageTransition";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CATEGORY_COLORS, CATEGORY_LABELS, type TaskCategory } from "@/lib/task-types";
 import { cn, formatKSh } from "@/lib/utils";
@@ -202,7 +214,14 @@ function SubmissionCard({ submission }: { submission: Submission }) {
   const payout = Number(task?.payout_ksh ?? 0);
 
   return (
-    <Card className="border border-outline-variant/40 bg-white shadow-sm">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22 }}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+    >
+    <Card className="max-w-full border border-outline-variant/40 bg-white shadow-sm">
       <CardContent className="p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
@@ -244,6 +263,7 @@ function SubmissionCard({ submission }: { submission: Submission }) {
         ) : null}
       </CardContent>
     </Card>
+    </motion.div>
   );
 }
 
@@ -300,6 +320,8 @@ function EmptyState({ filtered }: { filtered: boolean }) {
 export function SubmissionsClient() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [filter, setFilter] = useState<SubmissionStatus>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -342,14 +364,23 @@ export function SubmissionsClient() {
   }, [fetchSubmissions]);
 
   const visibleSubmissions = useMemo(() => {
-    if (filter === "all") return submissions;
-    return submissions.filter((submission) => submission.status === filter);
-  }, [filter, submissions]);
+    const byFilter = filter === "all" ? submissions : submissions.filter((submission) => submission.status === filter);
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return byFilter;
+    }
+
+    return byFilter.filter((submission) => {
+      const task = getTask(submission);
+      return String(task?.title ?? "").toLowerCase().includes(query);
+    });
+  }, [filter, searchQuery, submissions]);
 
   const hasLoadedSubmissions = submissions.length > 0;
+  const activeFilterLabel = FILTERS.find((item) => item.value === filter)?.label ?? "All";
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <PageTransition className="mx-auto w-full max-w-full space-y-6 overflow-x-hidden">
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-navy">My Submissions</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -357,19 +388,33 @@ export function SubmissionsClient() {
         </p>
       </header>
 
-      <div className="flex gap-2 overflow-x-auto rounded-lg border border-outline-variant/40 bg-white p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {FILTERS.map((item) => (
-          <Button
-            key={item.value}
-            type="button"
-            size="sm"
-            variant={filter === item.value ? "default" : "ghost"}
-            onClick={() => setFilter(item.value)}
-            className="flex-none"
-          >
-            {item.label}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search by task title"
+            className="pl-9"
+          />
+        </div>
+        <motion.div whileTap={{ scale: 0.97 }} className="shrink-0">
+          <Button type="button" variant="outline" size="icon" onClick={() => setFilterOpen(true)}>
+            <Filter className="h-4 w-4" />
           </Button>
-        ))}
+        </motion.div>
+      </div>
+
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Badge variant="outline">Filter: {activeFilterLabel}</Badge>
+        {searchQuery ? (
+          <Badge variant="outline" className="gap-1">
+            Search active
+            <button type="button" onClick={() => setSearchQuery("")}>
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ) : null}
       </div>
 
       {error ? (
@@ -378,6 +423,11 @@ export function SubmissionsClient() {
           <div>
             <p className="font-semibold">Could not load submissions</p>
             <p>{error}</p>
+            <motion.div whileTap={{ scale: 0.97 }} className="mt-3 inline-flex">
+              <Button variant="outline" size="sm" onClick={() => fetchSubmissions(0, false)}>
+                Retry
+              </Button>
+            </motion.div>
           </div>
         </div>
       ) : null}
@@ -397,20 +447,48 @@ export function SubmissionsClient() {
       {!loading && hasLoadedSubmissions ? (
         <div className="flex flex-col items-center gap-3">
           {hasMore ? (
-            <Button
-              variant="outline"
-              onClick={() => fetchSubmissions(submissions.length, true)}
-              disabled={loadingMore}
-            >
-              {loadingMore ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Load more
-            </Button>
+            <motion.div whileTap={{ scale: 0.97 }}>
+              <Button
+                variant="outline"
+                onClick={() => fetchSubmissions(submissions.length, true)}
+                disabled={loadingMore}
+              >
+                {loadingMore ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Load more
+              </Button>
+            </motion.div>
           ) : null}
           <p className="text-xs text-muted-foreground">
             Showing {submissions.length} of {total} submissions
           </p>
         </div>
       ) : null}
-    </div>
+
+      <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
+        <DialogContent className="max-h-[80vh] max-w-sm overflow-y-auto p-6">
+          <DialogHeader className="text-left">
+            <DialogTitle>Filter submissions</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((item) => (
+              <motion.div key={item.value} whileTap={{ scale: 0.97 }}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={filter === item.value ? "default" : "outline"}
+                  onClick={() => {
+                    setFilter(item.value);
+                    setFilterOpen(false);
+                  }}
+                  className="rounded-full"
+                >
+                  {item.label}
+                </Button>
+              </motion.div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </PageTransition>
   );
 }

@@ -5,6 +5,7 @@ import { validateTaskFinancials } from "@/lib/financial-limits";
 import { getMaxTaskBatchValueKsh, getMaxTaskPayoutKsh } from "@/lib/platform-settings";
 import { auditLog, requireAdmin } from "../../_lib";
 import { normalizeTaskDatetimes } from "@/lib/datetime";
+import { TASK_VISIBILITY_MODES, getAssignedUsersForTask, syncTaskAssignments } from "@/lib/task-distribution";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -25,7 +26,23 @@ const updateTaskSchema = z.object({
   requires_screenshot: z.boolean().optional(),
   requires_url: z.boolean().optional(),
   min_word_count: z.number().int().min(0).optional(),
+  visibility_mode: z.enum(TASK_VISIBILITY_MODES).optional(),
+  min_referrals_required: z.number().int().min(0).optional(),
+  assigned_user_ids: z.array(z.string().uuid()).optional(),
   task_data: z.record(z.unknown()).optional(),
+}).superRefine((data, ctx) => {
+  if (
+    data.visibility_mode &&
+    ["assigned_only", "proof_tier"].includes(data.visibility_mode) &&
+    Array.isArray(data.assigned_user_ids) &&
+    data.assigned_user_ids.length === 0
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["assigned_user_ids"],
+      message: "Select at least one user for assigned or proof tier tasks.",
+    });
+  }
 });
 
 export async function GET(_request: Request, { params }: RouteContext) {
@@ -47,7 +64,15 @@ export async function GET(_request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ task });
+  const assigned_users = await getAssignedUsersForTask(admin, id);
+
+  return NextResponse.json({
+    task: {
+      ...task,
+      assigned_users,
+      assigned_user_ids: assigned_users.map((user) => user.id),
+    },
+  });
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
@@ -105,7 +130,22 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   if (data.requires_screenshot !== undefined) update.requires_screenshot = data.requires_screenshot;
   if (data.requires_url !== undefined) update.requires_url = data.requires_url;
   if (data.min_word_count !== undefined) update.min_word_count = data.min_word_count;
+  if (data.visibility_mode !== undefined) update.visibility_mode = data.visibility_mode;
+  if (data.min_referrals_required !== undefined) update.min_referrals_required = data.min_referrals_required;
   if (data.task_data !== undefined) update.task_data = data.task_data;
+
+  const finalVisibilityMode = (data.visibility_mode ?? before.visibility_mode ?? "all") as string;
+  const finalAssignedUserIds = data.assigned_user_ids ?? undefined;
+  if (
+    ["assigned_only", "proof_tier"].includes(finalVisibilityMode) &&
+    Array.isArray(finalAssignedUserIds) &&
+    finalAssignedUserIds.length === 0
+  ) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Select at least one assigned user for this access mode." } },
+      { status: 422 }
+    );
+  }
 
   if (data.total_slots !== undefined) {
     const oldTotal = before.total_slots as number;
@@ -127,19 +167,44 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Failed to update task" }, { status: 500 });
   }
 
+  if (Array.isArray(data.assigned_user_ids)) {
+    try {
+      await syncTaskAssignments({
+        admin,
+        taskId: id,
+        assignedBy: userId,
+        assignedUserIds: data.assigned_user_ids,
+      });
+    } catch (assignmentError) {
+      console.error("[PATCH /api/admin/tasks/[id]] assignment sync error:", assignmentError);
+      return NextResponse.json({ error: "Task updated but assignments failed to save" }, { status: 500 });
+    }
+  }
+
+  const assigned_users = await getAssignedUsersForTask(admin, id);
+
   await auditLog({
     adminId: userId,
     action: "task_update",
     entityType: "tasks",
     entityId: id,
     before,
-    after: task,
+    after: {
+      ...task,
+      assigned_user_ids: assigned_users.map((user) => user.id),
+    },
     reason: "Updated by admin",
     ip: requestMeta?.ip ?? undefined,
     userAgent: requestMeta?.userAgent ?? undefined,
   });
 
-  return NextResponse.json({ task });
+  return NextResponse.json({
+    task: {
+      ...task,
+      assigned_users,
+      assigned_user_ids: assigned_users.map((user) => user.id),
+    },
+  });
 }
 
 export async function DELETE(request: Request, { params }: RouteContext) {

@@ -7,6 +7,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { formatKSh } from "@/lib/utils";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { getUserReferralDashboardData } from "@/lib/referral-dashboard";
+import { PageTransition } from "@/components/ui/PageTransition";
 import {
   Table,
   TableBody,
@@ -40,11 +41,11 @@ export default async function ReferralsPage() {
   }
 
   try {
-    const appBaseUrl = await getAppBaseUrl();
+    const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? await getAppBaseUrl();
     const data = await getUserReferralDashboardData(user.id, appBaseUrl);
 
     return (
-      <div className="space-y-6">
+      <PageTransition className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-navy">Referral Program</h1>
           <p className="text-sm text-muted-foreground">
@@ -56,7 +57,7 @@ export default async function ReferralsPage() {
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-foreground">Your Referral Link</p>
             <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="flex-1 rounded-md border border-outline-variant bg-background px-3 py-2 text-sm text-muted-foreground">
+              <div className="min-w-0 flex-1 break-all rounded-md border border-outline-variant bg-background px-3 py-2 text-sm text-muted-foreground">
                 {data.referralLink}
               </div>
               <ReferralActions referralLink={data.referralLink} />
@@ -155,12 +156,13 @@ export default async function ReferralsPage() {
           </Card>
         </div>
 
-        <Card className="border-outline-variant/40">
-          <CardHeader>
-            <CardTitle className="text-base text-navy">Latest referral bonuses</CardTitle>
-          </CardHeader>
+          <Card className="border-outline-variant/40 overflow-hidden">
+            <CardHeader>
+              <CardTitle className="text-base text-navy">Latest referral bonuses</CardTitle>
+            </CardHeader>
           <CardContent>
             {data.latestBonuses.length > 0 ? (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -183,12 +185,13 @@ export default async function ReferralsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground">No referral bonuses yet. Share your link to start earning from direct referrals.</p>
             )}
           </CardContent>
         </Card>
-      </div>
+      </PageTransition>
     );
   } catch (error) {
     console.error("[ReferralsPage]", error);

@@ -397,10 +397,23 @@ export interface Database {
           requires_url: boolean;
           min_word_count: number;
           min_completion_seconds: number;
+          visibility_mode: "all" | "referral_gated" | "assigned_only" | "proof_tier";
+          min_referrals_required: number;
           task_data: Record<string, unknown>;
         };
         Insert: Omit<Database["public"]["Tables"]["tasks"]["Row"], "id" | "created_at" | "updated_at" | "slots_remaining" | "min_completion_seconds">;
         Update: Partial<Database["public"]["Tables"]["tasks"]["Insert"]>;
+      };
+      task_assignments: {
+        Row: {
+          id: string;
+          task_id: string;
+          user_id: string;
+          assigned_by: string;
+          assigned_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["task_assignments"]["Row"], "id" | "assigned_at">;
+        Update: Partial<Database["public"]["Tables"]["task_assignments"]["Insert"]>;
       };
       task_submissions: {
         Row: {
@@ -479,7 +492,12 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      get_user_referral_count: {
+        Args: { p_user_id: string };
+        Returns: number;
+      };
+    };
     Enums: {
       account_state: AccountState;
       wallet_transaction_type: WalletTransactionType;

@@ -125,6 +125,7 @@ function LoginPageContent() {
       }
 
       await recordFingerprint(visitorId);
+      sessionStorage.setItem("pesatrix_session_active", "true");
 
       const nextRoute = await getPostLoginRedirect(redirect);
       router.push(nextRoute);
@@ -147,6 +148,7 @@ function LoginPageContent() {
       }
 
       await recordFingerprint(visitorId);
+      sessionStorage.setItem("pesatrix_session_active", "true");
 
       const nextRoute = await getPostLoginRedirect(redirect);
       router.push(nextRoute);

@@ -1,5 +1,6 @@
 export const metadata = {
-  title: "Pesatrix Wazim",
+  title: "Pesatrix Wazim Admin",
+  description: "Pesatrix Wazim administration portal",
 };
 
 export const dynamic = "force-dynamic";

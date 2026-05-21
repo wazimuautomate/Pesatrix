@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, CreditCard, ArrowDownToLine, BookOpen,
   Users2, ClipboardList, HeadphonesIcon, Shield, Settings, LogOut,
-  ChevronLeft, ChevronRight, FileText,
+  ChevronLeft, ChevronRight, FileText, Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
@@ -22,6 +22,7 @@ const adminLinks = [
   { href: "/wazim/payments", label: "Payments", icon: CreditCard },
   { href: "/wazim/referrals", label: "Referrals", icon: Users2 },
   { href: "/wazim/support", label: "Support", icon: HeadphonesIcon },
+  { href: "/wazim/banners", label: "Banners", icon: Megaphone },
   { href: "/wazim/fraud", label: "Fraud & Risk", icon: Shield },
   { href: "/wazim/settings", label: "Settings", icon: Settings },
 ];

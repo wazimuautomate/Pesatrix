@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
+import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 
 const startWatchSchema = z.object({
   task_id: z.string().uuid(),
@@ -38,13 +39,23 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminSupabaseClient();
-  const { data: task } = await admin
-    .from("tasks")
-    .select("id, status, slots_remaining, task_data, category")
-    .eq("id", parsed.data.task_id)
-    .single();
+  const [taskResult, taskAccess] = await Promise.all([
+    admin
+      .from("tasks")
+      .select("id, status, publish_at, expires_at, visibility_mode, min_referrals_required, slots_remaining, task_data, category")
+      .eq("id", parsed.data.task_id)
+      .single(),
+    getTaskAccessContext(admin, user.id),
+  ]);
+  const task = taskResult.data;
 
-  if (!task || task.category !== "watch_respond" || task.status !== "active" || Number(task.slots_remaining ?? 0) <= 0) {
+  if (
+    !task ||
+    task.category !== "watch_respond" ||
+    task.status !== "active" ||
+    !isTaskLive(task) ||
+    !canUserAccessTask(task, taskAccess)
+  ) {
     return NextResponse.json(
       { error: "This task is no longer available" },
       { status: 409 }

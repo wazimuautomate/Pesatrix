@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { ActivityProvider } from "@/providers/ActivityProvider";
 
 export const metadata = {
   title: "Dashboard",
@@ -87,7 +88,7 @@ export default async function DashboardLayout({
 
   return (
     <DashboardShell user={shellUser}>
-      {children}
+      <ActivityProvider>{children}</ActivityProvider>
     </DashboardShell>
   );
 }

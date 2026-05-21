@@ -25,7 +25,6 @@ export default async function DashboardActivatePage() {
       activationFeeKsh={activationFeeKsh}
       isLoggedIn={Boolean(user)}
       defaultPhone={defaultPhone}
-      minimal
     />
   );
 }

@@ -5,6 +5,7 @@ import { validateTaskFinancials } from "@/lib/financial-limits";
 import { getMaxTaskBatchValueKsh, getMaxTaskPayoutKsh } from "@/lib/platform-settings";
 import { taskInsertSchema } from "@/lib/task-types";
 import { normalizeTaskDatetimes } from "@/lib/datetime";
+import { syncTaskAssignments } from "@/lib/task-distribution";
 
 export async function GET(request: Request) {
   const { error, userId } = await requireAdmin({
@@ -93,6 +94,9 @@ export async function POST(request: Request) {
     requires_screenshot,
     requires_url,
     min_word_count,
+    visibility_mode,
+    min_referrals_required,
+    assigned_user_ids,
     task_data,
   } = parsed.data;
 
@@ -156,6 +160,8 @@ export async function POST(request: Request) {
       requires_screenshot,
       requires_url,
       min_word_count,
+      visibility_mode,
+      min_referrals_required,
       task_data,
     })
     .select("*")
@@ -168,12 +174,31 @@ export async function POST(request: Request) {
     );
   }
 
+  try {
+    await syncTaskAssignments({
+      admin,
+      taskId: task.id,
+      assignedBy: userId,
+      assignedUserIds: assigned_user_ids,
+    });
+  } catch (assignmentError) {
+    console.error("[POST /api/admin/tasks] assignment sync error:", assignmentError);
+    await admin.from("tasks").delete().eq("id", task.id);
+    return NextResponse.json(
+      { error: "Task was created but assignments failed to save. Nothing was persisted." },
+      { status: 500 }
+    );
+  }
+
   await auditLog({
     adminId: userId,
     action: "task_create",
     entityType: "tasks",
     entityId: task.id,
-    after: task,
+    after: {
+      ...task,
+      assigned_user_ids,
+    },
     reason: "Created new task",
     ip: requestMeta?.ip ?? undefined,
     userAgent: requestMeta?.userAgent ?? undefined,

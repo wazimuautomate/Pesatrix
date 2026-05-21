@@ -195,7 +195,7 @@ async function callOpenRouterFraudModel(prompt: string): Promise<AIFraudScanResu
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://pesatrix.com",
+          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://pesatrix.vercel.app",
           "X-Title": "Pesatrix Fraud Scoring",
         },
         body: JSON.stringify({

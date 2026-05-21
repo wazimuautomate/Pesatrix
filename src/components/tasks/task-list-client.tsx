@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { Loader2, Clock, Users, CheckCircle, Search, Lock, ChevronRight, Eye } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +10,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyTaskState } from "@/components/tasks/EmptyTaskState";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CATEGORY_LABELS, CATEGORY_COLORS, DIFFICULTY_COLORS, type TaskCategory } from "@/lib/task-types";
 import {
   ACTION_LABELS,
@@ -181,11 +190,13 @@ function TimeBlock({ value, label }: { value: string; label: string }) {
 function TaskCard({
   task,
   isSubmitted,
-  tasksLocked,
+  isActivated,
+  onBlockedAction,
 }: {
   task: Task;
   isSubmitted: boolean;
-  tasksLocked: boolean;
+  isActivated: boolean;
+  onBlockedAction: () => void;
 }) {
   const expiresAt = task.expiresAt ? new Date(task.expiresAt) : null;
   const now = new Date();
@@ -207,12 +218,20 @@ function TaskCard({
       : summary;
 
   return (
-    <Card
-      className={`border shadow-sm transition-shadow hover:shadow-md ${
-        isLowSlots ? "border-amber-300" : ""
-      }`}
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22 }}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      className="h-full"
     >
-      <CardContent className="p-5">
+      <Card
+        className={`h-full border shadow-sm transition-shadow hover:shadow-md ${
+          isLowSlots ? "border-amber-300" : ""
+        }`}
+      >
+      <CardContent className="flex h-full flex-col justify-between px-4 py-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold text-navy">{task.title}</h3>
@@ -290,27 +309,35 @@ function TaskCard({
               <CheckCircle className="h-4 w-4" />
               Submitted
             </div>
-          ) : tasksLocked ? (
-            <Button disabled className="w-full">
-              <Lock className="mr-2 h-4 w-4" />
-              Locked
-            </Button>
           ) : (
             <div className="flex gap-2">
-              <Link href={`/tasks/${task.id}?view=details`} className="flex-1">
-                <Button variant="outline" className="w-full">
-                  <Eye className="mr-2 h-4 w-4" />
-                  View
-                </Button>
-              </Link>
-              <Link href={`/tasks/${task.id}`} className="flex-1">
-                <Button className="w-full">Start Task</Button>
-              </Link>
+              <motion.div whileTap={{ scale: 0.97 }} className="flex-1">
+                <Link href={`/tasks/${task.id}?view=details`} className="flex-1">
+                  <Button variant="outline" className="w-full">
+                    <Eye className="mr-2 h-4 w-4" />
+                    View
+                  </Button>
+                </Link>
+              </motion.div>
+              {isActivated ? (
+                <motion.div whileTap={{ scale: 0.97 }} className="flex-1">
+                  <Link href={`/tasks/${task.id}`} className="flex-1">
+                    <Button className="w-full">Start Task</Button>
+                  </Link>
+                </motion.div>
+              ) : (
+                <motion.div whileTap={{ scale: 0.97 }} className="flex-1">
+                  <Button className="w-full" onClick={onBlockedAction}>
+                    Start Task
+                  </Button>
+                </motion.div>
+              )}
             </div>
           )}
         </div>
       </CardContent>
     </Card>
+    </motion.div>
   );
 }
 
@@ -331,7 +358,7 @@ function SkeletonCard() {
   );
 }
 
-export function TaskListClient({ userId, isAdmin = false }: { userId: string; isAdmin?: boolean }) {
+export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [submittedTaskIds, setSubmittedTaskIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -342,6 +369,7 @@ export function TaskListClient({ userId, isAdmin = false }: { userId: string; is
   const [trainingIncomplete, setTrainingIncomplete] = useState(false);
   const [dailySubmissionCount, setDailySubmissionCount] = useState<number | null>(null);
   const [dailyTaskLimit, setDailyTaskLimit] = useState<number | null>(null);
+  const [activationDialogOpen, setActivationDialogOpen] = useState(false);
 
   const [selectedCategories, setSelectedCategories] = useState<TaskCategory[]>([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
@@ -467,20 +495,6 @@ export function TaskListClient({ userId, isAdmin = false }: { userId: string; is
     );
   }
 
-  if (!isActivated) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <Lock className="mx-auto h-10 w-10 text-amber-600" />
-          <h3 className="mt-4 text-lg font-semibold text-navy">Activate your account to access tasks.</h3>
-          <Button asChild className="mt-4">
-            <Link href="/dashboard/activate">Activate Account</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   if (trainingIncomplete) {
     return (
       <div className="space-y-6">
@@ -538,11 +552,7 @@ export function TaskListClient({ userId, isAdmin = false }: { userId: string; is
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <select
-          value={selectedDifficulty ?? ""}
-          onChange={(e) => setSelectedDifficulty(e.target.value || null)}
-          className="rounded-md border px-3 py-2 text-sm"
-        >
+        <select value={selectedDifficulty ?? ""} onChange={(e) => setSelectedDifficulty(e.target.value || null)} className="rounded-md border px-3 py-2 text-sm">
           <option value="">All Difficulties</option>
           {DIFFICULTIES.map((d) => (
             <option key={d} value={d}>
@@ -584,14 +594,15 @@ export function TaskListClient({ userId, isAdmin = false }: { userId: string; is
 
       <div className="flex flex-wrap gap-2">
         {CATEGORIES.map((cat) => (
-          <Button
-            key={cat}
-            variant={selectedCategories.includes(cat) ? "default" : "outline"}
-            size="sm"
-            onClick={() => handleCategoryToggle(cat)}
-          >
-            {CATEGORY_LABELS[cat]}
-          </Button>
+          <motion.div key={cat} whileTap={{ scale: 0.97 }}>
+            <Button
+              variant={selectedCategories.includes(cat) ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleCategoryToggle(cat)}
+            >
+              {CATEGORY_LABELS[cat]}
+            </Button>
+          </motion.div>
         ))}
       </div>
 
@@ -618,17 +629,44 @@ export function TaskListClient({ userId, isAdmin = false }: { userId: string; is
         </Card>
         )
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {filteredTasks.map((task) => (
             <TaskCard
               key={task.id}
               task={task}
               isSubmitted={submittedTaskIds.includes(task.id)}
-              tasksLocked={tasksLocked}
+              isActivated={isActivated}
+              onBlockedAction={() => setActivationDialogOpen(true)}
             />
           ))}
         </div>
       )}
+
+      <Dialog open={activationDialogOpen} onOpenChange={setActivationDialogOpen}>
+        <DialogContent className="max-h-[80vh] max-w-sm overflow-y-auto p-6">
+          <DialogHeader className="text-left">
+            <DialogTitle>Activate your account to start earning</DialogTitle>
+            <DialogDescription>
+              Pay KSh 500 once and unlock all tasks.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-2xl bg-accent p-4 text-sm text-muted-foreground">
+            You can browse every available task now, but task submission starts after activation.
+          </div>
+          <DialogFooter className="gap-2 sm:flex-col">
+            <motion.div whileTap={{ scale: 0.97 }} className="w-full">
+              <Button asChild className="w-full">
+                <Link href="/activate">Go to Activate</Link>
+              </Button>
+            </motion.div>
+            <motion.div whileTap={{ scale: 0.97 }} className="w-full">
+              <Button variant="outline" className="w-full" onClick={() => setActivationDialogOpen(false)}>
+                Close
+              </Button>
+            </motion.div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

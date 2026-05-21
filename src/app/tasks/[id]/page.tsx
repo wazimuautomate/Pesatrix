@@ -5,6 +5,7 @@ import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { TaskDetailsPreview, TaskSubmissionForm } from "@/components/tasks/task-submission-form";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { sanitizeTaskForClient } from "@/lib/task-data";
+import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 
 export const metadata = {
   title: "Task Detail",
@@ -30,10 +31,11 @@ export default async function TaskDetailPage({ params, searchParams }: RouteCont
   }
 
   const admin = createAdminSupabaseClient();
-  const [{ data: profile }, { data: task }, access] = await Promise.all([
+  const [{ data: profile }, { data: task }, access, taskAccess] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
     admin.from("tasks").select("*").eq("id", id).maybeSingle(),
     getTrainingProgramSnapshotForUser(user.id),
+    getTaskAccessContext(admin, user.id),
   ]);
 
   if (!access.canStartTasks) {
@@ -44,13 +46,7 @@ export default async function TaskDetailPage({ params, searchParams }: RouteCont
     redirect("/tasks");
   }
 
-  const publishAt = task?.publish_at ? new Date(task.publish_at as string).getTime() : null;
-  const isVisible =
-    task?.status === "active"
-      ? publishAt === null || publishAt <= Date.now()
-      : task?.status === "scheduled" && publishAt !== null && publishAt <= Date.now();
-
-  if (!task || task.slots_remaining <= 0 || !isVisible) {
+  if (!task || !isTaskLive(task) || !canUserAccessTask(task, taskAccess)) {
     redirect("/tasks");
   }
 
