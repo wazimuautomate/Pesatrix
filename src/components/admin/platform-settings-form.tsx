@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DEFAULT_ACTIVATION_FEE_KSH } from "@/lib/constants";
 import {
+  ACTIVATION_FEE_KSH_KEY,
   MAX_TASK_BATCH_VALUE_KSH_KEY,
   MAX_TASK_PAYOUT_KSH_KEY,
   MIN_WITHDRAWAL_KSH_KEY,
@@ -73,6 +75,14 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
   }
 
   const payoutSettingDefinitions = [
+    {
+      key: ACTIVATION_FEE_KSH_KEY,
+      label: "Activation fee (KSh)",
+      description: "One-time account activation charge collected through M-Pesa.",
+      type: "number",
+      min: 1,
+      defaultValue: String(DEFAULT_ACTIVATION_FEE_KSH),
+    },
     {
       key: WITHDRAWAL_HOLD_DAYS_KEY,
       label: "Withdrawal hold period (days)",
@@ -187,7 +197,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
     return (
       <Card className="border border-outline-variant/40 shadow-sm">
         <CardHeader>
-        <CardTitle className="text-lg text-navy">Payout Settings</CardTitle>
+        <CardTitle className="text-lg text-navy">Financial Settings</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-muted-foreground text-sm">
@@ -201,7 +211,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
   return (
     <Card className="border border-outline-variant/40 shadow-sm">
       <CardHeader>
-        <CardTitle className="text-lg text-navy">Payout Settings</CardTitle>
+        <CardTitle className="text-lg text-navy">Financial Settings</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid gap-6 md:grid-cols-3">

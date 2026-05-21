@@ -142,7 +142,7 @@ export default async function AdminTrainingPage(props: { searchParams: SearchPar
                             {row.completed_at ? formatDate(row.completed_at) : "—"}
                           </TableCell>
                           <TableCell className="text-right">
-                            <TrainingDetailPanel userId={row.user_id} adminRole={adminSession.role} />
+                            <TrainingDetailPanel userId={row.user_id} />
                           </TableCell>
                         </TableRow>
                       ))}

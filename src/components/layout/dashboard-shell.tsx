@@ -15,6 +15,7 @@ import {
   GraduationCap,
   Bell,
   ChevronRight,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
@@ -81,19 +82,19 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
     : "U";
 
   return (
-    <div className="flex min-h-screen">
+    <div className="dashboard-canvas flex min-h-screen">
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          "hidden flex-shrink-0 border-r border-outline-variant/40 bg-surface-container-lowest transition-[width] duration-200 lg:flex lg:flex-col",
+          "hidden flex-shrink-0 border-r border-white/10 bg-navy text-white shadow-[18px_0_60px_rgba(11,31,59,0.12)] transition-[width] duration-200 lg:flex lg:flex-col",
           collapsed ? "lg:w-20" : "lg:w-64"
         )}
       >
         {/* Logo */}
-        <div className={cn("flex h-16 items-center border-b border-outline-variant/40", collapsed ? "justify-center px-3" : "gap-2 px-6")}>
-          <BrandLogo size={collapsed ? "topbar" : "sidebar"} />
+        <div className={cn("flex h-20 items-center border-b border-white/10", collapsed ? "justify-center px-3" : "gap-2 px-6")}>
+          <BrandLogo size={collapsed ? "topbar" : "sidebar"} inverted />
           {!collapsed ? (
-            <span className="text-base font-bold tracking-tight text-navy">
+            <span className="text-base font-bold tracking-tight text-white">
               Pesatrix
             </span>
           ) : null}
@@ -113,14 +114,21 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
                 href={link.href}
                 title={collapsed ? link.label : undefined}
                 className={cn(
-                  "flex items-center rounded-md py-2.5 text-sm font-medium transition-colors",
+                  "group flex items-center rounded-xl py-2.5 text-sm font-medium transition-all duration-200",
                   collapsed ? "justify-center px-2" : "gap-3 px-3",
                   isActive
-                    ? "bg-accent text-primary"
-                    : "text-on-surface-variant hover:bg-accent/50 hover:text-foreground"
+                    ? "bg-white text-navy shadow-sm"
+                    : "text-white/70 hover:bg-white/10 hover:text-white"
                 )}
               >
-                <link.icon className="h-4 w-4" />
+                <span
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+                    isActive ? "bg-pesatrix-blue/10 text-pesatrix-blue" : "bg-white/10 text-white/75 group-hover:bg-white/15 group-hover:text-white"
+                  )}
+                >
+                  <link.icon className="h-4 w-4" />
+                </span>
                 {!collapsed ? link.label : null}
               </Link>
             );
@@ -128,31 +136,44 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
         </nav>
 
         {/* User Info */}
-        <div className={cn("border-t border-outline-variant/40", collapsed ? "p-3" : "p-4")}>
-          <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
+        <div className={cn("border-t border-white/10", collapsed ? "p-3" : "p-4")}>
+          <div className={cn("rounded-2xl bg-white/10", collapsed ? "flex justify-center p-2" : "flex items-center gap-3 p-3")}>
             <Avatar className="h-9 w-9">
-              <AvatarFallback className="bg-primary/10 text-xs text-primary">
+              <AvatarFallback className="bg-white text-xs text-navy">
                 {initials}
               </AvatarFallback>
             </Avatar>
             {!collapsed ? (
               <div className="flex-1 truncate">
-                <p className="truncate text-sm font-medium">
+                <p className="truncate text-sm font-medium text-white">
                   {user?.full_name || "User"}
                 </p>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="truncate text-xs text-white/58">
                   {user?.phone || ""}
                 </p>
               </div>
             ) : null}
           </div>
+          <Button
+            asChild
+            variant="ghost"
+            className={cn(
+              "mt-3 w-full justify-start rounded-xl text-white/70 hover:bg-white/10 hover:text-white",
+              collapsed && "justify-center px-0"
+            )}
+          >
+            <Link href="/login">
+              <LogOut className="h-4 w-4" />
+              {!collapsed && <span className="ml-3">Log out</span>}
+            </Link>
+          </Button>
         </div>
       </aside>
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col">
         {/* Top Bar (Mobile + Desktop) */}
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-outline-variant/40 bg-background/95 px-4 backdrop-blur sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-outline-variant/30 bg-white/80 px-4 shadow-sm shadow-navy/5 backdrop-blur-xl sm:px-6 lg:h-20 lg:px-8">
           {/* Mobile: Logo */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 lg:hidden">
@@ -194,14 +215,14 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:pb-6">
+        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8 lg:pb-8">
           {children}
         </main>
       </div>
 
       {/* Mobile Bottom Nav */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-outline-variant/40 bg-background/95 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-10px_24px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-outline-variant/30 bg-white/90 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-16px_34px_rgba(11,31,59,0.12)] backdrop-blur-xl lg:hidden"
         aria-label="Dashboard mobile navigation"
       >
         <div className="flex gap-2 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -216,7 +237,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "flex min-w-[4.75rem] flex-none flex-col items-center justify-center gap-1 rounded-md px-3 py-2 text-[11px] font-medium leading-tight transition-colors",
+                  "flex min-w-[4.75rem] flex-none flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[11px] font-medium leading-tight transition-colors",
                   isActive
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-on-surface-variant hover:bg-accent/60 hover:text-foreground"

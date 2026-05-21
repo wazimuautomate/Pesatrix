@@ -7,12 +7,14 @@ import { PlatformSettingsForm } from "@/components/admin/platform-settings-form"
 import { TaskLimitsSettingsForm } from "@/components/admin/task-limits-settings-form";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import {
+  DEFAULT_ACTIVATION_FEE_KSH,
   DEFAULT_DAILY_TASK_LIMIT,
   DAILY_TASK_LIMIT_KEY,
   REFERRAL_LEVEL_1_REWARD_KEY,
   DEFAULT_REFERRAL_REWARD_KSH,
   DEFAULT_TRAINING_REWARD_KSH,
   DEFAULT_WITHDRAWAL_HOLD_DAYS,
+  ACTIVATION_FEE_KSH_KEY,
   WITHDRAWAL_HOLD_DAYS_KEY,
 } from "@/lib/platform-settings";
 import { getEnvironmentReadiness } from "@/lib/environment-readiness";
@@ -55,6 +57,7 @@ export default async function AdminSettingsPage() {
   const aiProviders = await getAiProviderConfigs();
 
   const trainingRewardSetting = settings.find((s: { key: string }) => s.key === "training_completion_reward_ksh");
+  const activationFeeSetting = settings.find((s: { key: string }) => s.key === ACTIVATION_FEE_KSH_KEY);
   const holdSetting = settings.find((s: { key: string }) => s.key === WITHDRAWAL_HOLD_DAYS_KEY);
   const dailyTaskLimitSetting = settings.find((s: { key: string }) => s.key === DAILY_TASK_LIMIT_KEY);
   const referralLevel1Setting = settings.find((s: { key: string }) => s.key === REFERRAL_LEVEL_1_REWARD_KEY);
@@ -78,21 +81,27 @@ export default async function AdminSettingsPage() {
           tone="amber"
         />
         <MetricCard
+          label="Activation fee"
+          value={`KSh ${activationFeeSetting?.value ?? DEFAULT_ACTIVATION_FEE_KSH}`}
+          detail="Charged on account activation"
+          tone="amber"
+        />
+        <MetricCard
           label="Withdrawal hold"
           value={`${holdSetting?.value ?? DEFAULT_WITHDRAWAL_HOLD_DAYS} days`}
           detail="Before funds are withdrawable"
-        />
-        <MetricCard
-          label="Admin role"
-          value={adminSession.role}
-          detail={adminSession.email ?? "Signed in admin"}
-          tone="teal"
         />
         <MetricCard
           label="Referral payouts"
           value={`KSh ${referralReward}`}
           detail="Per direct activation"
           tone="amber"
+        />
+        <MetricCard
+          label="Admin role"
+          value={adminSession.role}
+          detail={adminSession.email ?? "Signed in admin"}
+          tone="teal"
         />
       </section>
 

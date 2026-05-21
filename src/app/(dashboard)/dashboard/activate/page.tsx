@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import ActivateClientPage from "@/app/activate/activate-client";
+import { getActivationFeeKsh } from "@/lib/platform-settings";
 
 export const metadata: Metadata = {
   title: "Activate Account",
@@ -8,6 +9,7 @@ export const metadata: Metadata = {
 
 export default async function DashboardActivatePage() {
   const supabase = await createServerSupabaseClient();
+  const activationFeeKsh = await getActivationFeeKsh();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -18,5 +20,12 @@ export default async function DashboardActivatePage() {
     defaultPhone = profile?.phone ?? "";
   }
 
-  return <ActivateClientPage isLoggedIn={Boolean(user)} defaultPhone={defaultPhone} />;
+  return (
+    <ActivateClientPage
+      activationFeeKsh={activationFeeKsh}
+      isLoggedIn={Boolean(user)}
+      defaultPhone={defaultPhone}
+      minimal
+    />
+  );
 }

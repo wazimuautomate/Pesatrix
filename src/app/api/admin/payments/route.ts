@@ -80,10 +80,9 @@ export async function GET(request: Request) {
   const pendingCount = allStats.filter((p: Record<string, unknown>) => p.status === "pending").length;
   const failedCount = allStats.filter((p: Record<string, unknown>) => p.status === "failed").length;
   
-  // Total Revenue (Paid Activations * 500)
-  // Assuming each paid activation is 500 KES as per specs, or use sum of amounts
-  // We'll use count * 500
-  const totalRevenue = paidCount * 500;
+  const totalRevenue = allStats
+    .filter((p: Record<string, unknown>) => p.status === "paid")
+    .reduce((sum: number, p: Record<string, unknown>) => sum + Number(p.amount ?? 0), 0);
   const netBalance = totalRevenue - totalWithdrawn;
 
   // 4. Daily revenue for the last 30 days
@@ -105,7 +104,7 @@ export async function GET(request: Request) {
       const pDateStr = new Date(p.paid_at as string).toISOString().split("T")[0];
       if (dailyRevenueMap[pDateStr]) {
         dailyRevenueMap[pDateStr].count += 1;
-        dailyRevenueMap[pDateStr].amount += 500; // Using 500 KSH
+        dailyRevenueMap[pDateStr].amount += Number(p.amount ?? 0);
       }
     }
   });

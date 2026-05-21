@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ACTIVITY_FEED } from "@/lib/mockData/activityFeed";
+import { formatKSh } from "@/lib/utils";
 
 const schema = z.object({
   phone: z
@@ -35,8 +36,10 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 type ActivateClientPageProps = {
+  activationFeeKsh: number;
   defaultPhone?: string;
   isLoggedIn: boolean;
+  minimal?: boolean;
 };
 
 type Step = "form" | "pending" | "success";
@@ -79,7 +82,7 @@ const FAQ_ITEMS = [
     answer: "Yes. All payouts are via M-Pesa directly to your phone number. No points, no vouchers.",
   },
   {
-    question: "Why the KSh 500 membership?",
+    question: "Why the activation fee?",
     answer: "It verifies your account and keeps out bots, so real tasks go to real people like you.",
   },
   {
@@ -97,9 +100,12 @@ const FAQ_ITEMS = [
 ];
 
 export default function ActivateClientPage({
+  activationFeeKsh,
   defaultPhone = "",
   isLoggedIn,
+  minimal = false,
 }: ActivateClientPageProps) {
+  const activationFeeLabel = formatKSh(activationFeeKsh);
   const [step, setStep] = useState<Step>("form");
   const socialStats = useMemo(
     () => [
@@ -109,6 +115,8 @@ export default function ActivateClientPage({
     ],
     []
   );
+
+  const faqItems = FAQ_ITEMS;
 
   const {
     register,
@@ -161,6 +169,109 @@ export default function ActivateClientPage({
       setStep("form");
       toast.error("Could not complete activation right now");
     }
+  }
+
+  const activationSection = (
+    <section
+      id="activation-form"
+      className={minimal ? "" : "border-b border-outline-variant/20 bg-surface-container-low"}
+    >
+      <div className={minimal ? "mx-auto max-w-3xl" : "mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10"}>
+        <div className="max-w-2xl">
+          <h2 className="mt-3 text-3xl font-bold text-navy">Join others already earning</h2>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+            A one-time membership of {activationFeeLabel} unlocks your full earning account. This covers your account verification
+            and guarantees your spot in the task queue.
+          </p>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-outline-variant/40 bg-white px-5 py-6 shadow-sm sm:px-6">
+          {isLoggedIn ? (
+            step === "success" ? (
+              <div className="flex flex-col items-center gap-4 py-8 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-teal/10">
+                  <CheckCircle2 className="h-8 w-8 text-teal" />
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-navy">Your earning access is ready</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Redirecting you to your dashboard now.</p>
+                </div>
+              </div>
+            ) : step === "pending" ? (
+              <div className="flex flex-col items-center gap-4 py-8 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-pesatrix-blue/10">
+                  <Loader2 className="h-8 w-8 animate-spin text-pesatrix-blue" />
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-navy">Check your phone</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Confirm the M-Pesa prompt to finish activating your account. This page will stay pending until Safaricom confirms the payment.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="activate-phone">M-Pesa phone number</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="activate-phone"
+                      className="pl-10"
+                      placeholder="07XX XXX XXX"
+                      {...register("phone")}
+                    />
+                  </div>
+                  {errors.phone ? <p className="text-xs text-destructive">{errors.phone.message}</p> : null}
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  We&apos;ll send an M-Pesa prompt to this number so you can complete your one-time membership.
+                </p>
+
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Reserve my spot with M-Pesa
+                </Button>
+              </form>
+            )
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Create your account first so we can attach your task queue, M-Pesa number, and referrals correctly.
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button asChild className="w-full sm:w-auto">
+                  <Link href="/register">Create account first</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Link href="/login">I already have an account</Link>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-5 grid gap-2 text-sm text-muted-foreground sm:grid-cols-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-teal" />
+              Secured by M-Pesa
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-pesatrix-blue" />
+              Account stays open for withdrawals
+            </div>
+            <div className="flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-emerald-600" />
+              7-day earnings protection on payouts
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
+  if (minimal) {
+    return <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-10">{activationSection}</div>;
   }
 
   return (
@@ -259,106 +370,13 @@ export default function ActivateClientPage({
         </div>
       </section>
 
-      <section id="activation-form" className="border-b border-outline-variant/20 bg-surface-container-low">
-        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
-          <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Reserve your earning spot</p>
-            <h2 className="mt-3 text-3xl font-bold text-navy">Join the queue with one step</h2>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
-              A one-time membership of KSh 500 unlocks your full earning account. This covers your account verification
-              and guarantees your spot in the task queue.
-            </p>
-          </div>
-
-          <div className="mt-6 rounded-2xl border border-outline-variant/40 bg-white px-5 py-6 shadow-sm">
-            {isLoggedIn ? (
-              step === "success" ? (
-                <div className="flex flex-col items-center gap-4 py-8 text-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-teal/10">
-                    <CheckCircle2 className="h-8 w-8 text-teal" />
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold text-navy">Your earning access is ready</p>
-                    <p className="mt-1 text-sm text-muted-foreground">Redirecting you to your dashboard now.</p>
-                  </div>
-                </div>
-              ) : step === "pending" ? (
-                <div className="flex flex-col items-center gap-4 py-8 text-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-pesatrix-blue/10">
-                    <Loader2 className="h-8 w-8 animate-spin text-pesatrix-blue" />
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold text-navy">Check your phone</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Confirm the M-Pesa prompt to finish activating your account. This page will stay pending until Safaricom confirms the payment.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="activate-phone">M-Pesa phone number</Label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        id="activate-phone"
-                        className="pl-10"
-                        placeholder="07XX XXX XXX"
-                        {...register("phone")}
-                      />
-                    </div>
-                    {errors.phone ? <p className="text-xs text-destructive">{errors.phone.message}</p> : null}
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    We&apos;ll send an M-Pesa prompt to this number so you can complete your one-time membership.
-                  </p>
-
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Reserve my spot with M-Pesa
-                  </Button>
-                </form>
-              )
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Create your account first so we can attach your task queue, M-Pesa number, and referrals correctly.
-                </p>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button asChild className="w-full sm:w-auto">
-                    <Link href="/register">Create account first</Link>
-                  </Button>
-                  <Button asChild variant="outline" className="w-full sm:w-auto">
-                    <Link href="/login">I already have an account</Link>
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="mt-5 grid gap-2 text-sm text-muted-foreground sm:grid-cols-3">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-teal" />
-                Secured by M-Pesa
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-pesatrix-blue" />
-                Account stays open for withdrawals
-              </div>
-              <div className="flex items-center gap-2">
-                <Wallet className="h-4 w-4 text-emerald-600" />
-                7-day earnings protection on payouts
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {activationSection}
 
       <section className="bg-white">
         <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
           <h2 className="text-2xl font-bold text-navy">Questions people ask before joining</h2>
           <div className="mt-5 space-y-3">
-            {FAQ_ITEMS.map((item) => (
+            {faqItems.map((item) => (
               <details key={item.question} className="rounded-2xl border border-outline-variant/40 bg-surface-container-low px-4 py-3">
                 <summary className="cursor-pointer list-none font-semibold text-navy">{item.question}</summary>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{item.answer}</p>

@@ -1,3 +1,4 @@
+export const ACTIVATION_FEE_KSH_KEY = "activation_fee_ksh";
 export const DAILY_TASK_LIMIT_KEY = "daily_task_limit";
 export const WITHDRAWAL_HOLD_DAYS_KEY = "withdrawal_hold_days";
 export const WITHDRAWAL_PROCESSING_DAYS_KEY = "withdrawal_processing_days";

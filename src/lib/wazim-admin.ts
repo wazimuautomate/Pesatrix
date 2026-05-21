@@ -7,7 +7,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 export type WazimAdminSession = {
   userId: string;
   email: string | null;
-  role: string;
+  role: "admin";
   adminUserId: string;
 };
 
@@ -35,10 +35,7 @@ export async function requireWazimAdmin(): Promise<WazimAdminSession> {
   return {
     userId: user.id,
     email: user.email ?? null,
-    role:
-      typeof adminUser.role === "string" && adminUser.role.trim()
-        ? adminUser.role
-        : "admin",
+    role: "admin",
     adminUserId: String(adminUser.id),
   };
 }

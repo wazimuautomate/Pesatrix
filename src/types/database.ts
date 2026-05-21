@@ -43,7 +43,7 @@ export type WithdrawalStatus =
 
 export type TicketStatus = "open" | "in_progress" | "resolved" | "closed";
 
-export type AdminRole = "admin" | "finance" | "super_admin";
+export type AdminRole = "admin";
 
 export type RewardSpinType = "free" | "paid";
 

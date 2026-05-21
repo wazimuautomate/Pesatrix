@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 
-export const ACTIVATION_FEE_KSH = 500;
 export const KENYAN_MPESA_PHONE_REGEX = /^(?:\+?254|0)[17]\d{8}$/;
 export const DARAJA_PHONE_REGEX = /^254[17]\d{8}$/;
 

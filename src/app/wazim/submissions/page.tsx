@@ -137,7 +137,7 @@ const PAGE_SIZE = 50;
 export default function SubmissionsPage() {
   return (
     <AdminPageShell
-      admin={{ userId: "", email: null, role: "", adminUserId: "" }}
+      admin={{ userId: "", email: null, role: "admin", adminUserId: "" }}
       title="Submissions"
       description="Review all task submissions across the platform. Approve, decline, flag for manual review, or trigger AI grading."
     >

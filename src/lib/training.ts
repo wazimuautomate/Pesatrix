@@ -2,6 +2,7 @@ import "server-only";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import {
+  getActivationFeeKsh,
   getReferralTaskUnlockReduction,
   getTaskUnlockDelayHours,
   getTrainingCompletionRewardKsh,
@@ -265,13 +266,13 @@ export function normalizeTrainingProgress(
   };
 }
 
-function buildGateMessage(activated: boolean, trainingCompleted: boolean) {
+function buildGateMessage(activated: boolean, trainingCompleted: boolean, activationFeeKsh: number) {
   if (!activated && !trainingCompleted) {
     return "Activate your account and complete the 7-day training before you can start live tasks.";
   }
 
   if (!activated) {
-    return "Activate your account with the KSh 500 fee before you can start live tasks.";
+    return `Activate your account with the KSh ${activationFeeKsh.toLocaleString("en-KE")} fee before you can start live tasks.`;
   }
 
   if (!trainingCompleted) {
@@ -376,7 +377,8 @@ export async function getTrainingProgramSnapshotForUser(
   const onboardingComplete = isOnboardingComplete(accountStatus);
   const activated = isActivated(accountStatus) || hasPaidActivation;
   const trainingCompleted = Boolean(trainingProgress.completed_at || trainingProgress.status === "completed");
-  const [configuredTaskUnlockDelayHours, referralTaskUnlockReduction] = await Promise.all([
+  const [activationFeeKsh, configuredTaskUnlockDelayHours, referralTaskUnlockReduction] = await Promise.all([
+    getActivationFeeKsh(),
     getTaskUnlockDelayHours(),
     getReferralTaskUnlockReduction(),
   ]);
@@ -402,13 +404,13 @@ export async function getTrainingProgramSnapshotForUser(
 
   if (!onboardingComplete) {
     gateReason = "onboarding";
-    gateMessage = buildGateMessage(activated, trainingCompleted);
+    gateMessage = buildGateMessage(activated, trainingCompleted, activationFeeKsh);
   } else if (!activated) {
     gateReason = "activation";
-    gateMessage = buildGateMessage(activated, trainingCompleted);
+    gateMessage = buildGateMessage(activated, trainingCompleted, activationFeeKsh);
   } else if (!trainingCompleted) {
     gateReason = "training";
-    gateMessage = buildGateMessage(activated, trainingCompleted);
+    gateMessage = buildGateMessage(activated, trainingCompleted, activationFeeKsh);
   } else if (tasksLocked) {
     gateReason = "tasks_locked";
     gateMessage = buildTasksLockedGateMessage(

@@ -13,8 +13,25 @@ import type {
   StkPushResponse,
 } from "./types";
 
+function resolveDarajaEnvironment() {
+  const env = process.env.DARAJA_ENV?.trim().toLowerCase();
+
+  if (!env || env === "sandbox" || env === "development" || env === "test") {
+    return "sandbox" as const;
+  }
+
+  if (env === "production" || env === "live") {
+    return "production" as const;
+  }
+
+  throw new Error(
+    `Unsupported DARAJA_ENV value "${process.env.DARAJA_ENV}". Use sandbox/development/test or production/live.`
+  );
+}
+
+const DARAJA_ENVIRONMENT = resolveDarajaEnvironment();
 const DARAJA_BASE =
-  process.env.DARAJA_ENV === "production"
+  DARAJA_ENVIRONMENT === "production"
     ? "https://api.safaricom.co.ke"
     : "https://sandbox.safaricom.co.ke";
 
@@ -53,6 +70,26 @@ function sanitizeDarajaError(data: Record<string, unknown>, fallback: string) {
   }
 
   return fallback;
+}
+
+function isInvalidAccessTokenError(data: Record<string, unknown>) {
+  const values = [
+    data.errorMessage,
+    data.ResponseDescription,
+    data.error_description,
+  ];
+
+  return values.some(
+    (value) => typeof value === "string" && value.toLowerCase().includes("invalid access token")
+  );
+}
+
+function getAccessTokenMismatchHint() {
+  if (DARAJA_ENVIRONMENT === "sandbox") {
+    return "Invalid Access Token. Daraja is rejecting the sandbox STK request. This usually means the app is using live shortcode/passkey credentials against sandbox. Set DARAJA_ENV=production for live credentials, or switch to sandbox shortcode/passkey values.";
+  }
+
+  return "Invalid Access Token. Daraja is rejecting the live STK request. Confirm the consumer key/secret, shortcode, and passkey all belong to the same approved live app.";
 }
 
 export async function getDarajaToken(): Promise<string> {
@@ -120,6 +157,10 @@ export async function initiateStkPush(params: {
   });
 
   const data = (await parseDarajaJson(response)) as Partial<StkPushResponse>;
+
+  if (isInvalidAccessTokenError(data)) {
+    throw new Error(`STK Push failed: ${getAccessTokenMismatchHint()}`);
+  }
 
   if (
     !response.ok ||
