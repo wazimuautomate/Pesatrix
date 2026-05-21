@@ -24,8 +24,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
@@ -222,7 +220,7 @@ function QuestionList({
   );
 }
 
-export function TrainingClient({ initialSnapshot, initialView, fullName }: TrainingClientProps) {
+export function TrainingClient({ initialSnapshot, initialView }: TrainingClientProps) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [view, setView] = useState(initialView);
   const [submittingLesson, setSubmittingLesson] = useState(false);
@@ -529,7 +527,89 @@ export function TrainingClient({ initialSnapshot, initialView, fullName }: Train
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr,1.05fr]">
+      <motion.div
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ...enterTransition, delay: 0.06 }}
+        className="rounded-xl border border-outline-variant/40 bg-white shadow-sm"
+      >
+        <div className="space-y-5 p-5">
+          {snapshot.trainingCompleted ? (
+            <div className="rounded-xl border border-teal/25 bg-teal/5 p-5">
+              <div className="flex items-start gap-3">
+                <Award className="mt-0.5 h-5 w-5 text-teal" />
+                <div>
+                  <p className="font-semibold text-navy">Training complete</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Your one-time KSh {view.rewardAmount} training reward has been credited.
+                  </p>
+                  <Button asChild variant="outline" className="mt-4" size="sm">
+                    <Link href="/dashboard/wallet">
+                      View wallet
+                      <Wallet className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : activeTest ? (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-navy">Stage check ready</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Open the overlay to answer and mark every question instantly.
+                  </p>
+                </div>
+                <Button onClick={openStageTestModal}>
+                  Start check
+                  <ShieldCheck className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ) : trainingLocked ? (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-50 p-5">
+              <div className="flex items-start gap-3">
+                <Lock className="mt-0.5 h-5 w-5 text-amber-600" />
+                <div>
+                  <p className="font-semibold text-amber-900">Training is locked</p>
+                  <p className="mt-1 text-sm text-amber-800">
+                    Activate your account first. Day 1 appears after activation.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : currentLesson ? (
+            <div className="rounded-xl border border-outline-variant/40 bg-surface-container-low p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-navy">{currentLesson.title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {modalSections.length} content pages, {currentLesson.practice.totalQuestions} marked questions.
+                  </p>
+                  <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock3 className="h-4 w-4" />
+                    {unlockCountdown}
+                  </div>
+                </div>
+                <Button onClick={openLessonModal} disabled={dayLockedByTimer}>
+                  Start training
+                  <BookOpen className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-outline-variant/40 bg-surface-container-low p-5">
+              <p className="font-semibold text-navy">No lesson open right now</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The next step appears after your current requirement is complete.
+              </p>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      <div className="space-y-6">
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
@@ -600,119 +680,6 @@ export function TrainingClient({ initialSnapshot, initialView, fullName }: Train
             })}
           </div>
         </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...enterTransition, delay: 0.16 }}
-          className="rounded-xl border border-outline-variant/40 bg-white shadow-sm"
-        >
-          <div className="border-b border-outline-variant/40 p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <Badge variant="muted" className="mb-3">
-                  {snapshot.trainingCompleted
-                    ? "Complete"
-                    : awaitingTest
-                      ? view.currentStage.name
-                      : `Day ${currentStep.day}`}
-                </Badge>
-                <h2 className="text-xl font-bold text-navy">
-                  {snapshot.trainingCompleted
-                    ? `Certificate unlocked for ${fullName}`
-                    : activeTest
-                      ? activeTest.title
-                      : currentLesson?.title ?? "Current lesson"}
-                </h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {snapshot.trainingCompleted
-                    ? "Training is complete and task access can open when the rest of your account is ready."
-                    : activeTest
-                      ? `${activeTest.totalQuestions} questions. Pass mark: ${activeTest.passMark}.`
-                      : currentLesson?.summary ?? "Your next lesson appears here when it unlocks."}
-                </p>
-              </div>
-              <div className="rounded-xl bg-primary/10 p-3 text-primary">
-                {snapshot.trainingCompleted ? <Award className="h-6 w-6" /> : <BookOpen className="h-6 w-6" />}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-5 p-5">
-            {snapshot.trainingCompleted ? (
-              <div className="rounded-xl border border-teal/25 bg-teal/5 p-5">
-                <div className="flex items-start gap-3">
-                  <Award className="mt-0.5 h-5 w-5 text-teal" />
-                  <div>
-                    <p className="font-semibold text-navy">Training complete</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Your one-time KSh {view.rewardAmount} training reward has been credited.
-                    </p>
-                    <Button asChild variant="outline" className="mt-4" size="sm">
-                      <Link href="/dashboard/wallet">
-                        View wallet
-                        <Wallet className="ml-2 h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ) : activeTest ? (
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-semibold text-navy">Stage check ready</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Open the overlay to answer and mark every question instantly.
-                    </p>
-                  </div>
-                  <Button onClick={openStageTestModal}>
-                    Start check
-                    <ShieldCheck className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ) : trainingLocked ? (
-              <div className="rounded-xl border border-amber-500/25 bg-amber-50 p-5">
-                <div className="flex items-start gap-3">
-                  <Lock className="mt-0.5 h-5 w-5 text-amber-600" />
-                  <div>
-                    <p className="font-semibold text-amber-900">Training is locked</p>
-                    <p className="mt-1 text-sm text-amber-800">
-                      Activate your account first. Day 1 appears after activation.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : currentLesson ? (
-              <div className="rounded-xl border border-outline-variant/40 bg-surface-container-low p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-semibold text-navy">{currentLesson.title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {modalSections.length} content pages, {currentLesson.practice.totalQuestions} marked questions.
-                    </p>
-                    <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock3 className="h-4 w-4" />
-                      {unlockCountdown}
-                    </div>
-                  </div>
-                  <Button onClick={openLessonModal} disabled={dayLockedByTimer}>
-                    Start training
-                    <BookOpen className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-outline-variant/40 bg-surface-container-low p-5">
-                <p className="font-semibold text-navy">No lesson open right now</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  The next step appears after your current requirement is complete.
-                </p>
-              </div>
-            )}
-          </div>
-        </motion.div>
       </div>
 
       {confettiVisible ? <ConfettiBurst /> : null}
@@ -726,18 +693,9 @@ export function TrainingClient({ initialSnapshot, initialView, fullName }: Train
               </Badge>
               <Badge variant="outline">{currentPageLabel}</Badge>
             </div>
-            <DialogHeader className="mx-auto mt-3 max-w-3xl items-center space-y-3 text-center">
-              <DialogTitle className="text-2xl font-extrabold leading-tight text-navy sm:text-3xl">
-                {modalMode === "stage_test" ? activeTest?.title : currentLesson?.title}
-              </DialogTitle>
-              <DialogDescription className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">
-                {modalMode === "stage_test"
-                  ? `Pass mark: ${activeTest?.passMark ?? 0} out of ${activeTest?.totalQuestions ?? 0}.`
-                  : showQuestions
-                    ? `Pass mark: ${currentLesson?.practice.passMark ?? 0} out of ${currentLesson?.practice.totalQuestions ?? 0}.`
-                    : currentLesson?.summary}
-              </DialogDescription>
-            </DialogHeader>
+            <DialogTitle className="sr-only">
+              {modalMode === "stage_test" ? activeTest?.title : currentLesson?.title}
+            </DialogTitle>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-7">

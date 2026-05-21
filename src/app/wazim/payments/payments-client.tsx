@@ -61,9 +61,12 @@ type Summary = {
 
 type DailyRevenue = {
   date: string;
+  label: string;
   count: number;
   amount: number;
 };
+
+type TrendPeriod = "day" | "week" | "month";
 
 export function PaymentsClient() {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -73,6 +76,7 @@ export function PaymentsClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [trendPeriod, setTrendPeriod] = useState<TrendPeriod>("day");
 
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
@@ -85,12 +89,13 @@ export function PaymentsClient() {
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const fetchData = useCallback(async (tab: string, searchQuery: string) => {
+  const fetchData = useCallback(async (tab: string, searchQuery: string, selectedTrendPeriod: TrendPeriod) => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
       if (tab !== "all") params.set("status", tab);
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      params.set("trend", selectedTrendPeriod);
 
       const res = await fetch(`/api/admin/payments?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch");
@@ -98,7 +103,7 @@ export function PaymentsClient() {
 
       setPayments(data.payments || []);
       setSummary(data.summary || null);
-      setDailyRevenue(data.daily_revenue || []);
+      setDailyRevenue(data.revenue_trend || data.daily_revenue || []);
     } catch {
       toast.error("Error loading payments data");
     } finally {
@@ -107,18 +112,18 @@ export function PaymentsClient() {
   }, []);
 
   useEffect(() => {
-    fetchData(activeTab, search);
-  }, [activeTab, fetchData]);
+    fetchData(activeTab, search, trendPeriod);
+  }, [activeTab, fetchData, trendPeriod]);
 
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      fetchData(activeTab, search);
+      fetchData(activeTab, search, trendPeriod);
     }, 400);
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [search, activeTab, fetchData]);
+  }, [search, activeTab, trendPeriod, fetchData]);
 
   const handleVerifyOpen = (payment: Payment) => {
     setSelectedPayment(payment);
@@ -155,7 +160,7 @@ export function PaymentsClient() {
 
       toast.success("Payment verified successfully!");
       setVerifyModalOpen(false);
-      fetchData(activeTab, search);
+      fetchData(activeTab, search, trendPeriod);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -163,12 +168,18 @@ export function PaymentsClient() {
     }
   };
 
-  const maxRevenue = Math.max(...(dailyRevenue.map((d) => d.amount) || [0]), 1000);
+  const maxRevenue = Math.max(...dailyRevenue.map((d) => d.amount), 1000);
+  const trendTitle =
+    trendPeriod === "day"
+      ? "Revenue Trend (Last 30 Days)"
+      : trendPeriod === "week"
+        ? "Revenue Trend (Last 12 Weeks)"
+        : "Revenue Trend (Last 12 Months)";
 
   return (
     <div className="space-y-6">
       {/* Top row stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="border border-outline-variant/40 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -179,7 +190,7 @@ export function PaymentsClient() {
               {isLoading ? <Skeleton width={120} height={28} /> : `KSh ${summary?.total_revenue_ksh.toLocaleString() || 0}`}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {isLoading ? <Skeleton width={80} height={12} /> : `${summary?.total_paid_count || 0} paid activations`}
+              {isLoading ? <Skeleton width={80} height={12} /> : `${summary?.total_paid_count || 0} paid activation payments`}
             </p>
           </CardContent>
         </Card>
@@ -192,6 +203,9 @@ export function PaymentsClient() {
             <div className="text-2xl font-bold text-red-500">
               {isLoading ? <Skeleton width={120} height={28} /> : `KSh ${summary?.total_withdrawn_ksh.toLocaleString() || 0}`}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Successful withdrawal requests
+            </p>
           </CardContent>
         </Card>
         <Card className="border border-outline-variant/40 shadow-sm">
@@ -203,19 +217,8 @@ export function PaymentsClient() {
             <div className={`text-2xl font-bold ${(!isLoading && (summary?.net_ksh || 0) >= 0) ? "text-green-500" : "text-red-500"}`}>
               {isLoading ? <Skeleton width={120} height={28} /> : `KSh ${summary?.net_ksh.toLocaleString() || 0}`}
             </div>
-          </CardContent>
-        </Card>
-        <Card className="border border-outline-variant/40 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Verifications</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-600">
-              {isLoading ? <Skeleton width={50} height={28} /> : (summary?.pending_count || 0)}
-            </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {isLoading ? <Skeleton width={60} height={12} /> : `${summary?.failed_count || 0} failed`}
+              Activation revenue minus paid withdrawals
             </p>
           </CardContent>
         </Card>
@@ -223,8 +226,22 @@ export function PaymentsClient() {
 
       {/* Revenue bar chart */}
       <Card className="col-span-4 border border-outline-variant/40 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg text-navy">Revenue Trend (Last 30 Days)</CardTitle>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-lg text-navy">{trendTitle}</CardTitle>
+          <div className="flex rounded-md border border-outline-variant/50 p-1">
+            {(["day", "week", "month"] as const).map((period) => (
+              <Button
+                key={period}
+                type="button"
+                size="sm"
+                variant={trendPeriod === period ? "default" : "ghost"}
+                className="h-8 px-3 capitalize"
+                onClick={() => setTrendPeriod(period)}
+              >
+                {period}
+              </Button>
+            ))}
+          </div>
         </CardHeader>
         <CardContent className="pl-2">
           {isLoading ? (
@@ -243,7 +260,7 @@ export function PaymentsClient() {
                       style={{ height: `${Math.max(heightPct, 2)}%` }}
                     >
                       <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground text-xs p-1.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-10 shadow-md">
-                        {day.date} — KSh {day.amount.toLocaleString()} ({day.count})
+                        {day.label} - KSh {day.amount.toLocaleString()} ({day.count})
                       </div>
                     </div>
                   );
@@ -253,7 +270,7 @@ export function PaymentsClient() {
                 {dailyRevenue.map((day, i) => (
                   <div key={i} className="flex-1 text-center">
                     <span className="text-[9px] text-muted-foreground">
-                      {new Date(day.date).getDate()}
+                      {getTrendAxisLabel(day, trendPeriod)}
                     </span>
                   </div>
                 ))}
@@ -388,6 +405,18 @@ export function PaymentsClient() {
       </Dialog>
     </div>
   );
+}
+
+function getTrendAxisLabel(day: DailyRevenue, period: TrendPeriod) {
+  if (period === "month") {
+    return day.label.split(" ")[0] ?? day.label;
+  }
+
+  if (period === "week") {
+    return day.label.replace("Week of ", "");
+  }
+
+  return new Date(day.date).getDate();
 }
 
 function PaymentTable({
