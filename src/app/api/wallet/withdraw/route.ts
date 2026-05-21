@@ -4,7 +4,6 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { hasPaidActivationPayment } from "@/lib/activation";
 import { KENYAN_PHONE_REGEX } from "@/lib/mpesa";
 import {
-  getWithdrawalVerification,
   getWalletSummaryForUser,
   MAX_WITHDRAWAL_AMOUNT,
 } from "@/lib/wallet";
@@ -53,13 +52,12 @@ export async function POST(request: Request) {
 
     const { amount: validAmount, phone } = parsed.data;
 
-    const [walletSummary, contact, processingDays, minWithdrawal, withdrawalFee, verification, hasPaidActivation] = await Promise.all([
+    const [walletSummary, contact, processingDays, minWithdrawal, withdrawalFee, hasPaidActivation] = await Promise.all([
       getWalletSummaryForUser(user.id),
       getWithdrawalContactForUser(user.id),
       getWithdrawalProcessingDays(),
       getMinWithdrawalKsh(),
       getWithdrawalFeeAmount(),
-      getWithdrawalVerification(user.id),
       hasPaidActivationPayment(admin, user.id),
     ]);
 
@@ -69,30 +67,6 @@ export async function POST(request: Request) {
           error: {
             code: "ACCOUNT_NOT_ACTIVATED",
             message: "Activate your account before requesting a withdrawal.",
-          },
-        },
-        { status: 403 }
-      );
-    }
-
-    if (!verification.phoneVerified) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "PHONE_NOT_VERIFIED",
-            message: "Verify your phone number before requesting a withdrawal.",
-          },
-        },
-        { status: 403 }
-      );
-    }
-
-    if (!verification.emailVerified) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "EMAIL_NOT_VERIFIED",
-            message: "Verify your email address before requesting a withdrawal.",
           },
         },
         { status: 403 }

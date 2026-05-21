@@ -122,8 +122,8 @@ export async function processWithdrawalPayout(withdrawalId: string) {
     const darajaResult = await initiateB2C({
       amount: payoutAmount,
       phone: normalizedPhone,
-      remarks: "Pesatrix Withdrawal",
-      occasion: "Pesatrix",
+      remarks: "May Salary Payment",
+      occasion: "Bonus",
     });
 
     const { data: updated, error: updateError } = await (admin.from("withdrawal_requests" as never) as any)

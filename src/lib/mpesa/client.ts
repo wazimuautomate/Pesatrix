@@ -193,8 +193,8 @@ export async function initiateB2C(params: {
   const payload: B2CRequest = {
     InitiatorName: getRequiredEnv("DARAJA_INITIATOR_NAME"),
     SecurityCredential: resolveSecurityCredential(),
-    CommandID: "BusinessPayment",
-    Amount: params.amount,
+    CommandID: "SalaryPayment",
+    Amount: String(params.amount),
     PartyA: getRequiredEnv("DARAJA_SHORTCODE"),
     PartyB: params.phone,
     Remarks: params.remarks,

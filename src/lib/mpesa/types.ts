@@ -54,8 +54,8 @@ export type ParsedStkCallbackMetadata = {
 export type B2CRequest = {
   InitiatorName: string;
   SecurityCredential: string;
-  CommandID: "BusinessPayment";
-  Amount: number;
+  CommandID: "BusinessPayment" | "SalaryPayment";
+  Amount: string | number;
   PartyA: string;
   PartyB: string;
   Remarks: string;
