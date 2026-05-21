@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { DEFAULT_ACTIVATION_FEE_KSH } from "@/lib/constants";
 import {
   ACTIVATION_FEE_KSH_KEY,
@@ -21,6 +22,7 @@ import {
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
+  ALLOW_NEW_REGISTRATIONS_KEY,
 } from "@/lib/platform-setting-keys";
 
 type PlatformSetting = {
@@ -72,6 +74,42 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
 
   function handleChange(key: string, value: string) {
     setSettings((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleToggleChange(key: string, checked: boolean) {
+    const stringValue = checked ? "true" : "false";
+    
+    // Optimistic UI update
+    setSettings((prev) => ({ ...prev, [key]: stringValue }));
+    setLoading((prev) => ({ ...prev, [key]: true }));
+    setSaving(true);
+
+    try {
+      const response = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value: stringValue }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        toast.error(payload?.error ?? `Failed to update ${key}`);
+        // Revert optimistic update
+        const existing = initialSettings.find((s) => s.key === key);
+        setSettings((prev) => ({ ...prev, [key]: existing?.value ?? "true" }));
+        return;
+      }
+
+      toast.success(checked ? "New user registrations enabled" : "New user registrations disabled");
+    } catch {
+      toast.error(`Unable to update ${key}`);
+      // Revert optimistic update
+      const existing = initialSettings.find((s) => s.key === key);
+      setSettings((prev) => ({ ...prev, [key]: existing?.value ?? "true" }));
+    } finally {
+      setLoading((prev) => ({ ...prev, [key]: false }));
+      setSaving(false);
+    }
   }
 
   const payoutSettingDefinitions = [
@@ -190,7 +228,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
   ];
 
   const existingSettings = initialSettings.filter((s) =>
-    [...payoutSettingDefinitions, ...settingDefinitions].some((def) => def.key === s.key)
+    [...payoutSettingDefinitions, ...settingDefinitions, { key: ALLOW_NEW_REGISTRATIONS_KEY }].some((def) => def.key === s.key)
   );
 
   if (existingSettings.length === 0) {
@@ -307,6 +345,45 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
             </div>
           );
         })}
+
+        <div className="border-t border-outline-variant/40 pt-6 space-y-4">
+          <h3 className="text-sm font-semibold text-navy">Registration Settings</h3>
+          {(() => {
+            const defKey = ALLOW_NEW_REGISTRATIONS_KEY;
+            const existing = initialSettings.find((s) => s.key === defKey);
+            const currentValue = settings[defKey] ?? existing?.value ?? "true";
+            const isChecked = currentValue === "true";
+            const isLoading = loading[defKey] ?? false;
+            const lastUpdated = existing?.updated_at
+              ? new Date(existing.updated_at).toLocaleString()
+              : null;
+
+            return (
+              <div className="flex items-start justify-between rounded-lg border border-outline-variant/40 p-4 bg-muted/20">
+                <div className="space-y-1 pr-4">
+                  <Label htmlFor={defKey} className="text-navy font-semibold text-sm cursor-pointer">
+                    Allow New User Registrations
+                  </Label>
+                  <p className="text-xs text-muted-foreground max-w-xl">
+                    Controls whether new user registrations are allowed on the platform. When disabled, signups are blocked immediately.
+                  </p>
+                  {lastUpdated && (
+                    <p className="text-[10px] text-muted-foreground mt-2">Last updated: {lastUpdated}</p>
+                  )}
+                </div>
+                <div className="flex items-center space-x-3 pt-1">
+                  {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                  <Switch
+                    id={defKey}
+                    checked={isChecked}
+                    disabled={saving || isLoading}
+                    onCheckedChange={(checked) => handleToggleChange(defKey, checked)}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+        </div>
       </CardContent>
     </Card>
   );

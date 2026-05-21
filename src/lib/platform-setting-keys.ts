@@ -11,3 +11,5 @@ export const MAX_TASK_BATCH_VALUE_KSH_KEY = "max_task_batch_value_ksh";
 export const TRAINING_REWARD_SETTING_KEY = "training_completion_reward_ksh";
 export const REFERRAL_ACTIVATION_RULE_KEY = "referral_activation_rule";
 export const REFERRAL_LEVEL_1_REWARD_KEY = "referral_level_1_reward_ksh";
+export const ALLOW_NEW_REGISTRATIONS_KEY = "allow_new_registrations";
+

@@ -16,6 +16,7 @@ import {
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
+  ALLOW_NEW_REGISTRATIONS_KEY,
 } from "@/lib/platform-setting-keys";
 
 const settingsUpdateSchema = z.object({
@@ -70,6 +71,16 @@ export async function PATCH(request: Request) {
     WITHDRAWAL_PROCESSING_DAYS_KEY,
     REFERRAL_LEVEL_1_REWARD_KEY,
   ];
+
+  if (key === ALLOW_NEW_REGISTRATIONS_KEY) {
+    const valStr = String(value).toLowerCase().trim();
+    if (valStr !== "true" && valStr !== "false") {
+      return NextResponse.json(
+        { error: "Allow new registrations must be 'true' or 'false'" },
+        { status: 422 }
+      );
+    }
+  }
 
   if (key === REFERRAL_ACTIVATION_RULE_KEY) {
     if (value !== "activation_paid") {

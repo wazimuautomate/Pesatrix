@@ -54,6 +54,14 @@ export function mapRegisterErrorMessage(message: string) {
   const msg = message.toLowerCase();
 
   if (
+    msg.includes("registration_disabled") ||
+    msg.includes("registration is temporarily disabled") ||
+    msg.includes("registrations are temporarily disabled")
+  ) {
+    return "New registrations are temporarily disabled. Please contact support.";
+  }
+
+  if (
     msg.includes("database error saving new user") ||
     msg.includes("unexpected_failure")
   ) {

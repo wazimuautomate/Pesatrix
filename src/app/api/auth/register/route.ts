@@ -10,6 +10,8 @@ import {
 } from "@/lib/api";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getPlatformSetting } from "@/lib/platform-settings";
+import { ALLOW_NEW_REGISTRATIONS_KEY } from "@/lib/platform-setting-keys";
 
 const registerSchema = z
   .object({
@@ -40,6 +42,12 @@ export async function POST(request: Request) {
     const parsed = registerSchema.safeParse(await request.json());
     if (!parsed.success) {
       return validationErrorResponse(parsed.error.errors[0]?.message ?? "Invalid registration");
+    }
+
+    // Check if new registrations are allowed
+    const registrationSetting = await getPlatformSetting(ALLOW_NEW_REGISTRATIONS_KEY);
+    if (registrationSetting && registrationSetting.value === "false") {
+      return errorResponse(403, "REGISTRATION_DISABLED", "New registrations are temporarily disabled. Please contact support.");
     }
 
     const ip = getRequestIp(request);
