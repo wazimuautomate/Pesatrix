@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { cn, formatKSh } from "@/lib/utils";
+import Skeleton from "react-loading-skeleton";
 
 const FREE_WHEEL_SEGMENTS = ["KSh 5", "KSh 10", "KSh 15", "KSh 20", "KSh 25", "KSh 40", "Miss"];
 const PAID_WHEEL_SEGMENTS = ["x0", "x1", "x2", "x3", "x4"];
@@ -231,8 +232,100 @@ export function RewardsClient() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[420px] items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      <div className="space-y-6">
+        <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">
+              Daily Rewards
+            </p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-navy md:text-4xl">
+              <Skeleton width={260} height={36} />
+            </h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Skeleton width={120} height={34} borderRadius={9999} />
+            <Skeleton width={120} height={34} borderRadius={9999} />
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 xl:gap-8">
+          {/* Wheel skeleton column */}
+          <div className="relative flex min-h-[420px] flex-col items-center justify-center overflow-hidden rounded-[28px] border border-outline-variant/50 bg-white p-5 shadow-sm sm:p-8 xl:col-span-5">
+            <Skeleton circle width={280} height={280} containerClassName="flex items-center justify-center" />
+            <div className="mt-4">
+              <Skeleton width={160} height={32} borderRadius={9999} />
+            </div>
+          </div>
+
+          {/* Mode selectors and controls column */}
+          <div className="flex flex-col gap-4 xl:col-span-4">
+            <div className="rounded-3xl border border-outline-variant/50 bg-white p-6 shadow-sm">
+              <div className="mb-2 flex items-center justify-between gap-4">
+                <Skeleton width={120} height={20} />
+                <Skeleton width={60} height={20} borderRadius={9999} />
+              </div>
+              <Skeleton count={2} height={14} className="mt-2" />
+            </div>
+
+            <div className="rounded-3xl border border-outline-variant/50 bg-white p-6 shadow-sm">
+              <div className="mb-2 flex items-center justify-between gap-4">
+                <Skeleton width={120} height={20} />
+                <Skeleton width={60} height={20} borderRadius={9999} />
+              </div>
+              <Skeleton count={2} height={14} className="mt-2" />
+            </div>
+
+            <div className="mt-auto overflow-hidden rounded-3xl border border-outline-variant/50 bg-white p-7 shadow-sm">
+              <Skeleton width={90} height={12} />
+              <div className="mt-4 mb-6">
+                <Skeleton width={160} height={32} />
+                <Skeleton width={120} height={18} className="mt-1" />
+              </div>
+              <Skeleton height={56} borderRadius={16} />
+            </div>
+          </div>
+
+          {/* Wallet and stats column */}
+          <div className="flex flex-col gap-6 xl:col-span-3">
+            <div className="rounded-3xl border border-outline-variant/50 bg-white p-7 shadow-sm">
+              <div className="mb-8 flex items-start justify-between gap-4">
+                <div>
+                  <Skeleton width={90} height={12} />
+                  <div className="mt-2">
+                    <Skeleton width={120} height={32} />
+                  </div>
+                </div>
+                <Skeleton circle width={48} height={48} containerClassName="flex shrink-0" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-2xl border border-outline-variant/40 bg-surface-container-low p-4">
+                  <Skeleton width={60} height={10} />
+                  <Skeleton width={40} height={20} className="mt-2" />
+                </div>
+                <div className="rounded-2xl border border-outline-variant/40 bg-surface-container-low p-4">
+                  <Skeleton width={60} height={10} />
+                  <Skeleton width={40} height={20} className="mt-2" />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-outline-variant/50 bg-white p-7 shadow-sm">
+              <Skeleton width={90} height={16} />
+              <Skeleton count={2} height={14} className="mt-2" />
+            </div>
+
+            <div className="rounded-3xl border border-outline-variant/50 bg-white p-6 shadow-sm">
+              <div className="flex items-start gap-3">
+                <Skeleton circle width={20} height={20} containerClassName="flex shrink-0" />
+                <div className="flex-1">
+                  <Skeleton height={14} count={2} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

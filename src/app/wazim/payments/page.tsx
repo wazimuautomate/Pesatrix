@@ -9,7 +9,7 @@ export default async function AdminPaymentsPage() {
     <AdminPageShell
       admin={adminSession}
       title="Payments"
-      description="Review activation payments, paid receipts, pending STK records, and manually verify failed activation attempts."
+      description=""
     >
       <PaymentsClient />
     </AdminPageShell>

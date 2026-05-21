@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { WazimAdminSession } from "@/lib/wazim-admin";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export function AdminPageShell({
   admin,
@@ -32,7 +33,7 @@ export function AdminPageShell({
     <div className="dashboard-canvas min-h-screen lg:flex">
       <AdminSidebar />
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 border-b border-outline-variant/30 bg-white/80 shadow-sm shadow-navy/5 backdrop-blur-xl">
+        <header className="sticky top-0 z-20 border-b border-outline-variant/30 bg-card/80 shadow-sm shadow-navy/5 backdrop-blur-xl">
           <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-3 lg:min-h-20 lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
               <BrandLogo size="topbar" className="shrink-0" />
@@ -40,21 +41,22 @@ export function AdminPageShell({
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-pesatrix-blue">
                   Wazim Control
                 </p>
-                <h1 className="mt-1 truncate text-xl font-bold text-navy lg:text-2xl">
+                <h1 className="mt-1 truncate text-xl font-bold text-on-surface lg:text-2xl">
                   {title}
                 </h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <ThemeToggle />
               {actions}
-              <Badge variant="outline" className="hidden border-outline-variant/60 bg-white/80 text-navy sm:inline-flex">
+              <Badge variant="outline" className="hidden border-outline-variant/60 bg-card/80 text-on-surface sm:inline-flex">
                 {admin.role}
               </Badge>
             </div>
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1440px] px-4 py-6 pb-28 md:pb-8 lg:px-8 lg:py-8">
-          <div className="mb-6 rounded-2xl border border-outline-variant/40 bg-white/70 px-5 py-4 shadow-sm shadow-navy/5">
+          <div className="mb-6 rounded-2xl border border-outline-variant/40 bg-card/70 px-5 py-4 shadow-sm shadow-navy/5">
             <p className="max-w-4xl text-sm leading-6 text-muted-foreground">
               {description}
             </p>
@@ -96,7 +98,7 @@ export function MetricCard({
       <CardContent className="p-5">
         <div className={cn("mb-4 h-2 w-14 rounded-full", toneClass)} />
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className="mt-2 text-2xl font-bold text-navy">{value}</p>
+        <p className="mt-2 text-2xl font-bold text-on-surface">{value}</p>
         <p className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</p>
       </CardContent>
     </Card>
@@ -105,7 +107,7 @@ export function MetricCard({
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-outline-variant/70 bg-white/70 p-8 text-center text-sm text-muted-foreground">
+    <div className="rounded-2xl border border-dashed border-outline-variant/70 bg-card/70 p-8 text-center text-sm text-muted-foreground">
       {children}
     </div>
   );

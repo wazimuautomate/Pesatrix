@@ -34,6 +34,7 @@ import {
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
+import { TableSkeleton } from "@/components/ui/skeleton-loaders";
 
 function money(value: unknown) {
   const amount = Number(value ?? 0);
@@ -253,7 +254,7 @@ export default function WithdrawalsPage() {
         adminUserId: "",
       }}
       title="Withdrawals"
-      description="Review and process withdrawal requests. Trigger live Daraja B2C payouts or use the manual override actions when reconciliation requires it."
+      description=""
     >
       {counts && (
         <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -326,11 +327,7 @@ export default function WithdrawalsPage() {
               </Button>
             </div>
           ) : null}
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : withdrawals.length === 0 ? (
+          {!loading && withdrawals.length === 0 ? (
             <EmptyState>No withdrawals in this category.</EmptyState>
           ) : (
             <Table>
@@ -347,147 +344,151 @@ export default function WithdrawalsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {withdrawals.map((w) => (
-                  <TableRow key={w.id}>
-                    <TableCell>
-                      <span className="font-medium text-navy">
-                        {w.profiles?.full_name ?? "Unknown"}
-                      </span>
-                      <p className="text-xs text-muted-foreground">{w.profiles?.email ?? ""}</p>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{w.phone}</TableCell>
-                    <TableCell className="font-semibold">{money(w.amount)}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={w.status} />
-                      {w.b2c_conversation_id && (
-                        <p className="mt-1 text-[10px] text-muted-foreground">
-                          B2C: {w.b2c_conversation_id.slice(0, 16)}...
-                        </p>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">{shortDate(w.created_at)}</TableCell>
-                    <TableCell className="text-sm">{shortDate(w.processed_at)}</TableCell>
-                    <TableCell>
-                      {w.mpesa_txn_id ? (
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {w.mpesa_txn_id}
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap justify-end gap-1">
-                        {w.status === "requested" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="gap-1 bg-pesatrix-blue text-xs"
-                              onClick={() => openB2cModal(w)}
-                            >
-                              <Send className="h-3 w-3" />
-                              Send via B2C
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1 text-xs"
-                              onClick={() => openSendModal(w)}
-                            >
-                              <CheckCircle2 className="h-3 w-3" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="gap-1 text-xs"
-                              onClick={() => openFailModal(w)}
-                            >
-                              <XCircle className="h-3 w-3" />
-                              Decline
-                            </Button>
-                          </>
+                {loading ? (
+                  <TableSkeleton rows={8} columns={8} />
+                ) : (
+                  withdrawals.map((w) => (
+                    <TableRow key={w.id}>
+                      <TableCell>
+                        <span className="font-medium text-navy">
+                          {w.profiles?.full_name ?? "Unknown"}
+                        </span>
+                        <p className="text-xs text-muted-foreground">{w.profiles?.email ?? ""}</p>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{w.phone}</TableCell>
+                      <TableCell className="font-semibold">{money(w.amount)}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={w.status} />
+                        {w.b2c_conversation_id && (
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            B2C: {w.b2c_conversation_id.slice(0, 16)}...
+                          </p>
                         )}
-                        {w.status === "processing" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1 text-xs"
-                              onClick={() => openSendModal(w)}
-                            >
-                              <CheckCircle2 className="h-3 w-3" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="gap-1 text-xs"
-                              onClick={() => openFailModal(w)}
-                            >
-                              <XCircle className="h-3 w-3" />
-                              Decline
-                            </Button>
-                          </>
+                      </TableCell>
+                      <TableCell className="text-sm">{shortDate(w.created_at)}</TableCell>
+                      <TableCell className="text-sm">{shortDate(w.processed_at)}</TableCell>
+                      <TableCell>
+                        {w.mpesa_txn_id ? (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {w.mpesa_txn_id}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
-                        {w.status === "held" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="gap-1 bg-pesatrix-blue text-xs"
-                              onClick={() => openB2cModal(w)}
-                            >
-                              <Send className="h-3 w-3" />
-                              Send via B2C
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1 text-xs"
-                              onClick={() => openSendModal(w)}
-                            >
-                              <CheckCircle2 className="h-3 w-3" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="gap-1 text-xs"
-                              onClick={() => openFailModal(w)}
-                            >
-                              <XCircle className="h-3 w-3" />
-                              Decline
-                            </Button>
-                          </>
-                        )}
-                        {w.status === "sent" && (
-                          <span className="text-xs text-muted-foreground">Completed</span>
-                        )}
-                        {w.status === "failed" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1 text-xs"
-                              onClick={() => openRetryModal(w)}
-                            >
-                              <RefreshCw className="h-3 w-3" />
-                              Retry
-                            </Button>
-                            {w.failure_reason && (
-                              <Badge variant="destructive" className="text-[10px]">
-                                {w.failure_reason.slice(0, 30)}
-                                {w.failure_reason.length > 30 ? "..." : ""}
-                              </Badge>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap justify-end gap-1">
+                          {w.status === "requested" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="gap-1 bg-pesatrix-blue text-xs"
+                                onClick={() => openB2cModal(w)}
+                              >
+                                <Send className="h-3 w-3" />
+                                Send via B2C
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1 text-xs"
+                                onClick={() => openSendModal(w)}
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="gap-1 text-xs"
+                                onClick={() => openFailModal(w)}
+                              >
+                                <XCircle className="h-3 w-3" />
+                                Decline
+                              </Button>
+                            </>
+                          )}
+                          {w.status === "processing" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1 text-xs"
+                                onClick={() => openSendModal(w)}
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="gap-1 text-xs"
+                                onClick={() => openFailModal(w)}
+                              >
+                                <XCircle className="h-3 w-3" />
+                                Decline
+                              </Button>
+                            </>
+                          )}
+                          {w.status === "held" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="gap-1 bg-pesatrix-blue text-xs"
+                                onClick={() => openB2cModal(w)}
+                              >
+                                <Send className="h-3 w-3" />
+                                Send via B2C
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1 text-xs"
+                                onClick={() => openSendModal(w)}
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="gap-1 text-xs"
+                                onClick={() => openFailModal(w)}
+                              >
+                                <XCircle className="h-3 w-3" />
+                                Decline
+                              </Button>
+                            </>
+                          )}
+                          {w.status === "sent" && (
+                            <span className="text-xs text-muted-foreground">Completed</span>
+                          )}
+                          {w.status === "failed" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1 text-xs"
+                                onClick={() => openRetryModal(w)}
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                Retry
+                              </Button>
+                              {w.failure_reason && (
+                                <Badge variant="destructive" className="text-[10px]">
+                                  {w.failure_reason.slice(0, 30)}
+                                  {w.failure_reason.length > 30 ? "..." : ""}
+                                </Badge>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           )}

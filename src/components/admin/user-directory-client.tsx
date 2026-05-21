@@ -45,7 +45,8 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
+import Skeleton from "react-loading-skeleton";
+import { TableSkeleton } from "@/components/ui/skeleton-loaders";
 import { Separator } from "@/components/ui/separator";
 import { EmptyState } from "@/components/admin/admin-native";
 
@@ -300,9 +301,7 @@ export function UserDirectoryClient({
           </form>
         </div>
 
-        {loading ? (
-          <TableSkeleton />
-        ) : error ? (
+        {error ? (
           <div className="p-8 text-center">
             <AlertTriangle className="mx-auto mb-2 h-8 w-8 text-destructive" />
             <p className="text-sm text-destructive">{error}</p>
@@ -310,7 +309,7 @@ export function UserDirectoryClient({
               Retry
             </Button>
           </div>
-        ) : users.length === 0 ? (
+        ) : !loading && users.length === 0 ? (
           <EmptyState>No users found. Try adjusting your search.</EmptyState>
         ) : (
           <>
@@ -329,8 +328,11 @@ export function UserDirectoryClient({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
+                  {loading ? (
+                    <TableSkeleton rows={8} columns={8} />
+                  ) : (
+                    users.map((user) => (
+                      <TableRow key={user.id}>
                       <TableCell>
                         <button
                           onClick={() => openDetail(user.id)}
@@ -387,7 +389,8 @@ export function UserDirectoryClient({
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -439,10 +442,10 @@ export function UserDirectoryClient({
 
           {detailLoading ? (
             <div className="space-y-4">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-              <Skeleton className="h-20 w-full" />
+              <Skeleton height={16} />
+              <Skeleton height={16} width="75%" />
+              <Skeleton height={16} width="50%" />
+              <Skeleton height={80} />
             </div>
           ) : detailUser ? (
             <div className="space-y-6">
@@ -677,23 +680,4 @@ function formatDate(dateStr: string) {
     timeStyle: "short",
     timeZone: "Africa/Nairobi",
   }).format(date);
-}
-
-function TableSkeleton() {
-  return (
-    <div className="space-y-3 p-4">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="flex gap-4">
-          <Skeleton className="h-5 w-32" />
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="h-5 w-20" />
-          <Skeleton className="h-5 w-16" />
-          <Skeleton className="h-5 w-12" />
-          <Skeleton className="h-5 w-28" />
-          <Skeleton className="h-5 w-20 ml-auto" />
-        </div>
-      ))}
-    </div>
-  );
 }

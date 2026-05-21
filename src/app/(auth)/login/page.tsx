@@ -127,6 +127,7 @@ function LoginPageContent() {
       await recordFingerprint(visitorId);
       sessionStorage.setItem("pesatrix_session_active", "true");
 
+      toast.success("Login successful");
       const nextRoute = await getPostLoginRedirect(redirect);
       router.push(nextRoute);
       router.refresh();
@@ -150,6 +151,7 @@ function LoginPageContent() {
       await recordFingerprint(visitorId);
       sessionStorage.setItem("pesatrix_session_active", "true");
 
+      toast.success("Login successful");
       const nextRoute = await getPostLoginRedirect(redirect);
       router.push(nextRoute);
       router.refresh();
@@ -271,8 +273,8 @@ function LoginPageContent() {
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Sign In
+                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Logging in...</> : "Sign In"}
+
               </Button>
             </form>
           </TabsContent>
@@ -326,8 +328,8 @@ function LoginPageContent() {
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Sign In
+                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Logging in...</> : "Sign In"}
+
               </Button>
             </form>
           </TabsContent>

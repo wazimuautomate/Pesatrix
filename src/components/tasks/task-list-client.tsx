@@ -7,6 +7,8 @@ import { Loader2, Clock, Users, CheckCircle, Search, Lock, ChevronRight, Eye } f
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Skeleton from "react-loading-skeleton";
+import { CardSkeleton } from "@/components/ui/skeleton-loaders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyTaskState } from "@/components/tasks/EmptyTaskState";
@@ -341,23 +343,6 @@ function TaskCard({
   );
 }
 
-function SkeletonCard() {
-  return (
-    <Card className="animate-pulse">
-      <CardContent className="p-5">
-        <div className="h-5 w-3/4 rounded bg-gray-200" />
-        <div className="mt-3 flex gap-2">
-          <div className="h-5 w-20 rounded bg-gray-200" />
-          <div className="h-5 w-16 rounded bg-gray-200" />
-        </div>
-        <div className="mt-4 h-4 w-full rounded bg-gray-200" />
-        <div className="mt-3 h-4 w-2/3 rounded bg-gray-200" />
-        <div className="mt-4 h-10 w-full rounded bg-gray-200" />
-      </CardContent>
-    </Card>
-  );
-}
-
 export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [submittedTaskIds, setSubmittedTaskIds] = useState<string[]>([]);
@@ -480,15 +465,17 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-wrap gap-3 rounded-lg border bg-card p-3">
-          <div className="h-9 w-32 animate-pulse rounded-md bg-muted" />
-          <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
-          <div className="h-9 w-36 animate-pulse rounded-md bg-muted" />
-          <div className="h-9 flex-1 animate-pulse rounded-md bg-muted" />
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
+          <Skeleton height={36} width={128} borderRadius={6} />
+          <Skeleton height={36} width={96} borderRadius={6} />
+          <Skeleton height={36} width={144} borderRadius={6} />
+          <div className="flex-1 min-w-[200px]">
+            <Skeleton height={36} borderRadius={6} />
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3, 4].map((i) => (
-            <SkeletonCard key={i} />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CardSkeleton key={i} />
           ))}
         </div>
       </div>

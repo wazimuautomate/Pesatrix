@@ -35,6 +35,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Search, CheckCircle, Clock, XCircle, DollarSign, Activity, Receipt } from "lucide-react";
+import Skeleton from "react-loading-skeleton";
+import { TableSkeleton } from "@/components/ui/skeleton-loaders";
 
 type Payment = {
   id: string;
@@ -174,10 +176,10 @@ export function PaymentsClient() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              KSh {summary?.total_revenue_ksh.toLocaleString() || 0}
+              {isLoading ? <Skeleton width={120} height={28} /> : `KSh ${summary?.total_revenue_ksh.toLocaleString() || 0}`}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {summary?.total_paid_count || 0} paid activations
+              {isLoading ? <Skeleton width={80} height={12} /> : `${summary?.total_paid_count || 0} paid activations`}
             </p>
           </CardContent>
         </Card>
@@ -188,7 +190,7 @@ export function PaymentsClient() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-500">
-              KSh {summary?.total_withdrawn_ksh.toLocaleString() || 0}
+              {isLoading ? <Skeleton width={120} height={28} /> : `KSh ${summary?.total_withdrawn_ksh.toLocaleString() || 0}`}
             </div>
           </CardContent>
         </Card>
@@ -198,8 +200,8 @@ export function PaymentsClient() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${(summary?.net_ksh || 0) >= 0 ? "text-green-500" : "text-red-500"}`}>
-              KSh {summary?.net_ksh.toLocaleString() || 0}
+            <div className={`text-2xl font-bold ${(!isLoading && (summary?.net_ksh || 0) >= 0) ? "text-green-500" : "text-red-500"}`}>
+              {isLoading ? <Skeleton width={120} height={28} /> : `KSh ${summary?.net_ksh.toLocaleString() || 0}`}
             </div>
           </CardContent>
         </Card>
@@ -210,10 +212,10 @@ export function PaymentsClient() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-amber-600">
-              {summary?.pending_count || 0}
+              {isLoading ? <Skeleton width={50} height={28} /> : (summary?.pending_count || 0)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {summary?.failed_count || 0} failed
+              {isLoading ? <Skeleton width={60} height={12} /> : `${summary?.failed_count || 0} failed`}
             </p>
           </CardContent>
         </Card>
@@ -225,31 +227,39 @@ export function PaymentsClient() {
           <CardTitle className="text-lg text-navy">Revenue Trend (Last 30 Days)</CardTitle>
         </CardHeader>
         <CardContent className="pl-2">
-          <div className="h-[180px] w-full flex items-end gap-1 px-4 mt-2">
-            {dailyRevenue.map((day, i) => {
-              const heightPct = (day.amount / maxRevenue) * 100;
-              return (
-                <div
-                  key={i}
-                  className="flex-1 bg-pesatrix-blue/20 hover:bg-pesatrix-blue transition-all relative group rounded-t-sm"
-                  style={{ height: `${Math.max(heightPct, 2)}%` }}
-                >
-                  <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground text-xs p-1.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-10 shadow-md">
-                    {day.date} — KSh {day.amount.toLocaleString()} ({day.count})
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex gap-1 px-4 mt-1">
-            {dailyRevenue.map((day, i) => (
-              <div key={i} className="flex-1 text-center">
-                <span className="text-[9px] text-muted-foreground">
-                  {new Date(day.date).getDate()}
-                </span>
+          {isLoading ? (
+            <div className="h-[180px] w-full px-4 mt-2">
+              <Skeleton height="100%" borderRadius={4} />
+            </div>
+          ) : (
+            <>
+              <div className="h-[180px] w-full flex items-end gap-1 px-4 mt-2">
+                {dailyRevenue.map((day, i) => {
+                  const heightPct = (day.amount / maxRevenue) * 100;
+                  return (
+                    <div
+                      key={i}
+                      className="flex-1 bg-pesatrix-blue/20 hover:bg-pesatrix-blue transition-all relative group rounded-t-sm"
+                      style={{ height: `${Math.max(heightPct, 2)}%` }}
+                    >
+                      <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground text-xs p-1.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-10 shadow-md">
+                        {day.date} — KSh {day.amount.toLocaleString()} ({day.count})
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+              <div className="flex gap-1 px-4 mt-1">
+                {dailyRevenue.map((day, i) => (
+                  <div key={i} className="flex-1 text-center">
+                    <span className="text-[9px] text-muted-foreground">
+                      {new Date(day.date).getDate()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -406,11 +416,7 @@ function PaymentTable({
       </TableHeader>
       <TableBody>
         {isLoading ? (
-          <TableRow>
-            <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-              Loading payments...
-            </TableCell>
-          </TableRow>
+          <TableSkeleton rows={5} columns={7} />
         ) : payments.length === 0 ? (
           <TableRow>
             <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">

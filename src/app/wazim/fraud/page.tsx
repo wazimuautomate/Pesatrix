@@ -85,7 +85,7 @@ export default async function AdminFraudPage() {
     <AdminPageShell
       admin={adminSession}
       title="Fraud AI Scoring"
-      description="Review high-risk users, run manual AI fraud scans, control nightly fraud scoring, and manage fraud suspensions."
+      description=""
     >
       <FraudDashboardClient
         initialMode={mode}

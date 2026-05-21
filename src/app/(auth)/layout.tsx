@@ -11,7 +11,7 @@ export default function AuthLayout({
       {/* Logo */}
       <Link href="/" className="mb-8 flex items-center gap-3">
         <BrandLogo size="auth" />
-        <span className="text-xl font-bold tracking-tight text-navy">
+        <span className="text-xl font-bold tracking-tight text-on-surface">
           Pesatrix
         </span>
       </Link>

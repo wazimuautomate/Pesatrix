@@ -21,6 +21,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const sidebarLinks = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -189,19 +190,19 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
       {/* Main Content */}
       <div className="flex flex-1 flex-col">
         {/* Top Bar (Mobile + Desktop) */}
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between rounded-b-2xl bg-white px-4 shadow-sm shadow-navy/10 sm:px-6 lg:h-20 lg:rounded-none lg:border-b lg:border-outline-variant/30 lg:px-8 lg:shadow-sm lg:backdrop-blur-xl">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between rounded-b-2xl bg-card px-4 shadow-sm shadow-navy/5 sm:px-6 lg:h-20 lg:rounded-none lg:border-b lg:border-outline-variant/30 lg:px-8 lg:shadow-sm lg:backdrop-blur-xl">
           {/* Mobile: Logo */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 lg:hidden">
               <BrandLogo size="topbar" />
-              <span className="text-base font-bold tracking-tight text-navy">
+              <span className="text-base font-bold tracking-tight text-on-surface">
                 Pesatrix
               </span>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              className="hidden lg:inline-flex"
+              className="hidden lg:inline-flex text-on-surface"
               onClick={() => setCollapsed((current) => !current)}
             >
               <ChevronRight
@@ -215,10 +216,11 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Button
               variant="ghost"
               size="icon"
-              className="rounded-full text-navy lg:hidden"
+              className="rounded-full text-on-surface lg:hidden"
               onClick={() => void handleLogout()}
               disabled={isSigningOut}
             >
@@ -235,7 +237,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
 
       {/* Mobile Bottom Nav */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-gray-100 bg-white/95 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-16px_34px_rgba(11,31,59,0.12)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-outline-variant/20 bg-card/95 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-16px_34px_rgba(11,31,59,0.12)] backdrop-blur-xl lg:hidden"
         aria-label="Dashboard mobile navigation"
       >
         <div className="relative">
@@ -253,23 +255,23 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
                 className={cn(
                   "flex min-w-[4.75rem] flex-none flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[11px] font-medium leading-tight transition-colors",
                   isActive
-                    ? "text-indigo-600"
-                    : "text-gray-400 hover:bg-accent/60 hover:text-foreground"
+                    ? "text-primary"
+                    : "text-on-surface-variant/70 hover:bg-accent/60 hover:text-foreground"
                 )}
               >
-                <link.icon className={cn("h-5 w-5", isActive ? "text-indigo-600" : "text-gray-400")} />
+                <link.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-on-surface-variant/70")} />
                 <span className="whitespace-nowrap">{link.label}</span>
                 <span
                   className={cn(
                     "h-1.5 w-1.5 rounded-full transition-opacity",
-                    isActive ? "bg-indigo-600 opacity-100" : "opacity-0"
+                    isActive ? "bg-primary opacity-100" : "opacity-0"
                   )}
                 />
               </Link>
             );
           })}
           </div>
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white via-white/90 to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card via-card/90 to-transparent" />
         </div>
       </nav>
     </div>

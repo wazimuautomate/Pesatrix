@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 
 import { AdminPageShell, StatusBadge } from "@/components/admin/admin-native";
+import { cn } from "@/lib/utils";
+import { TableSkeleton } from "@/components/ui/skeleton-loaders";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -152,7 +154,7 @@ export default function SubmissionsPage() {
     <AdminPageShell
       admin={{ userId: "", email: null, role: "admin", adminUserId: "" }}
       title="Submissions"
-      description="Review all task submissions across the platform. Approve, decline, flag for manual review, or trigger AI grading."
+      description=""
     >
       <SubmissionsContent />
     </AdminPageShell>
@@ -266,21 +268,69 @@ function SubmissionsContent() {
             <CardTitle className="text-lg text-navy">Submission Queue</CardTitle>
           </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
+          <div className="space-y-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="w-full md:max-w-xs">
                 <SearchInput />
               </div>
-              <FilterMenu
-                statusFilter={statusFilter}
-                categoryFilter={categoryFilter}
-                dateRange={dateRange}
-                onStatusChange={(value) => setFilter("status", value)}
-                onCategoryChange={(value) => setFilter("category", value)}
-                onDateRangeChange={setDateRange}
-                mobileOpen={mobileFiltersOpen}
-                onMobileOpenChange={setMobileFiltersOpen}
-              />
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Category Selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground">Category:</span>
+                  <Select value={categoryFilter} onValueChange={(val) => setFilter("category", val)}>
+                    <SelectTrigger className="h-9 w-[150px] text-xs">
+                      <SelectValue placeholder="All categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All categories</SelectItem>
+                      {CATEGORIES.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category.replaceAll("_", " ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Date Range Selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground">Date:</span>
+                  <Select value={dateRange} onValueChange={(val) => setDateRange(val as any)}>
+                    <SelectTrigger className="h-9 w-[130px] text-xs">
+                      <SelectValue placeholder="All time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DATE_RANGE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Inline Status Filter Tabs */}
+            <div className="flex flex-wrap gap-1.5 border-b border-outline-variant/30 pb-2">
+              {["all", "pending", "ai_reviewing", "approved", "declined", "flagged"].map((status) => {
+                const isActive = statusFilter === status;
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setFilter("status", status)}
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                      isActive
+                        ? "bg-pesatrix-blue/10 text-pesatrix-blue"
+                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                    )}
+                  >
+                    {status === "all" ? "All Submissions" : status.replaceAll("_", " ")}
+                  </button>
+                );
+              })}
             </div>
 
             {activeFilterBadges.length > 0 ? (
@@ -312,8 +362,25 @@ function SubmissionsContent() {
           )}
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Task</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>AI Score</TableHead>
+                    <TableHead>Payout</TableHead>
+                    <TableHead>Credited</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableSkeleton rows={8} columns={9} />
+                </TableBody>
+              </Table>
             </div>
           ) : filteredItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-outline-variant/70 bg-white p-8 text-center text-sm text-muted-foreground">
@@ -409,169 +476,15 @@ function SearchInput() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search name or phone..."
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="pl-9 h-8 w-56 text-xs"
-        />
-      </div>
-      <Button type="submit" size="sm" className="h-8 text-xs">Search</Button>
+    <form onSubmit={handleSubmit} className="relative w-full max-w-sm">
+      <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        placeholder="Search name or phone..."
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="pl-9 h-9 w-full text-xs border-outline-variant/60 focus:border-pesatrix-blue focus:ring-1 focus:ring-pesatrix-blue/20"
+      />
     </form>
-  );
-}
-
-function FilterMenu({
-  statusFilter,
-  categoryFilter,
-  dateRange,
-  onStatusChange,
-  onCategoryChange,
-  onDateRangeChange,
-  mobileOpen,
-  onMobileOpenChange,
-}: {
-  statusFilter: string;
-  categoryFilter: string;
-  dateRange: (typeof DATE_RANGE_OPTIONS)[number]["value"];
-  onStatusChange: (value: string) => void;
-  onCategoryChange: (value: string) => void;
-  onDateRangeChange: (value: (typeof DATE_RANGE_OPTIONS)[number]["value"]) => void;
-  mobileOpen: boolean;
-  onMobileOpenChange: (open: boolean) => void;
-}) {
-  return (
-    <>
-      <Button
-        variant="outline"
-        size="icon"
-        className="h-10 w-10 md:hidden"
-        onClick={() => onMobileOpenChange(true)}
-      >
-        <SlidersHorizontal className="h-4 w-4" />
-      </Button>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" className="hidden h-10 w-10 md:inline-flex">
-            <SlidersHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[22rem] p-0">
-          <div className="p-4">
-            <FilterPanel
-              statusFilter={statusFilter}
-              categoryFilter={categoryFilter}
-              dateRange={dateRange}
-              onStatusChange={onStatusChange}
-              onCategoryChange={onCategoryChange}
-              onDateRangeChange={onDateRangeChange}
-            />
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Dialog open={mobileOpen} onOpenChange={onMobileOpenChange}>
-        <DialogContent className="top-auto w-full max-w-none translate-x-[-50%] translate-y-0 rounded-t-[1.75rem] rounded-b-none border border-outline-variant/30 px-5 pb-8 pt-6 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 md:hidden">
-          <div className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-muted" />
-          <DialogTitle className="text-left text-base text-navy">Filters</DialogTitle>
-          <DialogDescription className="text-left">
-            Refine the submissions queue by status, category, and date.
-          </DialogDescription>
-          <div className="mt-3">
-            <FilterPanel
-              statusFilter={statusFilter}
-              categoryFilter={categoryFilter}
-              dateRange={dateRange}
-              onStatusChange={onStatusChange}
-              onCategoryChange={onCategoryChange}
-              onDateRangeChange={onDateRangeChange}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-function FilterPanel({
-  statusFilter,
-  categoryFilter,
-  dateRange,
-  onStatusChange,
-  onCategoryChange,
-  onDateRangeChange,
-}: {
-  statusFilter: string;
-  categoryFilter: string;
-  dateRange: (typeof DATE_RANGE_OPTIONS)[number]["value"];
-  onStatusChange: (value: string) => void;
-  onCategoryChange: (value: string) => void;
-  onDateRangeChange: (value: (typeof DATE_RANGE_OPTIONS)[number]["value"]) => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Status</Label>
-        <div className="flex flex-wrap gap-2">
-          {["all", "pending", "ai_reviewing", "approved", "declined", "flagged"].map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => onStatusChange(status)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                statusFilter === status
-                  ? "bg-pesatrix-blue text-white"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
-            >
-              {status === "all" ? "All" : status.replaceAll("_", " ")}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="category-filter" className="text-xs uppercase tracking-wide text-muted-foreground">Task Category</Label>
-        <Select value={categoryFilter} onValueChange={onCategoryChange}>
-          <SelectTrigger id="category-filter" className="w-full">
-            <SelectValue placeholder="All categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {CATEGORIES.map((category) => (
-              <SelectItem key={category} value={category}>
-                {category.replaceAll("_", " ")}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Date Range</Label>
-        <div className="grid grid-cols-2 gap-2">
-          {DATE_RANGE_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onDateRangeChange(option.value)}
-              className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                dateRange === option.value
-                  ? "border-pesatrix-blue/30 bg-pesatrix-blue/10 text-pesatrix-blue"
-                  : "border-outline-variant/40 bg-white text-muted-foreground"
-              }`}
-            >
-              <CalendarRange className="h-3.5 w-3.5" />
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
 

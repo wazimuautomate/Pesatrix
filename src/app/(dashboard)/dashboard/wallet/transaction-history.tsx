@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { ArrowDownRight, ArrowUpRight, Loader2, RefreshCw } from "lucide-react";
+import Skeleton from "react-loading-skeleton";
 import { formatKSh } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -105,13 +106,16 @@ export default function TransactionHistory({
     return (
       <div className="space-y-3">
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="flex items-center gap-4 animate-pulse">
-            <div className="h-8 w-8 rounded-full bg-muted" />
+          <div key={i} className="flex items-center gap-4 py-3 px-4 border border-outline-variant/30 rounded-lg bg-white">
+            <Skeleton circle width={32} height={32} containerClassName="flex shrink-0" />
             <div className="space-y-2 flex-1">
-              <div className="h-4 w-24 bg-muted rounded" />
-              <div className="h-3 w-32 bg-muted rounded" />
+              <Skeleton width={120} height={16} />
+              <Skeleton width={180} height={12} />
             </div>
-            <div className="h-5 w-16 bg-muted rounded" />
+            <div className="flex flex-col items-end gap-2">
+              <Skeleton width={70} height={16} />
+              <Skeleton width={50} height={20} borderRadius={9999} />
+            </div>
           </div>
         ))}
       </div>

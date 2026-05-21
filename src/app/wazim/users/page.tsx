@@ -32,7 +32,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
     <AdminPageShell
       admin={adminSession}
       title="Users"
-      description="Search users, inspect activation status, manage accounts, and enforce platform policies."
+      description=""
       actions={
         <Button asChild variant="outline">
           <Link href="/wazim/users/suspended">Suspended users</Link>

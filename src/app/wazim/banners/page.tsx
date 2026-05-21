@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Trash2, Loader2, Megaphone } from "lucide-react";
 import { toast } from "sonner";
+import { TableSkeleton } from "@/components/ui/skeleton-loaders";
 import { AdminPageShell } from "@/components/admin/admin-native";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -124,11 +125,7 @@ export default function BannersPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                </td>
-              </TableRow>
+              <TableSkeleton rows={5} columns={7} />
             ) : banners.length === 0 ? (
               <TableRow>
                 <td colSpan={7} className="p-8 text-center text-muted-foreground">

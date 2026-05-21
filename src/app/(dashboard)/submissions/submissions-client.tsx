@@ -27,7 +27,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { PageTransition } from "@/components/ui/PageTransition";
-import { Skeleton } from "@/components/ui/skeleton";
+import Skeleton from "react-loading-skeleton";
+import { CardSkeleton } from "@/components/ui/skeleton-loaders";
 import { CATEGORY_COLORS, CATEGORY_LABELS, type TaskCategory } from "@/lib/task-types";
 import { cn, formatKSh } from "@/lib/utils";
 
@@ -270,23 +271,8 @@ function SubmissionCard({ submission }: { submission: Submission }) {
 function LoadingState() {
   return (
     <div className="space-y-4">
-      {[0, 1, 2].map((item) => (
-        <Card key={item} className="border border-outline-variant/40 bg-white">
-          <CardContent className="space-y-4 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex gap-2">
-                <Skeleton className="h-6 w-24 rounded-full" />
-                <Skeleton className="h-6 w-32 rounded-full" />
-              </div>
-              <Skeleton className="h-4 w-28" />
-            </div>
-            <Skeleton className="h-6 w-2/3" />
-            <Skeleton className="h-px w-full" />
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-          </CardContent>
-        </Card>
+      {Array.from({ length: 3 }).map((_, item) => (
+        <CardSkeleton key={item} />
       ))}
     </div>
   );

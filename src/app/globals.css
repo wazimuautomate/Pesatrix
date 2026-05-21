@@ -25,6 +25,88 @@
     --input: 234 20% 80%;
     --ring: 220 100% 54%;             /* #1463FF */
     --radius: 0.5rem;
+
+    /* Custom Design Tokens mapped to HSL */
+    --navy: 215 68% 14%;              /* #0B1F3B */
+    --pesatrix-blue: 220 100% 54%;    /* #1463FF */
+    
+    --surface: 235 100% 99%;          /* #F9F9FF */
+    --surface-dim: 224 40% 88%;       /* #D2DAF0 */
+    --surface-bright: 235 100% 99%;   /* #F9F9FF */
+    --surface-container-lowest: 0 0% 100%; /* #FFFFFF */
+    --surface-container-low: 230 100% 97%; /* #F1F3FF */
+    --surface-container: 230 100% 95%; /* #E9EDFF */
+    --surface-container-high: 226 100% 94%; /* #E0E8FF */
+    --surface-container-highest: 225 52% 92%; /* #DBE2F9 */
+    
+    --on-surface: 222 36% 12%;        /* #141B2C */
+    --on-surface-variant: 233 14% 30%; /* #424656 */
+    
+    --outline: 230 8% 49%;            /* #737687 */
+    --outline-variant: 234 20% 80%;   /* #C3C5D8 */
+    
+    --teal: 178 100% 21%;             /* #006A66 */
+    --teal-container: 177 92% 71%;    /* #73F7F0 */
+    
+    --error-container: 4 100% 92%;    /* #FFDAD6 */
+    
+    --body-gradient-mid: 224 100% 97%; /* #eef3ff */
+    
+    --canvas-start: 241, 243, 255, 0.94;
+    --canvas-mid: 249, 249, 255, 0.98;
+    --canvas-end: 249, 249, 255, 1;
+  }
+
+  .dark {
+    --background: 222 47% 7%;         /* #090E1A */
+    --foreground: 210 40% 98%;        /* Soft off-white */
+    --card: 222 47% 11%;              /* #0E1629 */
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 10%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 220 100% 54%;          /* Vibrant blue primary */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 178 80% 30%;         /* Premium dark teal */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 222 47% 13%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 222 47% 16%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 30% 20%;            /* Subtle but visible dark border */
+    --input: 222 30% 20%;
+    --ring: 220 100% 54%;
+    
+    /* Design Tokens */
+    --navy: 222 47% 6%;
+    --pesatrix-blue: 220 100% 54%;
+    
+    --surface: 222 47% 7%;
+    --surface-dim: 222 47% 5%;
+    --surface-bright: 222 47% 10%;
+    --surface-container-lowest: 222 47% 8%;
+    --surface-container-low: 222 47% 10%;
+    --surface-container: 222 47% 12%;
+    --surface-container-high: 222 47% 14%;
+    --surface-container-highest: 222 47% 16%;
+    
+    --on-surface: 210 40% 98%;
+    --on-surface-variant: 215 20% 65%;
+    
+    --outline: 222 20% 45%;
+    --outline-variant: 222 30% 20%;
+    
+    --teal: 178 80% 40%;
+    --teal-container: 178 80% 20%;
+    
+    --error-container: 0 50% 15%;
+    
+    --body-gradient-mid: 222 47% 4%;   /* Deep rich navy-black center */
+    
+    --canvas-start: 9, 14, 26, 0.94;
+    --canvas-mid: 14, 22, 41, 0.98;
+    --canvas-end: 9, 14, 26, 1;
   }
 
   * {
@@ -40,7 +122,7 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     min-height: 100vh;
     background:
-      linear-gradient(180deg, hsl(var(--background)) 0%, #eef3ff 52%, hsl(var(--background)) 100%);
+      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--body-gradient-mid)) 52%, hsl(var(--background)) 100%);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -93,10 +175,23 @@
 
   .dashboard-canvas {
     background:
-      linear-gradient(180deg, rgba(241, 243, 255, 0.94) 0%, rgba(249, 249, 255, 0.98) 44%, rgba(249, 249, 255, 1) 100%);
+      linear-gradient(180deg, rgba(var(--canvas-start)) 0%, rgba(var(--canvas-mid)) 44%, rgba(var(--canvas-end)) 100%);
   }
 
   .dashboard-glass {
-    @apply border border-outline-variant/40 bg-white/90 shadow-[0_20px_60px_rgba(11,31,59,0.08)] backdrop-blur-xl;
+    @apply border border-outline-variant/40 backdrop-blur-xl shadow-[0_20px_60px_rgba(11,31,59,0.08)] bg-white/90;
+  }
+
+  .dark .dashboard-glass {
+    @apply bg-card/90 shadow-[0_20px_60px_rgba(0,0,0,0.35)];
+  }
+
+  /* Global Dark Mode Overrides for Hardcoded Components */
+  .dark .bg-white {
+    background-color: hsl(var(--card)) !important;
+  }
+
+  .dark .text-navy {
+    color: hsl(var(--foreground)) !important;
   }
 }

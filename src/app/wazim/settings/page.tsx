@@ -71,7 +71,7 @@ export default async function AdminSettingsPage() {
     <AdminPageShell
       admin={adminSession}
       title="Settings"
-      description="Control operational settings that affect user training, activation, payments, and provider integrations."
+      description=""
     >
       <section className="grid gap-4 md:grid-cols-4">
         <MetricCard

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Check, X, Flag, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
+import Skeleton from "react-loading-skeleton";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -145,8 +146,59 @@ function SubmissionDetail() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-pesatrix-blue" />
+      <div className="space-y-6">
+        <div className="mb-2">
+          <Skeleton width={160} height={32} />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardContent className="p-6 space-y-6">
+              <div>
+                <Skeleton width="60%" height={24} />
+                <div className="mt-2 flex gap-2">
+                  <Skeleton width={80} height={20} borderRadius={4} />
+                  <Skeleton width={80} height={20} borderRadius={4} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="space-y-1">
+                    <Skeleton width={60} height={12} />
+                    <Skeleton width="80%" height={16} />
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <Skeleton width={80} height={12} />
+                <Skeleton height={14} count={3} />
+              </div>
+
+              <div className="space-y-2">
+                <Skeleton width={80} height={12} />
+                <Skeleton height={120} borderRadius={8} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-6 space-y-4">
+                <Skeleton width={50} height={12} />
+                <Skeleton width={80} height={24} borderRadius={4} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6 space-y-3">
+                <Skeleton width={50} height={12} />
+                <Skeleton height={38} borderRadius={6} />
+                <Skeleton height={38} borderRadius={6} />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     );
   }

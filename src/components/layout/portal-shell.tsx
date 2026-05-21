@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const sidebarLinks = [
   { href: "/manage-sales", label: "Manage Sales", icon: ShoppingCart },
@@ -188,12 +189,12 @@ export function PortalShell({ children, user }: PortalShellProps) {
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-outline-variant/30 bg-white/80 px-4 shadow-sm shadow-navy/5 backdrop-blur-xl sm:px-6 lg:h-20 lg:px-8">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-outline-variant/30 bg-card/80 px-4 shadow-sm shadow-navy/5 backdrop-blur-xl sm:px-6 lg:h-20 lg:px-8">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden"
+              className="lg:hidden text-on-surface"
               onClick={() => setMobileMenuOpen(true)}
             >
               <Menu className="h-5 w-5" />
@@ -201,7 +202,7 @@ export function PortalShell({ children, user }: PortalShellProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="hidden lg:inline-flex"
+              className="hidden lg:inline-flex text-on-surface"
               onClick={() => setCollapsed((current) => !current)}
             >
               <ChevronRight
@@ -210,7 +211,8 @@ export function PortalShell({ children, user }: PortalShellProps) {
             </Button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Button variant="ghost" size="icon" asChild className="lg:hidden">
               <Link href="/dashboard/profile">
                 <Avatar className="h-8 w-8">
@@ -230,7 +232,7 @@ export function PortalShell({ children, user }: PortalShellProps) {
 
       {/* Mobile Bottom Nav */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-outline-variant/30 bg-white/90 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-16px_34px_rgba(11,31,59,0.12)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-outline-variant/30 bg-card/90 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-16px_34px_rgba(11,31,59,0.12)] backdrop-blur-xl lg:hidden"
         aria-label="Portal mobile navigation"
       >
         <div className="flex gap-2 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

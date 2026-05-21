@@ -51,17 +51,12 @@ export function HomepageHeader() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          
           <Link
             href="/login"
-            className="hidden px-2 text-sm font-bold text-navy transition-colors hover:text-pesatrix-blue sm:inline"
-          >
-            Log in
-          </Link>
-          <Link
-            href="/register"
             className="inline-flex h-10 items-center justify-center rounded-full bg-pesatrix-blue px-4 text-sm font-black text-white shadow-lg shadow-pesatrix-blue/20 transition-transform active:scale-[0.98] sm:px-5"
           >
-            Sign up
+            Login
           </Link>
         </div>
       </div>

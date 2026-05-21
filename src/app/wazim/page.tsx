@@ -57,7 +57,7 @@ export default async function AdminOverviewPage() {
     <AdminPageShell
       admin={adminSession}
       title="Overview"
-      description="Monitor account growth, activation money, payout pressure, support load, training completion, and fraud risk from one operating view."
+      description=""
     >
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Total users" value={usersCount.count ?? 0} detail="Registered Pesatrix profiles" />

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AlertCircle, FileEdit, FileUp, Loader2, Plus, Search, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { CardSkeleton, TableSkeleton, FormSkeleton } from "@/components/ui/skeleton-loaders";
 
 import { AdminPageShell, MetricCard } from "@/components/admin/admin-native";
 import { Button } from "@/components/ui/button";
@@ -252,7 +253,7 @@ export default function TasksPage() {
         adminUserId: "",
       }}
       title="Tasks"
-      description="Manage the task catalog: create, import, edit, and publish tasks for users."
+      description=""
       headerVariant="logoOnly"
       actions={
         <div className="flex flex-wrap justify-end gap-2">
@@ -400,7 +401,7 @@ export default function TasksPage() {
       <div className="mt-4 space-y-3 md:hidden">
         {loading ? (
           Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-40 animate-pulse rounded-2xl border border-outline-variant/40 bg-white" />
+            <CardSkeleton key={index} />
           ))
         ) : tasks.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-outline-variant/70 bg-white p-8 text-center text-sm text-muted-foreground">
@@ -450,11 +451,7 @@ export default function TasksPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <td colSpan={10} className="p-8 text-center text-muted-foreground">
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                </td>
-              </TableRow>
+              <TableSkeleton rows={8} columns={10} />
             ) : tasks.length === 0 ? (
               <TableRow>
                 <td colSpan={10} className="p-8 text-center text-muted-foreground">
@@ -504,9 +501,7 @@ export default function TasksPage() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogTitle>Edit Task</DialogTitle>
           {editingTaskLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
+            <FormSkeleton fields={5} />
           ) : editingTask ? (
             <TaskForm
               task={editingTask}

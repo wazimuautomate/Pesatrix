@@ -49,6 +49,7 @@ export function AdminLoginForm() {
         return;
       }
 
+      toast.success("Login successful");
       router.push("/wazim");
       router.refresh();
     } catch {
@@ -104,8 +105,14 @@ export function AdminLoginForm() {
             </div>
           </div>
           <Button className="w-full" disabled={loading} type="submit">
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Sign in
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Logging in...
+              </>
+            ) : (
+              "Sign in"
+            )}
           </Button>
         </form>
       </CardContent>

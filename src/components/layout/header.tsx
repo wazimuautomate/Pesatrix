@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ChevronRight } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const navLinks = [
   { href: "/how-it-works", label: "How It Works" },
@@ -19,12 +20,12 @@ export function MarketingHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl transition-all">
+    <header className="sticky top-0 z-50 w-full bg-card/80 border-b border-outline-variant/10 backdrop-blur-xl transition-all">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6 lg:px-12">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
           <BrandLogo size="sidebar" className="transition-transform group-hover:scale-105" />
-          <span className="text-xl font-semibold tracking-tight text-navy font-display">
+          <span className="text-xl font-semibold tracking-tight text-on-surface font-display">
             Pesatrix
           </span>
         </Link>
@@ -35,7 +36,7 @@ export function MarketingHeader() {
             <Link
               key={link.href}
               href={link.href}
-              className="text-sm font-semibold text-on-surface-variant transition-colors hover:text-navy"
+              className="text-sm font-semibold text-on-surface-variant transition-colors hover:text-on-surface"
             >
               {link.label}
             </Link>
@@ -44,7 +45,8 @@ export function MarketingHeader() {
 
         {/* Desktop CTA */}
         <div className="hidden items-center gap-4 md:flex">
-          <Link href="/login" className="text-sm font-semibold text-navy hover:text-pesatrix-blue transition-colors px-2">
+          <ThemeToggle />
+          <Link href="/login" className="text-sm font-semibold text-on-surface hover:text-pesatrix-blue transition-colors px-2">
             Sign In
           </Link>
           <Button asChild className="rounded-full px-6">
@@ -54,14 +56,17 @@ export function MarketingHeader() {
           </Button>
         </div>
 
-        {/* Mobile Menu Toggle */}
-        <button
-          onClick={() => setMobileOpen(!mobileOpen)}
-          className="flex h-12 w-12 items-center justify-center rounded-xl text-navy bg-surface-container-low md:hidden"
-          aria-label="Toggle menu"
-        >
-          {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        {/* Mobile Menu Toggle & Theme Toggle */}
+        <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle />
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="flex h-12 w-12 items-center justify-center rounded-xl text-on-surface bg-surface-container-low"
+            aria-label="Toggle menu"
+          >
+            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
@@ -72,7 +77,7 @@ export function MarketingHeader() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="absolute top-20 left-0 w-full bg-white/95 backdrop-blur-xl border-t border-outline-variant/20 shadow-2xl md:hidden"
+            className="absolute top-20 left-0 w-full bg-card/95 backdrop-blur-xl border-t border-outline-variant/20 shadow-2xl md:hidden"
           >
             <nav className="flex flex-col gap-2 px-6 py-8">
               {navLinks.map((link) => (
@@ -80,7 +85,7 @@ export function MarketingHeader() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileOpen(false)}
-                  className="rounded-xl px-4 py-3 text-lg font-semibold text-navy transition-colors hover:bg-surface-container-low"
+                  className="rounded-xl px-4 py-3 text-lg font-semibold text-on-surface transition-colors hover:bg-surface-container-low"
                 >
                   {link.label}
                 </Link>

@@ -49,7 +49,7 @@ export default async function AdminTrainingPage(props: { searchParams: SearchPar
       <AdminPageShell
         admin={adminSession}
         title="Training"
-        description="Monitor real training progress records, search learners, and adjust user progress when support intervention is required."
+        description=""
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {cardItems.map((card) => (
