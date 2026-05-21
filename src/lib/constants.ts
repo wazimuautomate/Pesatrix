@@ -6,4 +6,3 @@ export const FINANCIAL_LIMITS = {
 } as const;
 
 export const MIN_TASK_PAYOUT_KSH = 10 as const;
-export const DEFAULT_ACTIVATION_FEE_KSH = 500;

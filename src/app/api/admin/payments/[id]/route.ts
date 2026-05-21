@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { syncAccountActivationFromPaidPayments } from "@/lib/activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "../../_lib";
 
@@ -61,6 +62,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Failed to update payment" }, { status: 500 });
   }
 
+  if (parsed.data.status !== undefined) {
+    await syncAccountActivationFromPaidPayments(admin, before.user_id);
+  }
+
   await auditLog({
     adminId: userId,
     action: "payment_update",
@@ -96,6 +101,8 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     .delete()
     .eq("id", id);
   if (deleteError) return NextResponse.json({ error: "Failed to delete payment" }, { status: 500 });
+
+  await syncAccountActivationFromPaidPayments(admin, before.user_id);
 
   await auditLog({
     adminId: userId,

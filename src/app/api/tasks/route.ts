@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
-import { getDailyTaskLimit } from "@/lib/platform-settings";
+import { getActivationFeeKsh, getDailyTaskLimit } from "@/lib/platform-settings";
 import { sanitizeTaskDataForClient } from "@/lib/task-data";
 import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 
@@ -19,7 +19,10 @@ export async function GET() {
 
   const access = await getTrainingProgramSnapshotForUser(user.id);
   const admin = createAdminSupabaseClient();
-  const dailyLimit = await getDailyTaskLimit();
+  const [dailyLimit, activationFeeKsh] = await Promise.all([
+    getDailyTaskLimit(),
+    getActivationFeeKsh(),
+  ]);
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
   const { count: todaySubmissionCount } = await admin
@@ -36,6 +39,7 @@ export async function GET() {
       dailyTaskLimit: dailyLimit,
       total: 0,
       isActivated: false,
+      activationFeeKsh,
       trainingStatus: access.training.status,
       taskUnlockAt: access.taskUnlockAt,
       tasksLocked: true,
@@ -50,6 +54,7 @@ export async function GET() {
       dailyTaskLimit: dailyLimit,
       total: 0,
       isActivated: true,
+      activationFeeKsh,
       trainingStatus: access.training.status,
       taskUnlockAt: access.taskUnlockAt,
       tasksLocked: !access.trainingCompleted || access.tasksLocked,
@@ -103,6 +108,7 @@ export async function GET() {
     dailyTaskLimit: dailyLimit,
     total: formattedTasks.length,
     isActivated: access.activated,
+    activationFeeKsh,
     trainingStatus: access.training.status,
     taskUnlockAt: access.taskUnlockAt,
     tasksLocked: false,

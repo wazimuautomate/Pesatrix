@@ -141,6 +141,7 @@ export default async function DashboardPage() {
   }
 
   const accountStatus = resolveAccountFlags(accountStatusRow as any);
+  const paidActivated = trainingSnapshot.activated;
   const canStartTasks = trainingSnapshot.canStartTasks;
   const rewardSpins = (rewardSpinRows ?? []) as RewardSpinRow[];
   const earningPathSteps = [
@@ -151,8 +152,8 @@ export default async function DashboardPage() {
     },
     {
       label: "Activate",
-      complete: accountStatus.activated,
-      detail: accountStatus.activated ? "Account active" : "Pay activation",
+      complete: paidActivated,
+      detail: paidActivated ? "Account active" : "Pay activation",
     },
     {
       label: "Training",
@@ -190,7 +191,7 @@ export default async function DashboardPage() {
 
   const recentTxns = (recentTxnRows ?? []) as RecentTxn[];
   const stateVariant =
-    accountStatus.setupComplete || accountStatus.activated
+    accountStatus.setupComplete || paidActivated
       ? "success"
       : accountStatus.state === "suspended"
         ? "destructive"
@@ -202,7 +203,7 @@ export default async function DashboardPage() {
       <DashboardOverviewClient
         stateLabel={accountStatus.state.replace(/_/g, " ").toUpperCase()}
       stateVariant={stateVariant}
-      activated={accountStatus.activated}
+      activated={paidActivated}
       setupComplete={accountStatus.setupComplete}
       activationFeeKsh={activationFeeKsh}
       trainingActivated={trainingSnapshot.activated}

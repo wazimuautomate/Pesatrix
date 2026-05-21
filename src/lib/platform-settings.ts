@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { FINANCIAL_LIMITS, DEFAULT_ACTIVATION_FEE_KSH } from "@/lib/constants";
+import { FINANCIAL_LIMITS } from "@/lib/constants";
 import {
   ACTIVATION_FEE_KSH_KEY,
   DAILY_TASK_LIMIT_KEY,
@@ -31,7 +31,6 @@ export {
 export const DEFAULT_TRAINING_REWARD_KSH = 50;
 export const DEFAULT_WITHDRAWAL_HOLD_DAYS = 7;
 export const DEFAULT_WITHDRAWAL_PROCESSING_DAYS = 3;
-export { DEFAULT_ACTIVATION_FEE_KSH };
 
 export const TASK_UNLOCK_DELAY_HOURS_KEY = "task_unlock_delay_hours";
 export const DEFAULT_TASK_UNLOCK_DELAY_HOURS = 0;
@@ -122,6 +121,15 @@ function normalizeIntegerWithFloor(value: unknown, floor: number) {
   return Math.max(parsed, floor);
 }
 
+function normalizeRequiredPositiveInteger(value: unknown, key: string) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`[PlatformSettings] ${key} must be a whole number of at least 1`);
+  }
+
+  return parsed;
+}
+
 export async function getPlatformSetting(key: string): Promise<PlatformSetting | null> {
   const admin = createAdminSupabaseClient();
 
@@ -159,10 +167,10 @@ export async function getTrainingCompletionRewardKsh() {
 export async function getActivationFeeKsh() {
   const setting = await getPlatformSetting(ACTIVATION_FEE_KSH_KEY);
   if (!setting) {
-    warnMissingSetting(ACTIVATION_FEE_KSH_KEY, DEFAULT_ACTIVATION_FEE_KSH);
+    throw new Error(`[PlatformSettings] Missing required ${ACTIVATION_FEE_KSH_KEY}`);
   }
 
-  return normalizeIntegerWithFloor(setting?.value, DEFAULT_ACTIVATION_FEE_KSH);
+  return normalizeRequiredPositiveInteger(setting.value, ACTIVATION_FEE_KSH_KEY);
 }
 
 export async function getWithdrawalHoldDays() {

@@ -7,7 +7,6 @@ import { PlatformSettingsForm } from "@/components/admin/platform-settings-form"
 import { TaskLimitsSettingsForm } from "@/components/admin/task-limits-settings-form";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import {
-  DEFAULT_ACTIVATION_FEE_KSH,
   DEFAULT_DAILY_TASK_LIMIT,
   DAILY_TASK_LIMIT_KEY,
   REFERRAL_LEVEL_1_REWARD_KEY,
@@ -82,7 +81,7 @@ export default async function AdminSettingsPage() {
         />
         <MetricCard
           label="Activation fee"
-          value={`KSh ${activationFeeSetting?.value ?? DEFAULT_ACTIVATION_FEE_KSH}`}
+          value={activationFeeSetting?.value ? `KSh ${activationFeeSetting.value}` : "Not configured"}
           detail="Charged on account activation"
           tone="amber"
         />

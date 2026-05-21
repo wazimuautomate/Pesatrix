@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { syncAccountActivationFromPaidPayments } from "@/lib/activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { creditDirectReferralBonus } from "@/lib/referral";
 import { SYSTEM_ADMIN_ID } from "@/lib/fraud/riskScorer";
@@ -200,7 +201,7 @@ export async function POST(request: Request) {
 
     const paidAt = new Date().toISOString();
 
-    const { error: paymentUpdateError } = await admin
+    const { data: paidPayment, error: paymentUpdateError } = await admin
       .from("activation_payments")
       .update({
         status: "paid",
@@ -211,28 +212,19 @@ export async function POST(request: Request) {
         stk_completed_at: completedAt,
       })
       .eq("id", payment.id)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .select("id, user_id, status")
+      .maybeSingle();
 
     if (paymentUpdateError) {
       throw paymentUpdateError;
     }
 
-    const { error: statusUpdateError } = await admin
-      .from("account_status")
-      .upsert(
-        {
-          user_id: payment.user_id,
-          is_activated: true,
-          activated_at: paidAt,
-          state: "activated",
-          status: "active",
-        },
-        { onConflict: "user_id" }
-      );
-
-    if (statusUpdateError) {
-      throw statusUpdateError;
+    if (!paidPayment || paidPayment.status !== "paid") {
+      return acceptedResponse;
     }
+
+    await syncAccountActivationFromPaidPayments(admin, payment.user_id);
 
     try {
       await creditDirectReferralBonus(payment.user_id);

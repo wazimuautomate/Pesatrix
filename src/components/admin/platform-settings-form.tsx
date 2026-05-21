@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { DEFAULT_ACTIVATION_FEE_KSH } from "@/lib/constants";
 import {
   ACTIVATION_FEE_KSH_KEY,
   MAX_TASK_BATCH_VALUE_KSH_KEY,
@@ -119,7 +118,6 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       description: "One-time account activation charge collected through M-Pesa.",
       type: "number",
       min: 1,
-      defaultValue: String(DEFAULT_ACTIVATION_FEE_KSH),
     },
     {
       key: WITHDRAWAL_HOLD_DAYS_KEY,
@@ -255,7 +253,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
         <div className="grid gap-6 md:grid-cols-3">
           {payoutSettingDefinitions.map((def) => {
             const existing = initialSettings.find((s) => s.key === def.key);
-            const currentValue = settings[def.key] ?? existing?.value ?? def.defaultValue;
+            const currentValue = settings[def.key] ?? existing?.value ?? def.defaultValue ?? "";
             const isLoading = loading[def.key] ?? false;
             const lastUpdated = existing?.updated_at
               ? new Date(existing.updated_at).toLocaleString()

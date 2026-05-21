@@ -101,17 +101,6 @@ export class TrainingProgressError extends Error {
   }
 }
 
-function isActivated(status: AccountStatusRow | null) {
-  if (!status) return false;
-
-  return Boolean(
-    status.is_activated ||
-      status.state === "activated" ||
-      status.status === "activated" ||
-      status.status === "active"
-  );
-}
-
 function isOnboardingComplete(status: AccountStatusRow | null) {
   if (!status) return false;
 
@@ -190,9 +179,9 @@ export async function gradeTrainingQuestion(
   questionId: string,
   selectedOptionId: string
 ): Promise<QuestionGradeResult> {
-  const { accountStatus, trainingProgress } = await loadTrainingContext(userId);
+  const { trainingProgress, hasPaidActivation } = await loadTrainingContext(userId);
 
-  if (!isActivated(accountStatus)) {
+  if (!hasPaidActivation) {
     throw new TrainingProgressError(
       403,
       "ACTIVATION_REQUIRED",
@@ -375,7 +364,7 @@ export async function getTrainingProgramSnapshotForUser(
 ): Promise<TrainingProgramSnapshot> {
   const { accountStatus, trainingProgress, hasPaidActivation } = await loadTrainingContext(userId);
   const onboardingComplete = isOnboardingComplete(accountStatus);
-  const activated = isActivated(accountStatus) || hasPaidActivation;
+  const activated = hasPaidActivation;
   const trainingCompleted = Boolean(trainingProgress.completed_at || trainingProgress.status === "completed");
   const [activationFeeKsh, configuredTaskUnlockDelayHours, referralTaskUnlockReduction] = await Promise.all([
     getActivationFeeKsh(),
@@ -532,9 +521,9 @@ export async function ensureTrainingReward(userId: string, createdByAdminId?: st
 
 export async function completeTrainingDay(userId: string, answers: Record<string, string> = {}) {
   const admin = createAdminSupabaseClient();
-  const { accountStatus, trainingProgress } = await loadTrainingContext(userId);
+  const { trainingProgress, hasPaidActivation } = await loadTrainingContext(userId);
 
-  if (!isActivated(accountStatus)) {
+  if (!hasPaidActivation) {
     throw new TrainingProgressError(
       403,
       "ACTIVATION_REQUIRED",
@@ -627,9 +616,9 @@ export async function submitTrainingStageTest(
   answers: Record<string, string>
 ): Promise<{ snapshot: TrainingProgramSnapshot; result: StageTestResult }> {
   const admin = createAdminSupabaseClient();
-  const { accountStatus, trainingProgress } = await loadTrainingContext(userId);
+  const { trainingProgress, hasPaidActivation } = await loadTrainingContext(userId);
 
-  if (!isActivated(accountStatus)) {
+  if (!hasPaidActivation) {
     throw new TrainingProgressError(
       403,
       "ACTIVATION_REQUIRED",

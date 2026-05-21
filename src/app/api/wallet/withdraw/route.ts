@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { hasPaidActivationPayment } from "@/lib/activation";
 import { KENYAN_PHONE_REGEX } from "@/lib/mpesa";
 import {
   getWithdrawalVerification,
@@ -52,20 +53,17 @@ export async function POST(request: Request) {
 
     const { amount: validAmount, phone } = parsed.data;
 
-    const [walletSummary, contact, processingDays, minWithdrawal, withdrawalFee, verification, accountStatus] = await Promise.all([
+    const [walletSummary, contact, processingDays, minWithdrawal, withdrawalFee, verification, hasPaidActivation] = await Promise.all([
       getWalletSummaryForUser(user.id),
       getWithdrawalContactForUser(user.id),
       getWithdrawalProcessingDays(),
       getMinWithdrawalKsh(),
       getWithdrawalFeeAmount(),
       getWithdrawalVerification(user.id),
-      (admin.from("account_status" as never) as any)
-        .select("is_activated")
-        .eq("user_id", user.id)
-        .maybeSingle(),
+      hasPaidActivationPayment(admin, user.id),
     ]);
 
-    if (!accountStatus.data?.is_activated) {
+    if (!hasPaidActivation) {
       return NextResponse.json(
         {
           error: {

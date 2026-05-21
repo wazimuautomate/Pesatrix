@@ -121,7 +121,7 @@ export default function ActivateClientPage({
           throw new Error(payload?.error ?? "Could not verify payment status.");
         }
 
-        if (payload.status === "paid" || payload.status === "completed") {
+        if (payload.status === "paid") {
           resetPendingState();
           toast.success("Activation successful.");
           router.push("/dashboard");

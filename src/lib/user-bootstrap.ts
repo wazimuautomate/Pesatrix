@@ -84,7 +84,7 @@ export function buildMeResponse(args: {
   const metadataCounty =
     typeof authMetadata?.county === "string" ? authMetadata.county : null;
   const setupComplete = accountStatus?.is_setup_complete === true;
-  const activated = accountStatus?.is_activated === true;
+  const activated = trainingSnapshot?.activated ?? accountStatus?.is_activated === true;
 
   return {
     profile: {

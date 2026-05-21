@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin, auditLog } from "../../../_lib";
+import { syncAccountActivationFromPaidPayments } from "@/lib/activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 const verifyPaymentSchema = z.object({
@@ -78,23 +79,8 @@ export async function POST(
       );
     }
 
-    // 4. Update the user's account_status
-    const { data: accountStatus } = await supabase
-      .from("account_status")
-      .select("is_activated, state")
-      .eq("user_id", payment.user_id)
-      .single();
-
-    if (accountStatus && !accountStatus.is_activated) {
-      await supabase
-        .from("account_status")
-        .update({
-          is_activated: true,
-          activated_at: now,
-          state: accountStatus.state === "pending_activation" || accountStatus.state === "registered" ? "activated" : accountStatus.state,
-        })
-        .eq("user_id", payment.user_id);
-    }
+    // 4. Derive the user's activation state from paid activation payments only.
+    await syncAccountActivationFromPaidPayments(supabase, payment.user_id);
 
     // 5. Write to audit_log
     await auditLog({

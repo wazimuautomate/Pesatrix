@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { hasPaidActivationPayment } from "@/lib/activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "../../_lib";
 
@@ -204,6 +205,19 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   let updatedStatus = beforeStatus;
   if (Object.keys(statusPatch).length > 0) {
+    const requestsActivation =
+      statusPatch.is_activated === true ||
+      statusPatch.state === "activated" ||
+      statusPatch.status === "active" ||
+      statusPatch.status === "activated";
+
+    if (requestsActivation && !(await hasPaidActivationPayment(admin, id))) {
+      return NextResponse.json(
+        { error: "User cannot be activated without a paid activation payment" },
+        { status: 422 }
+      );
+    }
+
     const { data, error: statusError } = await (admin.from("account_status" as never) as any)
       .upsert({ user_id: id, ...statusPatch }, { onConflict: "user_id" })
       .select("*")

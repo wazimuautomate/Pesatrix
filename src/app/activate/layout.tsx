@@ -1,9 +1,6 @@
 import { redirect } from "next/navigation";
+import { hasPaidActivationPayment } from "@/lib/activation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-
-type ActivationStatus = {
-  is_activated: boolean | null;
-};
 
 export default async function ActivateLayout({
   children,
@@ -16,14 +13,7 @@ export default async function ActivateLayout({
   } = await supabase.auth.getUser();
 
   if (user) {
-    const { data: statusRow } = await supabase
-      .from("account_status")
-      .select("is_activated")
-      .eq("user_id", user.id)
-      .single();
-
-    const status = statusRow as ActivationStatus | null;
-    if (status?.is_activated) redirect("/dashboard");
+    if (await hasPaidActivationPayment(supabase, user.id)) redirect("/dashboard");
   }
 
   return (

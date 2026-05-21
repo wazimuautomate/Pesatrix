@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { internalErrorResponse, rateLimitedResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api";
+import { hasPaidActivationPayment } from "@/lib/activation";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getActivationFeeKsh } from "@/lib/platform-settings";
@@ -40,17 +41,7 @@ export async function POST(request: Request) {
     const admin = createAdminSupabaseClient();
     const activationFeeKsh = await getActivationFeeKsh();
 
-    const { data: currentStatus, error: statusError } = await admin
-      .from("account_status")
-      .select("is_activated")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (statusError) {
-      throw statusError;
-    }
-
-    if (currentStatus?.is_activated) {
+    if (await hasPaidActivationPayment(admin, user.id)) {
       return NextResponse.json(
         {
           error: { code: "ALREADY_ACTIVATED", message: "Account is already activated" },

@@ -5,8 +5,8 @@ import { z } from "zod";
 import {
   getAccountProgressSnapshot,
   mergeAccountMetadata,
-  resolveAccountFlags,
 } from "@/lib/account-progress";
+import { hasPaidActivationPayment } from "@/lib/activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getWalletSummaryForUser } from "@/lib/wallet";
@@ -159,21 +159,13 @@ export async function GET() {
     const admin = createAdminSupabaseClient();
     const todayStart = startOfUtcDayIso();
 
-    const [{ data: profile }, { data: accountStatus }, { data: activationPayment }, { data: rewardRows }, walletSummary] =
+    const [{ data: profile }, hasPaidActivation, { data: rewardRows }, walletSummary] =
       await Promise.all([
         (admin.from("profiles" as never) as any)
           .select("metadata")
           .eq("id", user.id)
           .maybeSingle(),
-        (admin.from("account_status" as never) as any)
-          .select("state, status, is_activated, is_setup_complete")
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        (admin.from("activation_payments" as never) as any)
-          .select("id, status")
-          .eq("user_id", user.id)
-          .eq("status", "paid")
-          .maybeSingle(),
+        hasPaidActivationPayment(admin, user.id),
         (admin.from("wallet_transactions" as never) as any)
           .select("id, amount, created_at, description, reference_table, direction")
           .eq("user_id", user.id)
@@ -183,9 +175,7 @@ export async function GET() {
         getWalletSummaryForUser(user.id),
       ]);
 
-    const accountFlags = resolveAccountFlags(accountStatus);
-    const hasPaidActivation = Boolean(activationPayment?.status === "paid");
-    const activated = accountFlags.activated || hasPaidActivation;
+    const activated = hasPaidActivation;
     const progress = getAccountProgressSnapshot(profile?.metadata);
     const today = summarizeDailyTransactions((rewardRows ?? []) as RewardTransactionRow[]);
 
@@ -239,16 +229,13 @@ export async function POST(request: Request) {
     const admin = createAdminSupabaseClient();
     const todayStart = startOfUtcDayIso();
 
-    const [{ data: profile }, { data: accountStatus }, { data: rewardRows }, walletSummary] =
+    const [{ data: profile }, hasPaidActivation, { data: rewardRows }, walletSummary] =
       await Promise.all([
         (admin.from("profiles" as never) as any)
           .select("metadata")
           .eq("id", user.id)
           .maybeSingle(),
-        (admin.from("account_status" as never) as any)
-          .select("state, status, is_activated, is_setup_complete")
-          .eq("user_id", user.id)
-          .maybeSingle(),
+        hasPaidActivationPayment(admin, user.id),
         (admin.from("wallet_transactions" as never) as any)
           .select("id, amount, created_at, description, reference_table, direction")
           .eq("user_id", user.id)
@@ -258,8 +245,7 @@ export async function POST(request: Request) {
         getWalletSummaryForUser(user.id),
       ]);
 
-    const accountFlags = resolveAccountFlags(accountStatus);
-    if (!accountFlags.activated) {
+    if (!hasPaidActivation) {
       return errorResponse("Activate your account before using the reward wheel.", "ACTIVATION_REQUIRED", 403);
     }
 

@@ -2,17 +2,12 @@
  * Referral bonus utilities.
  * All writes happen server-side via Supabase service role.
  */
+import { hasPaidActivationPayment } from "@/lib/activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { sendReferralBonusEmail } from "@/lib/notifications";
 import { DEFAULT_REFERRAL_REWARD_KSH } from "@/lib/referral-program-utils";
 import { accelerateTaskUnlockForReferral } from "@/lib/training";
 import { SYSTEM_ADMIN_ID, validateReferralPair } from "@/lib/fraud/riskScorer";
-
-type AccountStatusRow = {
-  state?: string | null;
-  is_activated?: boolean | null;
-  activated_at?: string | null;
-};
 
 type NotificationRecipient = {
   id: string;
@@ -34,33 +29,7 @@ type VerificationRow = {
 async function hasActivated(userId: string) {
   const supabase = createAdminSupabaseClient();
 
-  const [{ data: accountStatus, error: accountStatusError }, { data: activationPayment }] = await Promise.all([
-    supabase
-      .from("account_status")
-      .select("state, is_activated, activated_at")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    (supabase.from("activation_payments" as never) as any)
-      .select("id, status")
-      .eq("user_id", userId)
-      .eq("status", "paid")
-      .maybeSingle(),
-  ]);
-
-  if (accountStatusError) {
-    throw accountStatusError;
-  }
-
-  const accountActivated = Boolean(
-    accountStatus?.is_activated ||
-      accountStatus?.activated_at ||
-      accountStatus?.state === "activated" ||
-      accountStatus?.state === "active"
-  );
-
-  const paymentActivated = Boolean(activationPayment?.status === "paid");
-
-  return accountActivated || paymentActivated;
+  return hasPaidActivationPayment(supabase, userId);
 }
 
 async function queueReferralActivationNotification(args: {

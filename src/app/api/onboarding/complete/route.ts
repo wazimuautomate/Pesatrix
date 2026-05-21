@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { hasPaidActivationPayment } from "@/lib/activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { internalErrorResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -31,15 +32,12 @@ export async function POST(request: Request) {
 
     const admin = createAdminSupabaseClient();
 
-    const [{ data: currentStatus }, { data: currentProfile }] = await Promise.all([
-      (admin.from("account_status" as never) as any)
-        .select("is_activated, activated_at, status, state")
-        .eq("user_id", user.id)
-        .maybeSingle(),
+    const [{ data: currentProfile }, hasPaidActivation] = await Promise.all([
       (admin.from("profiles" as never) as any)
         .select("full_name, county")
         .eq("id", user.id)
         .maybeSingle(),
+      hasPaidActivationPayment(admin, user.id),
     ]);
 
     const userMeta =
@@ -95,11 +93,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const activated = Boolean(
-      currentStatus?.is_activated ||
-        currentStatus?.state === "activated" ||
-        currentStatus?.status === "active"
-    );
+    const activated = hasPaidActivation;
     const statusPatch = activated
       ? {
           is_setup_complete: true,

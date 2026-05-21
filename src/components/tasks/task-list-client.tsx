@@ -29,6 +29,7 @@ import {
   normalizeSocialPlatform,
   socialEstimatedTime,
 } from "@/lib/social-engagement";
+import { formatKSh } from "@/lib/utils";
 
 type Task = {
   id: string;
@@ -354,6 +355,7 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
   const [trainingIncomplete, setTrainingIncomplete] = useState(false);
   const [dailySubmissionCount, setDailySubmissionCount] = useState<number | null>(null);
   const [dailyTaskLimit, setDailyTaskLimit] = useState<number | null>(null);
+  const [activationFeeKsh, setActivationFeeKsh] = useState<number | null>(null);
   const [activationDialogOpen, setActivationDialogOpen] = useState(false);
 
   const [selectedCategories, setSelectedCategories] = useState<TaskCategory[]>([]);
@@ -387,6 +389,7 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
         setSubmittedTaskIds(data.submittedTaskIds ?? []);
         setDailySubmissionCount(data.dailySubmissionCount ?? 0);
         setDailyTaskLimit(data.dailyTaskLimit ?? null);
+        setActivationFeeKsh(typeof data.activationFeeKsh === "number" ? data.activationFeeKsh : null);
       } catch {
         setError("Failed to fetch tasks");
       } finally {
@@ -634,7 +637,7 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
           <DialogHeader className="text-left">
             <DialogTitle>Activate your account to start earning</DialogTitle>
             <DialogDescription>
-              Pay KSh 500 once and unlock all tasks.
+              Pay {activationFeeKsh ? formatKSh(activationFeeKsh) : "the configured activation fee"} once and unlock all tasks.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-2xl bg-accent p-4 text-sm text-muted-foreground">
