@@ -45,6 +45,9 @@ type Task = {
   requiresScreenshot: boolean;
   requiresUrl: boolean;
   minWordCount: number;
+  canStartTask: boolean;
+  blockedReason: string | null;
+  blockedMessage: string | null;
 };
 
 const CATEGORIES: TaskCategory[] = [
@@ -190,16 +193,94 @@ function TimeBlock({ value, label }: { value: string; label: string }) {
   );
 }
 
+function getBlockedDialogTitle(task: Task | null, gateReason: string | null, isActivated: boolean) {
+  if (task?.blockedReason === "referral_gated") {
+    return "Referral rule not met";
+  }
+
+  if (task?.blockedReason === "assigned_only" || task?.blockedReason === "proof_tier") {
+    return "Admin selection required";
+  }
+
+  if (!isActivated || gateReason === "activation") {
+    return "Activation required";
+  }
+
+  if (gateReason === "training") {
+    return "Training required";
+  }
+
+  if (gateReason === "tasks_locked") {
+    return "Tasks are still preparing";
+  }
+
+  return "Task is locked";
+}
+
+function getBlockedDialogDescription(task: Task | null, gateMessage: string | null, activationFeeKsh: number | null) {
+  if (task?.blockedMessage) {
+    return task.blockedMessage;
+  }
+
+  if (gateMessage) {
+    return gateMessage;
+  }
+
+  return `Pay ${activationFeeKsh ? formatKSh(activationFeeKsh) : "the configured activation fee"} once and complete the required steps before starting tasks.`;
+}
+
+function getBlockedActionHref(task: Task | null, gateReason: string | null, isActivated: boolean) {
+  if (task?.blockedReason === "referral_gated") {
+    return "/dashboard/referrals";
+  }
+
+  if (task?.blockedReason === "assigned_only" || task?.blockedReason === "proof_tier") {
+    return null;
+  }
+
+  if (!isActivated || gateReason === "activation") {
+    return "/dashboard/activate";
+  }
+
+  if (gateReason === "training") {
+    return "/dashboard/training";
+  }
+
+  if (gateReason === "tasks_locked") {
+    return "/dashboard/referrals";
+  }
+
+  return null;
+}
+
+function getBlockedActionLabel(task: Task | null, gateReason: string | null, isActivated: boolean) {
+  if (task?.blockedReason === "referral_gated") {
+    return "View Referrals";
+  }
+
+  if (!isActivated || gateReason === "activation") {
+    return "Activate Account";
+  }
+
+  if (gateReason === "training") {
+    return "Go to Training";
+  }
+
+  if (gateReason === "tasks_locked") {
+    return "View Referrals";
+  }
+
+  return "Continue";
+}
+
 function TaskCard({
   task,
   isSubmitted,
-  isActivated,
   onBlockedAction,
 }: {
   task: Task;
   isSubmitted: boolean;
-  isActivated: boolean;
-  onBlockedAction: () => void;
+  onBlockedAction: (task: Task) => void;
 }) {
   const expiresAt = task.expiresAt ? new Date(task.expiresAt) : null;
   const now = new Date();
@@ -322,7 +403,7 @@ function TaskCard({
                   </Button>
                 </Link>
               </motion.div>
-              {isActivated ? (
+              {task.canStartTask ? (
                 <motion.div whileTap={{ scale: 0.97 }} className="flex-1">
                   <Link href={`/tasks/${task.id}`} className="flex-1">
                     <Button className="w-full">Start Task</Button>
@@ -330,7 +411,8 @@ function TaskCard({
                 </motion.div>
               ) : (
                 <motion.div whileTap={{ scale: 0.97 }} className="flex-1">
-                  <Button className="w-full" onClick={onBlockedAction}>
+                  <Button className="w-full" onClick={() => onBlockedAction(task)}>
+                    <Lock className="mr-2 h-4 w-4" />
                     Start Task
                   </Button>
                 </motion.div>
@@ -353,10 +435,14 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
   const [isActivated, setIsActivated] = useState(true);
   const [unlockAt, setUnlockAt] = useState<string | undefined>(undefined);
   const [trainingIncomplete, setTrainingIncomplete] = useState(false);
+  const [canStartTasks, setCanStartTasks] = useState(true);
+  const [gateReason, setGateReason] = useState<string | null>(null);
+  const [gateMessage, setGateMessage] = useState<string | null>(null);
   const [dailySubmissionCount, setDailySubmissionCount] = useState<number | null>(null);
   const [dailyTaskLimit, setDailyTaskLimit] = useState<number | null>(null);
   const [activationFeeKsh, setActivationFeeKsh] = useState<number | null>(null);
   const [activationDialogOpen, setActivationDialogOpen] = useState(false);
+  const [blockedTask, setBlockedTask] = useState<Task | null>(null);
 
   const [selectedCategories, setSelectedCategories] = useState<TaskCategory[]>([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
@@ -383,6 +469,9 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
 
         setIsActivated(data.isActivated !== false);
         setTasksLocked(Boolean(data.tasksLocked));
+        setCanStartTasks(data.canStartTasks !== false);
+        setGateReason(typeof data.gateReason === "string" ? data.gateReason : null);
+        setGateMessage(typeof data.gateMessage === "string" ? data.gateMessage : null);
         setUnlockAt(data.taskUnlockAt ?? undefined);
         setTrainingIncomplete(data.isActivated !== false && data.trainingStatus !== "completed");
         setTasks(data.tasks ?? []);
@@ -485,22 +574,6 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
     );
   }
 
-  if (trainingIncomplete) {
-    return (
-      <div className="space-y-6">
-        <LockBanner mode="training" />
-      </div>
-    );
-  }
-
-  if (tasksLocked) {
-    return (
-      <div className="space-y-6">
-        <LockBanner unlockAt={unlockAt} mode="taskUnlock" />
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <Card>
@@ -520,6 +593,27 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
 
   return (
     <div className="space-y-6">
+      {!canStartTasks && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-950">
+                You can browse tasks, but starting is locked for now.
+              </p>
+              <p className="mt-1 text-sm text-amber-900">
+                {gateMessage ?? "Complete the required account steps before starting live tasks."}
+              </p>
+              {gateReason === "tasks_locked" && unlockAt && (
+                <p className="mt-1 text-xs font-medium text-amber-800">
+                  Unlock time: {new Date(unlockAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {dailySubmissionCount !== null && dailyTaskLimit !== null && (
         <div className="flex items-center justify-between rounded-lg border border-pesatrix-blue/20 bg-pesatrix-blue/5 px-4 py-3">
           <div>
@@ -625,8 +719,10 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
               key={task.id}
               task={task}
               isSubmitted={submittedTaskIds.includes(task.id)}
-              isActivated={isActivated}
-              onBlockedAction={() => setActivationDialogOpen(true)}
+              onBlockedAction={(selectedTask) => {
+                setBlockedTask(selectedTask);
+                setActivationDialogOpen(true);
+              }}
             />
           ))}
         </div>
@@ -635,20 +731,24 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
       <Dialog open={activationDialogOpen} onOpenChange={setActivationDialogOpen}>
         <DialogContent className="max-h-[80vh] max-w-sm overflow-y-auto p-6">
           <DialogHeader className="text-left">
-            <DialogTitle>Activate your account to start earning</DialogTitle>
+            <DialogTitle>{getBlockedDialogTitle(blockedTask, gateReason, isActivated)}</DialogTitle>
             <DialogDescription>
-              Pay {activationFeeKsh ? formatKSh(activationFeeKsh) : "the configured activation fee"} once and unlock all tasks.
+              {getBlockedDialogDescription(blockedTask, gateMessage, activationFeeKsh)}
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-2xl bg-accent p-4 text-sm text-muted-foreground">
-            You can browse every available task now, but task submission starts after activation.
+            You can still browse available tasks and payouts. Starting and submitting tasks unlock only after the required rule is met.
           </div>
           <DialogFooter className="gap-2 sm:flex-col">
-            <motion.div whileTap={{ scale: 0.97 }} className="w-full">
-              <Button asChild className="w-full">
-                <Link href="/activate">Go to Activate</Link>
-              </Button>
-            </motion.div>
+            {getBlockedActionHref(blockedTask, gateReason, isActivated) && (
+              <motion.div whileTap={{ scale: 0.97 }} className="w-full">
+                <Button asChild className="w-full">
+                  <Link href={getBlockedActionHref(blockedTask, gateReason, isActivated)!}>
+                    {getBlockedActionLabel(blockedTask, gateReason, isActivated)}
+                  </Link>
+                </Button>
+              </motion.div>
+            )}
             <motion.div whileTap={{ scale: 0.97 }} className="w-full">
               <Button variant="outline" className="w-full" onClick={() => setActivationDialogOpen(false)}>
                 Close

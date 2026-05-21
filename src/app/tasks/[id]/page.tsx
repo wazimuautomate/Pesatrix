@@ -5,7 +5,7 @@ import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { TaskDetailsPreview, TaskSubmissionForm } from "@/components/tasks/task-submission-form";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { sanitizeTaskForClient } from "@/lib/task-data";
-import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
+import { evaluateTaskAccess, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 
 export const metadata = {
   title: "Task Detail",
@@ -38,17 +38,19 @@ export default async function TaskDetailPage({ params, searchParams }: RouteCont
     getTaskAccessContext(admin, user.id),
   ]);
 
-  if (!access.canStartTasks) {
-    if (access.gateReason === "onboarding") {
-      redirect("/dashboard/onboarding");
-    }
+  if (!access.canStartTasks && access.gateReason === "onboarding") {
+    redirect("/dashboard/onboarding");
+  }
 
+  if (!task || !isTaskLive(task)) {
     redirect("/tasks");
   }
 
-  if (!task || !isTaskLive(task) || !canUserAccessTask(task, taskAccess)) {
-    redirect("/tasks");
-  }
+  const taskEligibility = evaluateTaskAccess(task, taskAccess);
+  const canStartTask = access.canStartTasks && taskEligibility.canAccess;
+  const blockedMessage = access.canStartTasks
+    ? taskEligibility.message
+    : access.gateMessage;
 
   const { data: existingSubmissions } = await admin
     .from("task_submissions")
@@ -76,8 +78,12 @@ export default async function TaskDetailPage({ params, searchParams }: RouteCont
       user={{ full_name: profile?.full_name ?? "Pesatrix User", phone: "" }}
     >
       <div className="mx-auto w-full max-w-3xl px-4 py-6">
-        {previewOnly ? (
-          <TaskDetailsPreview task={sanitizeTaskForClient(task)} />
+        {previewOnly || !canStartTask ? (
+          <TaskDetailsPreview
+            task={sanitizeTaskForClient(task)}
+            canStartTask={canStartTask}
+            blockedMessage={blockedMessage}
+          />
         ) : (
           <TaskSubmissionForm
             task={sanitizeTaskForClient(task)}

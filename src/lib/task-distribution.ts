@@ -12,6 +12,12 @@ export type TaskAccessContext = {
   assignedTaskIds: Set<string>;
 };
 
+export type TaskAccessEvaluation = {
+  canAccess: boolean;
+  reason: "referral_gated" | "assigned_only" | "proof_tier" | null;
+  message: string | null;
+};
+
 export type TaskDistributionRecord = {
   id: string;
   visibility_mode?: string | null;
@@ -49,17 +55,43 @@ export function getEffectiveMinReferrals(task: Pick<TaskDistributionRecord, "vis
 }
 
 export function canUserAccessTask(task: TaskDistributionRecord, context: TaskAccessContext) {
+  return evaluateTaskAccess(task, context).canAccess;
+}
+
+export function evaluateTaskAccess(task: TaskDistributionRecord, context: TaskAccessContext): TaskAccessEvaluation {
   const visibilityMode = normalizeTaskVisibilityMode(task.visibility_mode);
 
   if (visibilityMode === "all") {
-    return true;
+    return {
+      canAccess: true,
+      reason: null,
+      message: null,
+    };
   }
 
   if (visibilityMode === "referral_gated") {
-    return context.referralCount >= getEffectiveMinReferrals(task);
+    const requiredReferrals = getEffectiveMinReferrals(task);
+    const canAccess = context.referralCount >= requiredReferrals;
+
+    return {
+      canAccess,
+      reason: canAccess ? null : "referral_gated",
+      message: canAccess
+        ? null
+        : `This task unlocks after ${requiredReferrals} activated referrals. You currently have ${context.referralCount}.`,
+    };
   }
 
-  return context.assignedTaskIds.has(task.id);
+  const canAccess = context.assignedTaskIds.has(task.id);
+  return {
+    canAccess,
+    reason: canAccess ? null : visibilityMode,
+    message: canAccess
+      ? null
+      : visibilityMode === "proof_tier"
+        ? "This task is reserved for users selected for this proof tier by an admin."
+        : "This task is reserved for users selected by an admin.",
+  };
 }
 
 export function isTaskLive(task: Pick<TaskDistributionRecord, "status" | "publish_at" | "expires_at" | "slots_remaining">, now = Date.now()) {

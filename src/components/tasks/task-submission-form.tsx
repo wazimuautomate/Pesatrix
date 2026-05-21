@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CheckCircle, Clock, ExternalLink, FileText, Loader2, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle, Clock, ExternalLink, FileText, Loader2, Lock, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -515,7 +515,15 @@ export function TaskSubmissionForm({
   );
 }
 
-export function TaskDetailsPreview({ task }: { task: Task }) {
+export function TaskDetailsPreview({
+  task,
+  canStartTask = true,
+  blockedMessage,
+}: {
+  task: Task;
+  canStartTask?: boolean;
+  blockedMessage?: string | null;
+}) {
   const router = useRouter();
   const taskData = task.task_data;
   const hasDescription = typeof task.description === "string" && task.description.trim().length > 0;
@@ -599,13 +607,26 @@ export function TaskDetailsPreview({ task }: { task: Task }) {
           )}
 
           <div className="rounded-2xl border border-outline-variant/40 bg-surface-container-low p-4 text-sm text-muted-foreground">
-            The preview shows what this task involves and how to complete it. Questions and answer inputs only appear after you choose <span className="font-medium text-foreground">Start Task</span>.
+            {canStartTask ? (
+              <>
+                The preview shows what this task involves and how to complete it. Questions and answer inputs only appear after you choose <span className="font-medium text-foreground">Start Task</span>.
+              </>
+            ) : (
+              blockedMessage ?? "You can preview this task, but starting is locked until you meet the required account rules."
+            )}
           </div>
 
           <div className="flex gap-3">
-            <Button asChild className="flex-1">
-              <Link href={`/tasks/${task.id}`}>Start Task</Link>
-            </Button>
+            {canStartTask ? (
+              <Button asChild className="flex-1">
+                <Link href={`/tasks/${task.id}`}>Start Task</Link>
+              </Button>
+            ) : (
+              <Button disabled className="flex-1">
+                <Lock className="mr-2 h-4 w-4" />
+                Locked
+              </Button>
+            )}
             <Button asChild variant="outline" className="flex-1">
               <Link href="/tasks">Back to task list</Link>
             </Button>

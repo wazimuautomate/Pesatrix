@@ -4,7 +4,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { getActivationFeeKsh, getDailyTaskLimit } from "@/lib/platform-settings";
 import { sanitizeTaskDataForClient } from "@/lib/task-data";
-import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
+import { evaluateTaskAccess, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -31,36 +31,6 @@ export async function GET() {
     .eq("user_id", user.id)
     .gte("submitted_at", todayStart.toISOString());
 
-  if (!access.activated) {
-    return NextResponse.json({
-      tasks: [],
-      submittedTaskIds: [],
-      dailySubmissionCount: todaySubmissionCount ?? 0,
-      dailyTaskLimit: dailyLimit,
-      total: 0,
-      isActivated: false,
-      activationFeeKsh,
-      trainingStatus: access.training.status,
-      taskUnlockAt: access.taskUnlockAt,
-      tasksLocked: true,
-    });
-  }
-
-  if (access.activated && (!access.trainingCompleted || access.tasksLocked)) {
-    return NextResponse.json({
-      tasks: [],
-      submittedTaskIds: [],
-      dailySubmissionCount: todaySubmissionCount ?? 0,
-      dailyTaskLimit: dailyLimit,
-      total: 0,
-      isActivated: true,
-      activationFeeKsh,
-      trainingStatus: access.training.status,
-      taskUnlockAt: access.taskUnlockAt,
-      tasksLocked: !access.trainingCompleted || access.tasksLocked,
-    });
-  }
-
   const [taskResult, submissionsResult, taskAccess] = await Promise.all([
     admin
       .from("tasks")
@@ -81,25 +51,33 @@ export async function GET() {
   }
 
   const submittedTaskIds = (submissionsResult.data ?? []).map((s: { task_id: string }) => s.task_id);
-  const visibleTasks = (taskResult.data ?? []).filter((task: Record<string, unknown>) => (
-    isTaskLive(task) && canUserAccessTask(task as { id: string }, taskAccess)
-  ));
+  const visibleTasks = (taskResult.data ?? []).filter((task: Record<string, unknown>) => isTaskLive(task));
 
-  const formattedTasks = visibleTasks.map((task: Record<string, unknown>) => ({
-    id: task.id as string,
-    title: task.title as string,
-    category: task.category as string,
-    description: task.description as string | null,
-    instructions: task.instructions as string,
-    payoutKsh: task.payout_ksh as number,
-    slotsRemaining: task.slots_remaining as number,
-    difficulty: task.difficulty as string,
-    expiresAt: task.expires_at as string | null,
-    taskData: sanitizeTaskDataForClient(task.task_data) as Record<string, unknown>,
-    requiresScreenshot: task.requires_screenshot as boolean,
-    requiresUrl: task.requires_url as boolean,
-    minWordCount: task.min_word_count as number,
-  }));
+  const formattedTasks = visibleTasks.map((task: Record<string, unknown>) => {
+    const taskEligibility = evaluateTaskAccess(task as { id: string }, taskAccess);
+    const canStartTask = access.canStartTasks && taskEligibility.canAccess;
+    const blockedReason = access.canStartTasks ? taskEligibility.reason : access.gateReason;
+    const blockedMessage = access.canStartTasks ? taskEligibility.message : access.gateMessage;
+
+    return {
+      id: task.id as string,
+      title: task.title as string,
+      category: task.category as string,
+      description: task.description as string | null,
+      instructions: task.instructions as string,
+      payoutKsh: task.payout_ksh as number,
+      slotsRemaining: task.slots_remaining as number,
+      difficulty: task.difficulty as string,
+      expiresAt: task.expires_at as string | null,
+      taskData: sanitizeTaskDataForClient(task.task_data) as Record<string, unknown>,
+      requiresScreenshot: task.requires_screenshot as boolean,
+      requiresUrl: task.requires_url as boolean,
+      minWordCount: task.min_word_count as number,
+      canStartTask,
+      blockedReason,
+      blockedMessage,
+    };
+  });
 
   return NextResponse.json({
     tasks: formattedTasks,
@@ -111,6 +89,9 @@ export async function GET() {
     activationFeeKsh,
     trainingStatus: access.training.status,
     taskUnlockAt: access.taskUnlockAt,
-    tasksLocked: false,
+    tasksLocked: !access.canStartTasks,
+    canStartTasks: access.canStartTasks,
+    gateReason: access.gateReason,
+    gateMessage: access.gateMessage,
   });
 }

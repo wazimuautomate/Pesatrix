@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { sanitizeTaskForClient } from "@/lib/task-data";
-import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
+import { evaluateTaskAccess, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -23,13 +23,6 @@ export async function GET(request: Request, { params }: RouteContext) {
 
   const access = await getTrainingProgramSnapshotForUser(user.id);
 
-  if (!access.canStartTasks) {
-    return NextResponse.json(
-      { error: access.gateMessage ?? "Task access is locked" },
-      { status: 403 }
-    );
-  }
-
   const admin = createAdminSupabaseClient();
   const [taskResult, taskAccess] = await Promise.all([
     admin
@@ -44,9 +37,14 @@ export async function GET(request: Request, { params }: RouteContext) {
   ]);
 
   const task = taskResult.data;
-  if (taskResult.error || !task || !isTaskLive(task) || !canUserAccessTask(task, taskAccess)) {
+  if (taskResult.error || !task || !isTaskLive(task)) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
+
+  const taskEligibility = evaluateTaskAccess(task, taskAccess);
+  const canStartTask = access.canStartTasks && taskEligibility.canAccess;
+  const blockedReason = access.canStartTasks ? taskEligibility.reason : access.gateReason;
+  const blockedMessage = access.canStartTasks ? taskEligibility.message : access.gateMessage;
 
   const { data: existingSubmission } = await admin
     .from("task_submissions")
@@ -59,8 +57,16 @@ export async function GET(request: Request, { params }: RouteContext) {
     return NextResponse.json({
       task: sanitizeTaskForClient(task),
       existingSubmission,
+      canStartTask,
+      blockedReason,
+      blockedMessage,
     });
   }
 
-  return NextResponse.json({ task: sanitizeTaskForClient(task) });
+  return NextResponse.json({
+    task: sanitizeTaskForClient(task),
+    canStartTask,
+    blockedReason,
+    blockedMessage,
+  });
 }
