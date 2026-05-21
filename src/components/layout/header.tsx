@@ -86,11 +86,8 @@ export function MarketingHeader() {
                 </Link>
               ))}
               <div className="mt-6 flex flex-col gap-3 pt-6 border-t border-outline-variant/20">
-                <Button variant="outline" size="lg" asChild className="w-full rounded-xl">
-                  <Link href="/login">Sign In</Link>
-                </Button>
                 <Button size="lg" asChild className="w-full rounded-xl">
-                  <Link href="/register">Initialize</Link>
+                  <Link href="/login">Login</Link>
                 </Button>
               </div>
             </nav>

@@ -57,6 +57,9 @@ export const metadata: Metadata = {
     description:
       "Complete digital tasks from global partners and get paid instantly to your M-Pesa mobile wallet.",
   },
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({
