@@ -22,8 +22,8 @@ function normalizeDarajaPhone(phone: string) {
 
 export function normalizeWithdrawalStoragePhone(phone: string) {
   const normalized = normalizeKenyanPhone(phone);
-  if (!/^\+2547\d{8}$/.test(normalized)) {
-    throw new Error("Withdrawal phone must be a valid Safaricom M-Pesa number");
+  if (!/^\+254[17]\d{8}$/.test(normalized)) {
+    throw new Error("Withdrawal phone must be a valid Kenyan M-Pesa number");
   }
 
   return normalized;

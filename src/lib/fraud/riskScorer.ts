@@ -350,13 +350,14 @@ async function suspendForRiskThreshold(supabase: any, userId: string) {
   }
 
   const before = { status: accountStatus?.status ?? "active" };
-  const after = { status: "suspended" };
+  const after = { status: "suspended", state: "suspended" };
 
   const { error: statusError } = await supabase
     .from("account_status")
     .upsert({
       user_id: userId,
       status: "suspended",
+      state: "suspended",
       suspension_reason: "Auto-suspended: risk score threshold reached",
       suspended_at: new Date().toISOString(),
     });

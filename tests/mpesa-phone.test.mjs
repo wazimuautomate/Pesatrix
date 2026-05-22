@@ -4,6 +4,7 @@ import test from "node:test";
 const {
   KENYAN_MPESA_PHONE_REGEX,
   normalizeKenyanPhone,
+  normalizeStoredWithdrawalPhone,
   phonesMatch,
   validateSafaricomIP,
 } = await import("../src/lib/mpesa/security.ts");
@@ -19,6 +20,11 @@ test("normalizePesaPhone stores activation payment phones in Daraja format", () 
   assert.equal(normalizeKenyanPhone("0790295408"), "254790295408");
   assert.equal(normalizeKenyanPhone("+254111327204"), "254111327204");
   assert.equal(normalizeKenyanPhone("0111327204"), "254111327204");
+});
+
+test("normalizeStoredWithdrawalPhone accepts 07 and 01 withdrawal numbers", () => {
+  assert.equal(normalizeStoredWithdrawalPhone("0790295408"), "+254790295408");
+  assert.equal(normalizeStoredWithdrawalPhone("0111327204"), "+254111327204");
 });
 
 test("phonesMatch compares database and callback phone formats", () => {

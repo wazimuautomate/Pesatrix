@@ -62,14 +62,17 @@ test("computeWalletSummary ignores non-finalized debits until payout success", (
   assert.equal(summary.available, 200);
 });
 
-test("normalizeWithdrawalStoragePhone forces +2547 format for stored withdrawal numbers", () => {
+test("normalizeWithdrawalStoragePhone forces +254 format for stored withdrawal numbers", () => {
   assert.equal(normalizeWithdrawalStoragePhone("0712345678"), "+254712345678");
   assert.equal(normalizeWithdrawalStoragePhone("254712345678"), "+254712345678");
-  assert.throws(() => normalizeWithdrawalStoragePhone("0111327204"));
+  assert.equal(normalizeWithdrawalStoragePhone("0111327204"), "+254111327204");
+  assert.equal(normalizeWithdrawalStoragePhone("254111327204"), "+254111327204");
+  assert.throws(() => normalizeWithdrawalStoragePhone("0611327204"));
 });
 
 test("isAllowedWithdrawalPhone matches the saved account phone only", () => {
   assert.equal(isAllowedWithdrawalPhone("0712345678", "+254712345678"), true);
   assert.equal(isAllowedWithdrawalPhone("+254712345678", "+254712345678"), true);
+  assert.equal(isAllowedWithdrawalPhone("0111327204", "+254111327204"), true);
   assert.equal(isAllowedWithdrawalPhone("0799999999", "+254712345678"), false);
 });

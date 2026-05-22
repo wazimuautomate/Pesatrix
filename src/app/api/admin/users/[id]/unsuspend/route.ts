@@ -41,13 +41,20 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const restoredStatus =
+    before.is_activated ? "active" : before.is_setup_complete ? "setup_complete" : "registered";
+  const restoredState =
     before.is_activated ? "activated" : before.is_setup_complete ? "setup_complete" : "registered";
 
   const { data: updated, error: updateError } = await admin
     .from("account_status")
-    .update({ status: restoredStatus })
+    .update({
+      status: restoredStatus,
+      state: restoredState,
+      suspended_at: null,
+      suspension_reason: null,
+    })
     .eq("user_id", id)
-    .select("user_id, status, is_activated, is_setup_complete")
+    .select("user_id, status, is_activated, is_setup_complete, suspended_at, suspension_reason")
     .single();
 
   if (updateError || !updated) {

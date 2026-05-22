@@ -71,7 +71,7 @@ export default function WithdrawClientPage() {
       .max(maxWithdrawal, `Maximum withdrawal is KSh ${maxWithdrawal.toLocaleString()}`),
     phone: z
       .string()
-      .regex(/^(254|0)7\d{8}$|(254|0)1\d{8}$/, "Enter a valid Kenyan M-Pesa number starting with 254, 07, or 01"),
+      .regex(/^(\+?254|0)[17]\d{8}$/, "Enter a valid Kenyan M-Pesa number starting with 254, 07, or 01"),
   }).superRefine((data, context) => {
     if (configuredMinWithdrawal === null) {
       context.addIssue({
@@ -146,7 +146,9 @@ export default function WithdrawClientPage() {
           
           if (limitsData.allowedPhone) {
             let formattedPhone = limitsData.allowedPhone;
-            if (formattedPhone.startsWith("0")) {
+            if (formattedPhone.startsWith("+254")) {
+              formattedPhone = formattedPhone.slice(1);
+            } else if (formattedPhone.startsWith("0")) {
               formattedPhone = "254" + formattedPhone.slice(1);
             }
             setValue("phone", formattedPhone, { shouldValidate: true });
@@ -240,7 +242,7 @@ export default function WithdrawClientPage() {
       if (!res.ok) {
         setIsProcessing(false);
         setProcessingStatus(null);
-        toast.error(json.error || json.message || "Withdrawal failed. Please try again.");
+        toast.error(json.error?.message || json.message || "Withdrawal failed. Please try again.");
         return;
       }
 
@@ -446,7 +448,7 @@ export default function WithdrawClientPage() {
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Use format: 254XXXXXXXXX or 07XXXXXXXX or 01XXXXXXXX (07 or 01 will auto-format to 254)
+                  Use format: 254XXXXXXXXX, 07XXXXXXXX, or 01XXXXXXXX (07 or 01 will auto-format to 254)
                 </p>
                 {errors.phone && (
                   <p className="text-xs text-destructive">

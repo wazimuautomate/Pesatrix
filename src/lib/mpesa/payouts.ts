@@ -28,7 +28,7 @@ export async function processWithdrawalPayout(withdrawalId: string) {
 
   const [{ data: accountStatus }, { data: wallet }] = await Promise.all([
     (admin.from("account_status" as never) as any)
-      .select("status, suspended_at")
+      .select("status, state")
       .eq("user_id", withdrawal.user_id)
       .maybeSingle(),
     (admin.from("wallets" as never) as any)
@@ -37,12 +37,12 @@ export async function processWithdrawalPayout(withdrawalId: string) {
       .maybeSingle(),
   ]);
 
-  if (accountStatus?.status === "suspended") {
+  if (accountStatus?.status === "banned" || accountStatus?.state === "banned") {
     return {
       ok: false as const,
       status: 409,
-      code: "ACCOUNT_SUSPENDED",
-      message: "Suspended accounts cannot receive payouts",
+      code: "ACCOUNT_BANNED",
+      message: "Banned accounts cannot receive payouts",
       withdrawal,
     };
   }
@@ -82,12 +82,12 @@ export async function processWithdrawalPayout(withdrawalId: string) {
     };
   }
 
-  if (!/^2547\d{8}$/.test(normalizedPhone)) {
+  if (!/^254[17]\d{8}$/.test(normalizedPhone)) {
     return {
       ok: false as const,
       status: 422,
       code: "INVALID_PHONE",
-      message: "Withdrawal phone must be a valid Safaricom M-Pesa number",
+      message: "Withdrawal phone must be a valid Kenyan M-Pesa number",
       withdrawal,
     };
   }
