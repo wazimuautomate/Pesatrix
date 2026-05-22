@@ -43,26 +43,60 @@ export async function GET(request: Request) {
   const supabase = createAdminSupabaseClient();
 
   let query = supabase
-    .from("activation_payments")
-    .select("id, user_id, amount, phone, status, checkout_request_id, merchant_request_id, mpesa_receipt, callback_validation_error, paid_at, created_at, stk_initiated_at, stk_completed_at, safaricom_ip")
-    .order("created_at", { ascending: false });
+    .from("wallet_transactions" as never)
+    .select("id, user_id, type, amount, status, description, reference_table, reference_id, created_at, available_at" as never)
+    .in("type" as never, ["activation_fee", "deposit"] as never)
+    .order("created_at" as never, { ascending: false });
 
   if (statusFilter && statusFilter !== "all") {
-    query = query.eq("status", statusFilter);
+    if (statusFilter === "paid") {
+      query = query.eq("status" as never, "available" as never);
+    } else if (statusFilter === "pending") {
+      query = query.in("status" as never, ["pending", "locked"] as never);
+    } else {
+      query = query.eq("status" as never, statusFilter as never);
+    }
   }
 
-  const { data: payments, error: paymentsError } = await query;
+  const { data: txns, error: txnsError } = await query;
 
-  if (paymentsError) {
-    console.error("[GET /api/admin/payments] activation payment fetch failed", paymentsError);
+  if (txnsError) {
+    console.error("[GET /api/admin/payments] wallet transactions fetch failed", txnsError);
     return NextResponse.json(
       { error: "Failed to fetch payments" },
       { status: 500 }
     );
   }
 
-  const paymentRows = (payments ?? []) as ActivationPaymentRow[];
-  const profileIds = [...new Set(paymentRows.map((payment) => payment.user_id).filter(Boolean))];
+  const txnRows = (txns ?? []) as Array<{
+    id: string;
+    user_id: string;
+    type: string;
+    amount: number;
+    status: string;
+    description: string | null;
+    reference_table: string | null;
+    reference_id: string | null;
+    created_at: string;
+    available_at: string | null;
+  }>;
+
+  const actPaymentIds = [...new Set(txnRows.filter((t) => t.reference_table === "activation_payments" && t.reference_id).map((t) => t.reference_id).filter(Boolean))];
+
+  const { data: actPayments, error: actPaymentsError } = actPaymentIds.length
+    ? await supabase
+        .from("activation_payments")
+        .select("id, phone, mpesa_receipt, paid_at")
+        .in("id", actPaymentIds)
+    : { data: [], error: null };
+
+  if (actPaymentsError) {
+    console.error("[GET /api/admin/payments] activation payments bulk fetch failed", actPaymentsError);
+  }
+
+  const actPaymentsMap = new Map(((actPayments ?? []) as Array<{ id: string; phone: string; mpesa_receipt: string | null; paid_at: string | null }>).map((p) => [p.id, p]));
+
+  const profileIds = [...new Set(txnRows.map((t) => t.user_id).filter(Boolean))];
   const { data: profiles, error: profilesError } = profileIds.length
     ? await (supabase.from("profiles" as never) as any)
         .select("id, full_name, phone")
@@ -81,14 +115,34 @@ export async function GET(request: Request) {
     ((profiles ?? []) as ProfileRow[]).map((profile) => [profile.id, profile])
   );
 
-  const paymentsWithProfiles = paymentRows.map((payment) => ({
-    ...payment,
-    amount: Number(payment.amount ?? 0),
-    profiles: profilesById.get(payment.user_id) ?? {
-      full_name: null,
-      phone: null,
-    },
-  }));
+  const paymentsWithProfiles = txnRows.map((t) => {
+    const actPayment = t.reference_table === "activation_payments" && t.reference_id ? actPaymentsMap.get(t.reference_id) : null;
+    const profile = profilesById.get(t.user_id) ?? { full_name: null, phone: null };
+
+    let status: "pending" | "paid" | "failed" | "reversed" = "pending";
+    if (t.status === "available") {
+      status = "paid";
+    } else if (t.status === "reversed") {
+      status = "reversed";
+    } else if (t.status === "pending" || t.status === "locked") {
+      status = "pending";
+    }
+
+    return {
+      id: t.id,
+      user_id: t.user_id,
+      amount: Number(t.amount ?? 0),
+      phone: actPayment?.phone || profile.phone || "-",
+      mpesa_receipt: actPayment?.mpesa_receipt || (t.type === "deposit" ? t.description : null),
+      status,
+      paid_at: t.available_at || actPayment?.paid_at || t.created_at,
+      created_at: t.created_at,
+      profiles: {
+        full_name: profile.full_name,
+        phone: profile.phone || actPayment?.phone || null,
+      },
+    };
+  });
 
   const resolvedPayments = searchFilter
     ? paymentsWithProfiles.filter((payment) => {
@@ -97,8 +151,6 @@ export async function GET(request: Request) {
           payment.phone,
           payment.profiles.full_name,
           payment.profiles.phone,
-          payment.checkout_request_id,
-          payment.merchant_request_id,
         ]
           .filter(Boolean)
           .join(" ")
@@ -110,8 +162,8 @@ export async function GET(request: Request) {
 
   const { data: withdrawals, error: withError } = await supabase
     .from("withdrawal_requests" as never)
-    .select("amount, amount_after_fee")
-    .eq("status", "sent");
+    .select("amount, amount_after_fee" as never)
+    .eq("status" as never, "sent" as never);
 
   if (withError) {
     console.error("[GET /api/admin/payments] withdrawal fetch failed", withError);
@@ -128,8 +180,9 @@ export async function GET(request: Request) {
     );
 
   const { data: allStatsRaw, error: statsError } = await supabase
-    .from("activation_payments")
-    .select("status, amount, paid_at");
+    .from("wallet_transactions" as never)
+    .select("status, amount, type, created_at, available_at" as never)
+    .in("type" as never, ["activation_fee", "deposit"] as never);
 
   if (statsError) {
     console.error("[GET /api/admin/payments] payment stats fetch failed", statsError);
@@ -139,16 +192,34 @@ export async function GET(request: Request) {
     );
   }
 
-  const allStats = (allStatsRaw || []) as Array<{ status: string; amount: number | string; paid_at: string | null }>;
-  const paidPayments = allStats.filter((payment) => payment.status === "paid");
-  const paidCount = paidPayments.length;
-  const pendingCount = allStats.filter((payment) => payment.status === "pending").length;
-  const failedCount = allStats.filter((payment) => payment.status === "failed").length;
+  const allStats = (allStatsRaw || []) as Array<{ status: string; amount: number; type: string; created_at: string; available_at: string | null }>;
+  const paidPayments = allStats.filter((t) => t.status === "available");
   
-  const totalRevenue = paidPayments.reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0);
+  const paidCount = paidPayments.length;
+  const pendingCount = allStats.filter((t) => t.status === "pending" || t.status === "locked").length;
+  
+  // Fetch failed count from activation_payments (failed payments don't record wallet transactions)
+  const { count: failedCountRaw, error: failedCountError } = await supabase
+    .from("activation_payments" as never)
+    .select("id" as never, { count: "exact" as never, head: true as never } as any)
+    .eq("status" as never, "failed" as never);
+
+  const failedCount = failedCountError ? 0 : (failedCountRaw ?? 0);
+  
+  const totalRevenue = paidPayments
+    .filter((t) => t.type === "activation_fee")
+    .reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
+
   const netBalance = totalRevenue - totalWithdrawn;
 
-  const revenueTrend = buildRevenueTrend(paidPayments, trendPeriod);
+  const activationPaidPayments = paidPayments
+    .filter((t) => t.type === "activation_fee")
+    .map((t) => ({
+      amount: t.amount,
+      paid_at: t.available_at || t.created_at,
+    }));
+
+  const revenueTrend = buildRevenueTrend(activationPaidPayments, trendPeriod);
 
   return NextResponse.json({
     payments: resolvedPayments,

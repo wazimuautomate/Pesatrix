@@ -24,11 +24,15 @@ export default async function AdminOverviewPage() {
     openTickets,
     completedTraining,
     riskRows,
-    recentPayments,
+    recentPaymentsResult,
     recentWithdrawals,
   ] = await Promise.all([
     (admin.from("profiles" as never) as any).select("id", { count: "exact", head: true }),
-    (admin.from("activation_payments" as never) as any).select("amount").eq("status", "paid").limit(1000),
+    (admin.from("wallet_transactions" as never) as any)
+      .select("amount")
+      .eq("type", "activation_fee")
+      .eq("status", "available")
+      .limit(1000),
     (admin.from("withdrawal_requests" as never) as any)
       .select("id", { count: "exact", head: true })
       .in("status", ["requested", "processing", "held"]),
@@ -41,8 +45,9 @@ export default async function AdminOverviewPage() {
     (admin.from("user_verification" as never) as any)
       .select("user_id", { count: "exact", head: true })
       .gte("risk_score", 70),
-    (admin.from("activation_payments" as never) as any)
-      .select("id, amount, phone, status, mpesa_receipt, created_at, profiles(full_name, email)")
+    (admin.from("wallet_transactions" as never) as any)
+      .select("id, amount, status, created_at, user_id, type")
+      .eq("direction", "credit")
       .order("created_at", { ascending: false })
       .limit(5),
     getAdminWithdrawals({ limit: 5 }),
@@ -52,6 +57,35 @@ export default async function AdminOverviewPage() {
     (total, row) => total + Number(row.amount ?? 0),
     0
   );
+
+  const paymentRows = asArray<any>(recentPaymentsResult.data);
+  const paymentUserIds = [...new Set(paymentRows.map((row) => row.user_id).filter(Boolean))];
+
+  let paymentProfilesById = new Map<string, { full_name: string | null; email: string | null }>();
+  if (paymentUserIds.length > 0) {
+    const { data: profiles, error: profilesError } = await (admin.from("profiles" as never) as any)
+      .select("id, full_name, email")
+      .in("id", paymentUserIds);
+    if (!profilesError && profiles) {
+      paymentProfilesById = new Map(
+        profiles.map((p: any) => [p.id, { full_name: p.full_name, email: p.email }])
+      );
+    }
+  }
+
+  const recentPayments = paymentRows.map((row) => {
+    let status = row.status;
+    if (row.status === "available") {
+      status = "paid";
+    } else if (row.status === "pending" || row.status === "locked") {
+      status = "pending";
+    }
+    return {
+      ...row,
+      status,
+      profiles: paymentProfilesById.get(row.user_id) ?? null,
+    };
+  });
 
   return (
     <AdminPageShell
@@ -85,7 +119,7 @@ export default async function AdminOverviewPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {asArray<any>(recentPayments.data).map((payment) => (
+                {asArray<any>(recentPayments).map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell>{payment.profiles?.full_name ?? payment.profiles?.email ?? "Unknown"}</TableCell>
                     <TableCell>{money(payment.amount)}</TableCell>

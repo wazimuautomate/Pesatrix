@@ -64,6 +64,44 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   if (parsed.data.status !== undefined) {
     await syncAccountActivationFromPaidPayments(admin, before.user_id);
+
+    try {
+      if (parsed.data.status === "paid") {
+        const paidAt = payment.paid_at || new Date().toISOString();
+        const { data: existingTxn, error: checkTxnError } = await (admin.from("wallet_transactions" as never) as any)
+          .select("id")
+          .eq("reference_table", "activation_payments")
+          .eq("reference_id", id)
+          .maybeSingle();
+
+        if (!checkTxnError && !existingTxn) {
+          await (admin.from("wallet_transactions" as never) as any).insert({
+            user_id: before.user_id,
+            type: "activation_fee",
+            direction: "credit",
+            amount: Number(before.amount),
+            status: "available",
+            bucket: "available",
+            description: parsed.data.reason || "Manual update by admin",
+            reference_table: "activation_payments",
+            reference_id: id,
+            available_at: paidAt,
+          });
+        }
+      } else if (parsed.data.status === "reversed") {
+        await (admin.from("wallet_transactions" as never) as any)
+          .update({ status: "reversed" })
+          .eq("reference_table", "activation_payments")
+          .eq("reference_id", id);
+      } else {
+        await (admin.from("wallet_transactions" as never) as any)
+          .delete()
+          .eq("reference_table", "activation_payments")
+          .eq("reference_id", id);
+      }
+    } catch (txnErr) {
+      console.error("[PATCH /api/admin/payments/:id] Error synchronizing ledger:", txnErr);
+    }
   }
 
   await auditLog({
@@ -101,6 +139,16 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     .delete()
     .eq("id", id);
   if (deleteError) return NextResponse.json({ error: "Failed to delete payment" }, { status: 500 });
+
+  // Delete matching ledger transaction
+  try {
+    await (admin.from("wallet_transactions" as never) as any)
+      .delete()
+      .eq("reference_table", "activation_payments")
+      .eq("reference_id", id);
+  } catch (txnErr) {
+    console.error("[DELETE /api/admin/payments/:id] Error deleting ledger entry:", txnErr);
+  }
 
   await syncAccountActivationFromPaidPayments(admin, before.user_id);
 

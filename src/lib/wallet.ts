@@ -135,6 +135,7 @@ export async function getWalletSummary(userId: string) {
 
   const ledgerSummary = computeWalletSummary(promotedRows as WalletLedgerRow[]);
 
+  // If we have transactions, the ledger is the source of truth for the user's balance
   if ((ledgerRows?.length ?? 0) > 0) {
     if (
       wallet &&
@@ -147,15 +148,31 @@ export async function getWalletSummary(userId: string) {
         wallet,
         ledgerSummary,
       });
+
+      // Self-heal: trigger an async non-blocking update to resync the wallets table
+      admin
+        .from("wallets")
+        .upsert({
+          user_id: userId,
+          available_balance: ledgerSummary.available,
+          pending_balance: ledgerSummary.pending,
+          total_earned: ledgerSummary.totalEarned,
+          updated_at: new Date().toISOString(),
+        })
+        .then(({ error }: { error: any }) => {
+          if (error) {
+            console.error("[Wallet] Failed to sync wallets table with ledger", error);
+          }
+        });
     }
 
     return ledgerSummary;
   }
 
+  // If no transactions exist, return the wallets table row directly
   if (wallet) {
-    const available = Number(wallet.available_balance ?? 0);
     return {
-      available: Math.max(0, available),
+      available: Number(wallet.available_balance ?? 0),
       pending: Number(wallet.pending_balance ?? 0),
       total: Number(wallet.total_earned ?? 0),
       totalEarned: Number(wallet.total_earned ?? 0),
