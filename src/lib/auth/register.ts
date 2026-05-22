@@ -58,7 +58,7 @@ export function mapRegisterErrorMessage(message: string) {
     msg.includes("registration is temporarily disabled") ||
     msg.includes("registrations are temporarily disabled")
   ) {
-    return "New registrations are temporarily disabled. Please contact support.";
+    return "Due to high traffic, New registrations are temporarily disabled. Please try again later.";
   }
 
   if (

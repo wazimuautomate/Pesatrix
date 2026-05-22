@@ -24,6 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatPhone } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 type Limits = {
   allowedPhone: string | null;
@@ -52,6 +53,14 @@ export default function WithdrawClientPage() {
   const [limits, setLimits] = useState<Limits | null>(null);
   const [limitsLoading, setLimitsLoading] = useState(true);
 
+  // New state variables for withdrawals toggle and polling
+  const [withdrawalsEnabled, setWithdrawalsEnabled] = useState<boolean | null>(null);
+  const [minWithdrawalAmount, setMinWithdrawalAmount] = useState<number | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null);
+  const [polledAmount, setPolledAmount] = useState<number | null>(null);
+  const [polledPhone, setPolledPhone] = useState<string | null>(null);
+
   const schema = z.object({
     amount: z
       .number({ required_error: "Enter an amount" })
@@ -60,8 +69,7 @@ export default function WithdrawClientPage() {
       .max(limits?.maxWithdrawal ?? 100000, `Maximum withdrawal is KSh ${(limits?.maxWithdrawal ?? 100000).toLocaleString()}`),
     phone: z
       .string()
-      .min(10)
-      .regex(/^(?:\+?254|0)7\d{8}$/, "Enter a valid Kenyan M-Pesa number"),
+      .regex(/^(254|0)7\d{8}$|(254|0)1\d{8}$/, "Enter a valid Kenyan M-Pesa number starting with 254, 07, or 01"),
   });
 
   const {
@@ -73,26 +81,49 @@ export default function WithdrawClientPage() {
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+
   const requestedAmount = Number(watch("amount") || 0);
   const projectedReceive = requestedAmount - (limits?.withdrawalFee ?? 0);
   const balanceBelowMinimum = (limits?.availableBalance ?? 0) < (limits?.minWithdrawal ?? 0);
   const canSubmitWithdrawal =
     !limitsLoading &&
     !balanceBelowMinimum &&
-    Boolean(limits?.allowedPhone) &&
     requestedAmount >= (limits?.minWithdrawal ?? 0) &&
     requestedAmount <= (limits?.availableBalance ?? 0) &&
-    projectedReceive > 0;
+    projectedReceive > 0 &&
+    withdrawalsEnabled !== false;
 
+  // 1. FETCH MINIMUM AMOUNT & platform_settings + LIMITS
   useEffect(() => {
-    async function fetchLimits() {
+    async function fetchLimitsAndSettings() {
       try {
-        const res = await fetch("/api/wallet/limits");
-        const data = await res.json();
-        if (res.ok && data.minWithdrawal) {
-          setLimits(data);
-          if (data.allowedPhone) {
-            setValue("phone", data.allowedPhone, { shouldValidate: true });
+        const [limitsRes, settingsRes] = await Promise.all([
+          fetch("/api/wallet/limits"),
+          fetch("/api/settings/withdrawal")
+        ]);
+
+        const limitsData = await limitsRes.json();
+        const settingsData = await settingsRes.json();
+
+        if (settingsRes.ok) {
+          setWithdrawalsEnabled(settingsData.withdrawalsEnabled);
+          setMinWithdrawalAmount(settingsData.minAmount);
+        }
+
+        if (limitsRes.ok) {
+          const finalMin = settingsData.minAmount !== null ? settingsData.minAmount : (limitsData.minWithdrawal ?? 200);
+          const mergedLimits = {
+            ...limitsData,
+            minWithdrawal: finalMin,
+          };
+          setLimits(mergedLimits);
+          
+          if (limitsData.allowedPhone) {
+            let formattedPhone = limitsData.allowedPhone;
+            if (formattedPhone.startsWith("0")) {
+              formattedPhone = "254" + formattedPhone.slice(1);
+            }
+            setValue("phone", formattedPhone, { shouldValidate: true });
           }
         }
       } catch (err) {
@@ -101,27 +132,89 @@ export default function WithdrawClientPage() {
         setLimitsLoading(false);
       }
     }
-    fetchLimits();
+    
+    fetchLimitsAndSettings();
   }, [setValue]);
 
+  // 4. DUPLICATE WITHDRAWAL LOCK — UI LAYER (CHECK PENDING & POLL ON MOUNT)
+  useEffect(() => {
+    let activeInterval: NodeJS.Timeout | null = null;
+
+    async function checkPendingStatus() {
+      try {
+        const res = await fetch("/api/wallet/withdrawals/status");
+        const data = await res.json();
+        
+        if (res.ok && data.hasPending) {
+          setIsProcessing(true);
+          setProcessingStatus("processing");
+          setPolledAmount(data.amount);
+          setPolledPhone(data.phone);
+          
+          activeInterval = setInterval(async () => {
+            try {
+              const statusRes = await fetch("/api/wallet/withdrawals/status");
+              const statusData = await statusRes.json();
+              if (statusRes.ok) {
+                if (statusData.status === "sent") {
+                  clearInterval(activeInterval!);
+                  setIsProcessing(false);
+                  setProcessingStatus(null);
+                  toast.success(`KSh ${statusData.amount} sent to ${statusData.phone}. Check your M-Pesa.`);
+                  router.refresh();
+                } else if (statusData.status === "failed") {
+                  clearInterval(activeInterval!);
+                  setIsProcessing(false);
+                  setProcessingStatus(null);
+                  toast.error("Withdrawal failed. Your balance has been restored.");
+                  router.refresh();
+                }
+              }
+            } catch (err) {
+              console.error("Polling error", err);
+            }
+          }, 10000);
+        }
+      } catch (err) {
+        console.error("Failed to check pending withdrawals", err);
+      }
+    }
+
+    checkPendingStatus();
+
+    return () => {
+      if (activeInterval) clearInterval(activeInterval);
+    };
+  }, [router]);
+
   async function onSubmit(data: FormData) {
+    // 4. DUPLICATE WITHDRAWAL LOCK — DISABLE BUTTON IMMEDIATELY & SHOW STATE
+    setIsProcessing(true);
+    setProcessingStatus("processing");
+    setPolledAmount(data.amount);
+
+    let phoneToSubmit = data.phone.trim();
+    if (phoneToSubmit.startsWith("0")) {
+      phoneToSubmit = "254" + phoneToSubmit.slice(1);
+    }
+    setPolledPhone(phoneToSubmit);
+
     try {
       const res = await fetch("/api/wallet/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          amount: data.amount,
+          phone: phoneToSubmit,
+        }),
       });
 
       const json = await res.json();
 
       if (!res.ok) {
-        if (json.error?.code === "BELOW_MINIMUM" && json.error?.minimum) {
-          toast.error(`Minimum withdrawal is KSh ${json.error.minimum.toLocaleString()}`);
-        } else if (json.error?.code === "PHONE_MISMATCH" || json.error?.code === "PHONE_NOT_CONFIGURED") {
-          toast.error(json.error.message);
-        } else {
-          toast.error(json.error?.message || "Withdrawal failed. Please try again.");
-        }
+        setIsProcessing(false);
+        setProcessingStatus(null);
+        toast.error(json.error || json.message || "Withdrawal failed. Please try again.");
         return;
       }
 
@@ -131,11 +224,103 @@ export default function WithdrawClientPage() {
         fee: Number(json.fee ?? limits?.withdrawalFee ?? 0),
         amountToReceive: Number(json.amountToReceive ?? 0),
       });
-      setStep("success");
-      toast.success("Withdrawal request submitted successfully.");
+
+      toast.success("Withdrawal initiated. Processing payment...");
+
+      // Start polling status every 10 seconds
+      const activeInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch("/api/wallet/withdrawals/status");
+          const statusData = await statusRes.json();
+          if (statusRes.ok) {
+            if (statusData.status === "sent") {
+              clearInterval(activeInterval);
+              setIsProcessing(false);
+              setProcessingStatus(null);
+              toast.success(`KSh ${statusData.amount} sent to ${statusData.phone}. Check your M-Pesa.`);
+              router.refresh();
+              setStep("success");
+            } else if (statusData.status === "failed") {
+              clearInterval(activeInterval);
+              setIsProcessing(false);
+              setProcessingStatus(null);
+              toast.error("Withdrawal failed. Your balance has been restored.");
+              router.refresh();
+            }
+          }
+        } catch (err) {
+          console.error("Polling error", err);
+        }
+      }, 10000);
+
     } catch {
+      setIsProcessing(false);
+      setProcessingStatus(null);
       toast.error("Something went wrong. Please try again.");
     }
+  }
+
+  // 2. BLOCK UI IF NOT CONFIGURED OR EXPLICITLY DISABLED
+  if (!limitsLoading && withdrawalsEnabled === false) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-navy">
+            Withdraw to M-Pesa
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Withdraw your available earnings to your M-Pesa wallet
+          </p>
+        </div>
+
+        <Card className="border-destructive/20 bg-destructive/5 text-destructive">
+          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+              <Info className="h-8 w-8 text-destructive" />
+            </div>
+            <div>
+              <p className="font-semibold text-navy">Withdrawals Temporarily Disabled</p>
+              <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
+                Due to high traffic on our servers, withdrawal has been disabled. Try again later.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Processing screen for Polling State
+  if (isProcessing) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-navy">
+            Withdraw to M-Pesa
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Withdraw your available earnings to your M-Pesa wallet
+          </p>
+        </div>
+
+        <Card className="border-primary/20 bg-accent animate-pulse">
+          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <div>
+              <p className="font-semibold text-navy">Withdrawal Processing</p>
+              <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
+                Withdrawal processing... You will receive M-Pesa confirmation shortly.
+              </p>
+              {polledAmount !== null && (
+                <p className="mt-2 text-xs font-semibold text-navy">
+                  Amount: KSh {polledAmount.toLocaleString("en-KE")} {polledPhone && `to ${formatPhone(polledPhone)}`}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -184,9 +369,9 @@ export default function WithdrawClientPage() {
                 <div className="flex items-center justify-between">
                   <Label htmlFor="withdraw-amount">Amount (KSh)</Label>
                   {limits && (
-                  <span className="text-xs text-muted-foreground">
-                    Minimum: KSh {limits.minWithdrawal.toLocaleString()}
-                  </span>
+                    <span className="text-xs text-muted-foreground">
+                      Minimum: KSh {limits.minWithdrawal.toLocaleString()}
+                    </span>
                   )}
                 </div>
                 <Input
@@ -216,12 +401,22 @@ export default function WithdrawClientPage() {
                   <Input
                     id="withdraw-phone"
                     className="pl-10"
-                    placeholder={limits?.allowedPhone ? formatPhone(limits.allowedPhone) : "Set phone on profile first"}
-                    readOnly
-                    disabled={limitsLoading || !limits?.allowedPhone}
-                    {...register("phone")}
+                    placeholder="Enter M-Pesa phone number"
+                    disabled={limitsLoading}
+                    {...register("phone", {
+                      onChange: (e) => {
+                        let val = e.target.value.trim();
+                        if (val.startsWith("0") && val.length >= 10) {
+                          val = "254" + val.slice(1);
+                          setValue("phone", val, { shouldValidate: true });
+                        }
+                      }
+                    })}
                   />
                 </div>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Use format: 254XXXXXXXXX or 07XXXXXXXX or 01XXXXXXXX (07 or 01 will auto-format to 254)
+                </p>
                 {errors.phone && (
                   <p className="text-xs text-destructive">
                     {errors.phone.message}
@@ -230,11 +425,6 @@ export default function WithdrawClientPage() {
                 {!errors.phone && limits?.allowedPhone ? (
                   <p className="text-xs text-muted-foreground">
                     Withdrawals are only allowed to your saved profile number: {formatPhone(limits.allowedPhone)}
-                  </p>
-                ) : null}
-                {!errors.phone && !limitsLoading && !limits?.allowedPhone ? (
-                  <p className="text-xs text-destructive">
-                    Add a valid Safaricom M-Pesa number on your profile before requesting a withdrawal.
                   </p>
                 ) : null}
               </div>
@@ -253,18 +443,21 @@ export default function WithdrawClientPage() {
                 </div>
               )}
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isSubmitting || !canSubmitWithdrawal}
-              >
-                {isSubmitting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowUpRight className="mr-2 h-4 w-4" />
-                )}
-                Request Withdrawal
-              </Button>
+              {/* 6. LOADING STATE WITH FRAMER MOTION whileTap */}
+              <motion.div whileTap={{ scale: 0.97 }}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSubmitting || isProcessing || !canSubmitWithdrawal}
+                >
+                  {isSubmitting || isProcessing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUpRight className="mr-2 h-4 w-4" />
+                  )}
+                  Request Withdrawal
+                </Button>
+              </motion.div>
             </form>
           </CardContent>
         </Card>

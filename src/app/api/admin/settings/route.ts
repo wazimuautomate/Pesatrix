@@ -17,6 +17,8 @@ import {
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
   ALLOW_NEW_REGISTRATIONS_KEY,
+  WITHDRAWAL_MIN_AMOUNT_KEY,
+  WITHDRAWALS_ENABLED_KEY,
 } from "@/lib/platform-setting-keys";
 
 const settingsUpdateSchema = z.object({
@@ -70,6 +72,7 @@ export async function PATCH(request: Request) {
     WITHDRAWAL_HOLD_DAYS_KEY,
     WITHDRAWAL_PROCESSING_DAYS_KEY,
     REFERRAL_LEVEL_1_REWARD_KEY,
+    WITHDRAWAL_MIN_AMOUNT_KEY,
   ];
 
   if (key === ALLOW_NEW_REGISTRATIONS_KEY) {
@@ -77,6 +80,26 @@ export async function PATCH(request: Request) {
     if (valStr !== "true" && valStr !== "false") {
       return NextResponse.json(
         { error: "Allow new registrations must be 'true' or 'false'" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === WITHDRAWALS_ENABLED_KEY) {
+    const valStr = String(value).toLowerCase().trim();
+    if (valStr !== "true" && valStr !== "false") {
+      return NextResponse.json(
+        { error: "Withdrawals enabled must be 'true' or 'false'" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === WITHDRAWAL_MIN_AMOUNT_KEY) {
+    const numValue = Number(value);
+    if (!Number.isInteger(numValue) || numValue <= 0) {
+      return NextResponse.json(
+        { error: "Minimum withdrawal amount must be a positive integer" },
         { status: 422 }
       );
     }

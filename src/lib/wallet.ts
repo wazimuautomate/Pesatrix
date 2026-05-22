@@ -28,12 +28,17 @@ export type WalletTransactionsQuery = {
 };
 
 export function mapWalletTransactionForApi(row: WalletLedgerRow) {
+  const isAvailableByTime =
+    row.status === "pending" &&
+    row.available_at &&
+    new Date(row.available_at) <= new Date();
+
   return {
     id: row.id,
     type: row.type,
     direction: row.direction,
     amount: row.amount,
-    status: row.status,
+    status: isAvailableByTime ? "available" : row.status,
     availableAt: row.available_at,
     createdAt: row.created_at,
     description: row.description,
@@ -99,7 +104,7 @@ export async function getWalletSummary(userId: string) {
         .maybeSingle(),
       admin
         .from("wallet_transactions")
-        .select("amount, direction, status, bucket")
+        .select("amount, direction, status, bucket, available_at")
         .eq("user_id", userId),
     ]);
 
@@ -111,7 +116,24 @@ export async function getWalletSummary(userId: string) {
     throw ledgerError;
   }
 
-  const ledgerSummary = computeWalletSummary((ledgerRows ?? []) as WalletLedgerRow[]);
+  const now = new Date();
+  const promotedRows = (ledgerRows ?? []).map((row: any) => {
+    const isAvailableByTime =
+      row.status === "pending" &&
+      row.available_at &&
+      new Date(row.available_at) <= now;
+
+    if (isAvailableByTime) {
+      return {
+        ...row,
+        status: "available",
+        bucket: "available",
+      };
+    }
+    return row;
+  });
+
+  const ledgerSummary = computeWalletSummary(promotedRows as WalletLedgerRow[]);
 
   if ((ledgerRows?.length ?? 0) > 0) {
     if (

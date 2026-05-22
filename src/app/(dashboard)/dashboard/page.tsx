@@ -52,14 +52,19 @@ export default async function DashboardPage() {
   const pendingBalance = walletSummary.pending;
   const availableBalance = walletSummary.available;
 
-  const taskCount = walletTxns.filter((t) => t.type === "task_earning").length;
-
-  // Fetch referral stats
-  const { count: referralCount } = await supabase
-    .from("referrals")
+  // Fetch real task submissions count for user
+  const { count: taskSubmissionCount } = await supabase
+    .from("task_submissions")
     .select("id", { count: "exact", head: true })
-    .eq("referrer_id", user!.id)
-    .eq("level", 1);
+    .eq("user_id", user!.id);
+
+  const taskCount = taskSubmissionCount ?? 0;
+
+  // Fetch referral stats from profiles where referred_by is the user
+  const { count: referralCount } = await supabase
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("referred_by", user!.id);
 
   const [{ data: rewardSpinRows }] = await Promise.all([
     (supabase.from("reward_spins" as never) as any)
@@ -166,11 +171,6 @@ export default async function DashboardPage() {
       label: "Tasks",
       complete: canStartTasks && taskCount > 0,
       detail: canStartTasks ? `${taskCount} completed` : "Locked until training",
-    },
-    {
-      label: "Rewards",
-      complete: rewardSpins.length > 0,
-      detail: `${rewardSpins.length} wheel spins`,
     },
     {
       label: "Referrals",

@@ -13,6 +13,8 @@ export {
 } from "./mpesa/security";
 
 export { getDarajaToken, initiateB2C, initiateStkPush } from "./mpesa/client";
+export { generateSecurityCredential } from "./mpesa/generateSecurityCredential";
+export { getMpesaAccessToken } from "./mpesa/getAccessToken";
 
 export type {
   B2CResultPayload,

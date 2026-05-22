@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       payout_credited_at,
       screenshot_url,
       submitted_url,
-      tasks (
+      task:tasks (
         id,
         title,
         category,
@@ -58,13 +58,37 @@ export async function GET(request: Request) {
     );
   }
 
+  let items = data || [];
+  if (items.length > 0) {
+    const submissionIds = items.map((item: any) => item.id);
+    const { data: txs } = await supabase
+      .from("wallet_transactions")
+      .select("status, available_at, reference_id")
+      .eq("user_id", user.id)
+      .eq("reference_table", "task_submissions")
+      .in("reference_id", submissionIds);
+
+    const txMap = new Map<string, any>(
+      (txs ?? []).map((tx: any) => [tx.reference_id, tx] as [string, any])
+    );
+
+    items = items.map((item: any) => {
+      const tx = txMap.get(item.id);
+      return {
+        ...item,
+        transaction_status: tx?.status ?? null,
+        transaction_available_at: tx?.available_at ?? null,
+      };
+    });
+  }
+
   const total = count ?? 0;
 
   return NextResponse.json({
-    items: data || [],
+    items,
     total,
     offset,
     limit,
-    hasMore: offset + (data?.length ?? 0) < total,
+    hasMore: offset + items.length < total,
   });
 }

@@ -22,6 +22,8 @@ import {
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
   ALLOW_NEW_REGISTRATIONS_KEY,
+  WITHDRAWAL_MIN_AMOUNT_KEY,
+  WITHDRAWALS_ENABLED_KEY,
 } from "@/lib/platform-setting-keys";
 
 type PlatformSetting = {
@@ -99,7 +101,11 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
         return;
       }
 
-      toast.success(checked ? "New user registrations enabled" : "New user registrations disabled");
+      if (key === WITHDRAWALS_ENABLED_KEY) {
+        toast.success(checked ? "Withdrawals enabled" : "Withdrawals disabled");
+      } else {
+        toast.success(checked ? "New user registrations enabled" : "New user registrations disabled");
+      }
     } catch {
       toast.error(`Unable to update ${key}`);
       // Revert optimistic update
@@ -150,6 +156,14 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       type: "number",
       step: "any",
       defaultValue: "3",
+    },
+    {
+      key: WITHDRAWAL_MIN_AMOUNT_KEY,
+      label: "Minimum B2C withdrawal (KSh)",
+      description: "Minimum amount a user can request via M-Pesa B2C withdrawals.",
+      type: "number",
+      min: 1,
+      defaultValue: "200",
     },
     {
       key: WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
@@ -222,7 +236,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
   ];
 
   const existingSettings = initialSettings.filter((s) =>
-    [...payoutSettingDefinitions, ...settingDefinitions, { key: ALLOW_NEW_REGISTRATIONS_KEY }].some((def) => def.key === s.key)
+    [...payoutSettingDefinitions, ...settingDefinitions, { key: ALLOW_NEW_REGISTRATIONS_KEY }, { key: WITHDRAWALS_ENABLED_KEY }].some((def) => def.key === s.key)
   );
 
   if (existingSettings.length === 0) {
@@ -340,7 +354,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
         })}
 
         <div className="border-t border-outline-variant/40 pt-6 space-y-4">
-          <h3 className="text-sm font-semibold text-navy">Registration Settings</h3>
+          <h3 className="text-sm font-semibold text-navy">Platform Control Toggles</h3>
           {(() => {
             const defKey = ALLOW_NEW_REGISTRATIONS_KEY;
             const existing = initialSettings.find((s) => s.key === defKey);
@@ -359,6 +373,42 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
                   </Label>
                   <p className="text-xs text-muted-foreground max-w-xl">
                     Controls whether new user registrations are allowed on the platform. When disabled, signups are blocked immediately.
+                  </p>
+                  {lastUpdated && (
+                    <p className="text-[10px] text-muted-foreground mt-2">Last updated: {lastUpdated}</p>
+                  )}
+                </div>
+                <div className="flex items-center space-x-3 pt-1">
+                  {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                  <Switch
+                    id={defKey}
+                    checked={isChecked}
+                    disabled={saving || isLoading}
+                    onCheckedChange={(checked) => handleToggleChange(defKey, checked)}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
+          {(() => {
+            const defKey = WITHDRAWALS_ENABLED_KEY;
+            const existing = initialSettings.find((s) => s.key === defKey);
+            const currentValue = settings[defKey] ?? existing?.value ?? "true";
+            const isChecked = currentValue === "true";
+            const isLoading = loading[defKey] ?? false;
+            const lastUpdated = existing?.updated_at
+              ? new Date(existing.updated_at).toLocaleString()
+              : null;
+
+            return (
+              <div className="flex items-start justify-between rounded-lg border border-outline-variant/40 p-4 bg-muted/20">
+                <div className="space-y-1 pr-4">
+                  <Label htmlFor={defKey} className="text-navy font-semibold text-sm cursor-pointer">
+                    Enable Wallet Withdrawals
+                  </Label>
+                  <p className="text-xs text-muted-foreground max-w-xl">
+                    Controls whether B2C withdrawals are enabled. When disabled, users will see a message stating withdrawals are disabled due to high server traffic.
                   </p>
                   {lastUpdated && (
                     <p className="text-[10px] text-muted-foreground mt-2">Last updated: {lastUpdated}</p>

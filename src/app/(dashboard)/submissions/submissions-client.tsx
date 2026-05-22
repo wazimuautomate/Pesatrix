@@ -120,11 +120,15 @@ const STATUS_META: Record<
 };
 
 function getTask(submission: Submission) {
-  if (Array.isArray(submission.tasks)) {
-    return submission.tasks[0] ?? null;
+  if (!submission) return null;
+  const t = (submission as any).task ?? submission.tasks;
+  if (!t) return null;
+
+  if (Array.isArray(t)) {
+    return t[0] ?? null;
   }
 
-  return submission.tasks;
+  return t;
 }
 
 function formatCategory(category?: string) {
@@ -152,13 +156,21 @@ function ScoreLine({ score }: { score: number | null }) {
 
 function StatusDetails({ submission, payout }: { submission: Submission; payout: number }) {
   if (submission.status === "approved") {
+    const txStatus = (submission as any).transaction_status;
+    const txAvailableAt = (submission as any).transaction_available_at;
+    const isAvailable = txStatus === "available" || (txStatus === "pending" && txAvailableAt && new Date(txAvailableAt) <= new Date());
+    
+    let statusText = "Payout processing";
+    if (submission.payout_credited) {
+      statusText = isAvailable ? "Credited to wallet" : "Credited to wallet (pending hold)";
+    }
+
     return (
       <div className="space-y-2 text-sm text-on-surface-variant">
         <ScoreLine score={submission.ai_score} />
         {submission.ai_reasoning ? <p>{submission.ai_reasoning}</p> : null}
         <p>
-          Payout: {formatKSh(payout)} -{" "}
-          {submission.payout_credited ? "Credited to wallet (pending hold)" : "Payout processing"}
+          Payout: {formatKSh(payout)} - {statusText}
         </p>
       </div>
     );
@@ -192,11 +204,20 @@ function StatusDetails({ submission, payout }: { submission: Submission; payout:
   }
 
   if (submission.status === "admin_reviewed") {
+    const txStatus = (submission as any).transaction_status;
+    const txAvailableAt = (submission as any).transaction_available_at;
+    const isAvailable = txStatus === "available" || (txStatus === "pending" && txAvailableAt && new Date(txAvailableAt) <= new Date());
+
+    let statusText = "";
+    if (submission.payout_credited) {
+      statusText = isAvailable ? " (credited)" : " (pending hold)";
+    }
+
     return (
       <div className="space-y-2 text-sm text-on-surface-variant">
         {submission.admin_decision ? <p>Admin decision: {submission.admin_decision}</p> : null}
         {submission.admin_note ? <p>{submission.admin_note}</p> : null}
-        {submission.payout_credited ? <p>Payout credited: {formatKSh(payout)}</p> : null}
+        {submission.payout_credited ? <p>Payout credited: {formatKSh(payout)}{statusText}</p> : null}
       </div>
     );
   }

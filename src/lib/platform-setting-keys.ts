@@ -12,4 +12,5 @@ export const TRAINING_REWARD_SETTING_KEY = "training_completion_reward_ksh";
 export const REFERRAL_ACTIVATION_RULE_KEY = "referral_activation_rule";
 export const REFERRAL_LEVEL_1_REWARD_KEY = "referral_level_1_reward_ksh";
 export const ALLOW_NEW_REGISTRATIONS_KEY = "allow_new_registrations";
-
+export const WITHDRAWAL_MIN_AMOUNT_KEY = "withdrawal_min_amount";
+export const WITHDRAWALS_ENABLED_KEY = "withdrawals_enabled";
