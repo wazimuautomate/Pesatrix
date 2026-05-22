@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/mpesa-phone.test.mjs tests/task-data-sanitize.test.mjs tests/withdrawal-wallet.test.mjs"
+    "test": "node --test tests/mpesa-phone.test.mjs tests/task-data-sanitize.test.mjs tests/withdrawal-wallet.test.mjs && vitest run tests/b2c-callback.test.mjs"
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs": "^5.2.0",
