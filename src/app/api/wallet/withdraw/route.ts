@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getMpesaAccessToken, generateSecurityCredential } from "@/lib/mpesa";
+import { getMinWithdrawalKsh } from "@/lib/platform-settings";
 
 export async function POST(request: Request) {
   let withdrawalId: string | null = null;
@@ -79,23 +80,11 @@ export async function POST(request: Request) {
     }
 
     // STEP 4 — Minimum amount check (NO FALLBACK):
-    const { data: minAmountSetting, error: minError } = await admin
-      .from("platform_settings")
-      .select("value")
-      .eq("key", "withdrawal_min_amount")
-      .maybeSingle();
+    const minAmount = await getMinWithdrawalKsh();
 
-    if (minError || !minAmountSetting) {
+    if (minAmount === null) {
       return NextResponse.json(
         { error: { code: "CONFIGURATION_ERROR", message: "Withdrawals are currently unavailable. Please contact support." } },
-        { status: 503 }
-      );
-    }
-
-    const minAmount = parseInt(minAmountSetting.value, 10);
-    if (isNaN(minAmount)) {
-      return NextResponse.json(
-        { error: { code: "CONFIGURATION_ERROR", message: "Withdrawal configuration error. Please contact support." } },
         { status: 503 }
       );
     }

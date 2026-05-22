@@ -16,6 +16,7 @@ import {
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
+  WITHDRAWAL_MIN_AMOUNT_KEY,
 } from "@/lib/platform-setting-keys";
 
 export const TRAINING_UNLOCK_SETTING_KEY = "training_day_unlock_minutes";
@@ -27,6 +28,7 @@ export {
   WITHDRAWAL_HOLD_DAYS_KEY,
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
+  WITHDRAWAL_MIN_AMOUNT_KEY,
 };
 export const DEFAULT_TRAINING_REWARD_KSH = 50;
 export const DEFAULT_WITHDRAWAL_HOLD_DAYS = 7;
@@ -197,13 +199,18 @@ export async function getDailyTaskLimit() {
   return Math.min(limit, 100);
 }
 
-export async function getMinWithdrawalKsh() {
-  const setting = await getFirstPlatformSetting([MIN_WITHDRAWAL_KSH_KEY, LEGACY_MIN_WITHDRAWAL_KSH_KEY]);
+export async function getMinWithdrawalKsh(): Promise<number | null> {
+  const setting = await getFirstPlatformSetting([
+    WITHDRAWAL_MIN_AMOUNT_KEY,
+    MIN_WITHDRAWAL_KSH_KEY,
+    LEGACY_MIN_WITHDRAWAL_KSH_KEY,
+  ]);
   if (!setting) {
-    warnMissingSetting(MIN_WITHDRAWAL_KSH_KEY, FINANCIAL_LIMITS.MIN_WITHDRAWAL_KSH);
+    return null;
   }
 
-  return normalizeNonNegativeNumber(setting?.value, FINANCIAL_LIMITS.MIN_WITHDRAWAL_KSH);
+  const parsed = Number(setting.value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 export async function getWithdrawalFeeKsh() {

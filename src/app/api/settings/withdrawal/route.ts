@@ -1,34 +1,26 @@
 import { NextResponse } from "next/server";
-import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getMinWithdrawalKsh, getPlatformSetting } from "@/lib/platform-settings";
+import { WITHDRAWALS_ENABLED_KEY } from "@/lib/platform-setting-keys";
 
 export async function GET() {
   try {
-    const admin = createAdminSupabaseClient();
+    const minAmount = await getMinWithdrawalKsh();
+    const enabledRow = await getPlatformSetting(WITHDRAWALS_ENABLED_KEY);
 
-    // Query platform_settings table for withdrawal configuration keys
-    const { data: settings, error } = await admin
-      .from("platform_settings")
-      .select("key, value")
-      .in("key", ["withdrawal_min_amount", "withdrawals_enabled"]);
-
-    if (error) {
-      throw error;
+    if (minAmount === null) {
+      return NextResponse.json({
+        minAmount: null,
+        withdrawalsEnabled: false,
+        reason: "configuration_error",
+      });
     }
 
-    const minAmountRow = settings?.find((s: any) => s.key === "withdrawal_min_amount");
-    const enabledRow = settings?.find((s: any) => s.key === "withdrawals_enabled");
-
-    const rawMinAmount = minAmountRow ? parseInt(minAmountRow.value, 10) : null;
-    const isMinAmountConfigured = minAmountRow !== undefined && !isNaN(rawMinAmount as number);
-    
-    // Withdrawals are enabled if withdrawals_enabled key does not exist or is not 'false' AND min amount is configured
-    const withdrawalsEnabled =
-      isMinAmountConfigured &&
-      (enabledRow ? enabledRow.value !== "false" : true);
+    const withdrawalsEnabled = enabledRow ? enabledRow.value !== "false" : true;
 
     return NextResponse.json({
-      minAmount: isMinAmountConfigured ? rawMinAmount : null,
-      withdrawalsEnabled: withdrawalsEnabled,
+      minAmount,
+      withdrawalsEnabled,
+      reason: withdrawalsEnabled ? null : "disabled",
     });
   } catch (err) {
     console.error("[GET /api/settings/withdrawal] Failed to fetch settings:", err);

@@ -29,7 +29,7 @@ export default async function WalletPage() {
     getWithdrawalFeeAmount(),
     getWalletTransactionsForUser(user!.id),
   ]);
-  const canWithdraw = wallet.available >= minWithdrawal;
+  const canWithdraw = minWithdrawal !== null && wallet.available >= minWithdrawal;
 
   return (
     <div className="space-y-6">
@@ -58,7 +58,7 @@ export default async function WalletPage() {
       </div>
 
       <div className="rounded-lg border border-outline-variant/40 bg-surface-container-low px-4 py-3 text-sm text-muted-foreground">
-        Minimum withdrawal: {formatKSh(minWithdrawal)} | Processing fee: {formatKSh(withdrawalFee)}
+        Minimum withdrawal: {minWithdrawal !== null ? formatKSh(minWithdrawal) : "Unavailable (Contact Support)"} | Processing fee: {formatKSh(withdrawalFee)}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

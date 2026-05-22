@@ -56,6 +56,7 @@ export default function WithdrawClientPage() {
   // New state variables for withdrawals toggle and polling
   const [withdrawalsEnabled, setWithdrawalsEnabled] = useState<boolean | null>(null);
   const [minWithdrawalAmount, setMinWithdrawalAmount] = useState<number | null>(null);
+  const [withdrawalErrorReason, setWithdrawalErrorReason] = useState<"disabled" | "configuration_error" | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string | null>(null);
   const [polledAmount, setPolledAmount] = useState<number | null>(null);
@@ -65,7 +66,7 @@ export default function WithdrawClientPage() {
     amount: z
       .number({ required_error: "Enter an amount" })
       .int("Must be a whole number")
-      .min(limits?.minWithdrawal ?? 200, `Minimum withdrawal is KSh ${limits?.minWithdrawal ?? 200}`)
+      .min(limits?.minWithdrawal ?? 1, `Minimum withdrawal is KSh ${limits?.minWithdrawal ?? 1}`)
       .max(limits?.maxWithdrawal ?? 100000, `Maximum withdrawal is KSh ${(limits?.maxWithdrawal ?? 100000).toLocaleString()}`),
     phone: z
       .string()
@@ -108,15 +109,19 @@ export default function WithdrawClientPage() {
         if (settingsRes.ok) {
           setWithdrawalsEnabled(settingsData.withdrawalsEnabled);
           setMinWithdrawalAmount(settingsData.minAmount);
+          setWithdrawalErrorReason(settingsData.reason || null);
         }
 
         if (limitsRes.ok) {
-          const finalMin = settingsData.minAmount !== null ? settingsData.minAmount : (limitsData.minWithdrawal ?? 200);
+          const finalMin = settingsData.minAmount !== null ? settingsData.minAmount : (limitsData.minWithdrawal ?? null);
           const mergedLimits = {
             ...limitsData,
             minWithdrawal: finalMin,
           };
           setLimits(mergedLimits);
+          if (finalMin === null) {
+            setWithdrawalErrorReason("configuration_error");
+          }
           
           if (limitsData.allowedPhone) {
             let formattedPhone = limitsData.allowedPhone;
@@ -261,7 +266,8 @@ export default function WithdrawClientPage() {
   }
 
   // 2. BLOCK UI IF NOT CONFIGURED OR EXPLICITLY DISABLED
-  if (!limitsLoading && withdrawalsEnabled === false) {
+  if (!limitsLoading && (withdrawalsEnabled === false || withdrawalErrorReason !== null || minWithdrawalAmount === null || limits?.minWithdrawal === null)) {
+    const isConfigError = withdrawalErrorReason === "configuration_error" || minWithdrawalAmount === null || (limits !== null && limits.minWithdrawal === null);
     return (
       <div className="space-y-6">
         <div>
@@ -279,9 +285,13 @@ export default function WithdrawClientPage() {
               <Info className="h-8 w-8 text-destructive" />
             </div>
             <div>
-              <p className="font-semibold text-navy">Withdrawals Temporarily Disabled</p>
+              <p className="font-semibold text-navy">
+                {isConfigError ? "Withdrawals Unavailable" : "Withdrawals Temporarily Disabled"}
+              </p>
               <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
-                Due to high traffic on our servers, withdrawal has been disabled. Try again later.
+                {isConfigError
+                  ? "Withdrawals are currently unavailable. Please contact support."
+                  : "Due to high traffic on our servers, withdrawal has been disabled. Try again later."}
               </p>
             </div>
           </CardContent>
@@ -347,7 +357,7 @@ export default function WithdrawClientPage() {
               typically takes {limits?.withdrawalProcessingDays ?? 3} days after approval.
             </p>
             <p className="mt-2 font-medium text-foreground">
-              Minimum withdrawal: KSh {limits?.minWithdrawal?.toLocaleString() ?? 200} | Processing fee: KSh {limits?.withdrawalFee?.toLocaleString() ?? 30}
+              Minimum withdrawal: KSh {limits?.minWithdrawal?.toLocaleString() ?? "N/A"} | Processing fee: KSh {limits?.withdrawalFee?.toLocaleString() ?? 30}
             </p>
           </div>
         </CardContent>
@@ -377,8 +387,8 @@ export default function WithdrawClientPage() {
                 <Input
                   id="withdraw-amount"
                   type="number"
-                  placeholder={limitsLoading ? "Loading..." : `Min ${limits?.minWithdrawal ?? 200}`}
-                  min={limits?.minWithdrawal ?? 200}
+                  placeholder={limitsLoading ? "Loading..." : `Min ${limits?.minWithdrawal ?? ""}`}
+                  min={limits?.minWithdrawal ?? 1}
                   disabled={limitsLoading}
                   {...register("amount", { valueAsNumber: true })}
                 />

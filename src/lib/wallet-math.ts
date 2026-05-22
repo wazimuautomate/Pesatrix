@@ -36,7 +36,7 @@ export function computeWalletSummary(rows: WalletLedgerMathRow[]): WalletSummary
       (row) =>
         row.direction === "debit" &&
         row.bucket === "available" &&
-        row.status === "available"
+        row.status !== "reversed"
     )
     .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
 
