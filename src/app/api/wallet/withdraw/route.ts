@@ -61,26 +61,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // STEP 3 — Verification check:
-    const { data: userVerification, error: verificationError } = await admin
-      .from("user_verification")
-      .select("phone_verified, email_verified")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (
-      verificationError ||
-      !userVerification ||
-      !userVerification.phone_verified ||
-      !userVerification.email_verified
-    ) {
-      return NextResponse.json(
-        { error: { code: "UNVERIFIED", message: "Verify phone and email before withdrawing" } },
-        { status: 403 }
-      );
-    }
-
-    // STEP 4 — Minimum amount check (NO FALLBACK):
+    // STEP 3 - Minimum amount check (NO FALLBACK):
     const minAmount = await getMinWithdrawalKsh();
 
     if (minAmount === null) {
@@ -97,7 +78,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // STEP 5 — Duplicate withdrawal lock check:
+    // STEP 4 - Duplicate withdrawal lock check:
     const { data: pendingRequests, error: pendingError } = await admin
       .from("withdrawal_requests")
       .select("id")
@@ -116,7 +97,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // STEP 6 — Balance check:
+    // STEP 5 - Balance check:
     const { data: wallet, error: walletError } = await admin
       .from("wallets")
       .select("available_balance")
@@ -130,7 +111,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // STEP 7 — Phone format validation:
+    // STEP 6 - Phone format validation:
     let phone = String(rawPhone || "").trim();
     if (/^0[17]\d{8}$/.test(phone)) {
       phone = "254" + phone.slice(1);
@@ -143,7 +124,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // STEP 8 — Create withdrawal_requests row (status = 'requested'):
+    // STEP 7 - Create withdrawal_requests row (status = 'requested'):
     const { data: withdrawalRow, error: insertWError } = await admin
       .from("withdrawal_requests")
       .insert({
@@ -174,7 +155,7 @@ export async function POST(request: Request) {
 
     withdrawalId = withdrawalRow.id;
 
-    // STEP 9 — Debit wallet immediately (locks the funds):
+    // STEP 8 - Debit wallet immediately (locks the funds):
     const { error: insertTxError } = await admin
       .from("wallet_transactions")
       .insert({
@@ -193,7 +174,7 @@ export async function POST(request: Request) {
       throw new Error(`Failed to insert wallet transaction: ${insertTxError.message}`);
     }
 
-    // STEP 10 — Update withdrawal status to 'processing':
+    // STEP 9 - Update withdrawal status to 'processing':
     const { error: updateWError } = await admin
       .from("withdrawal_requests")
       .update({ status: "processing" })
@@ -203,7 +184,7 @@ export async function POST(request: Request) {
       throw new Error(`Failed to update withdrawal status to processing: ${updateWError.message}`);
     }
 
-    // STEP 11 — Call Daraja B2C:
+    // STEP 10 - Call Daraja B2C:
     const accessToken = await getMpesaAccessToken();
     const securityCredential = generateSecurityCredential();
     const env = process.env.DARAJA_ENV === "production" ? "api" : "sandbox";
@@ -238,7 +219,7 @@ export async function POST(request: Request) {
 
     const b2cData = await b2cRes.json().catch(() => ({}));
 
-    // STEP 12 — Store B2C conversation IDs:
+    // STEP 11 - Store B2C conversation IDs:
     if (b2cData?.ConversationID || b2cData?.OriginatorConversationID) {
       await admin
         .from("withdrawal_requests")
@@ -249,7 +230,7 @@ export async function POST(request: Request) {
         .eq("id", withdrawalId);
     }
 
-    // STEP 13 — Handle B2C call failure:
+    // STEP 12 - Handle B2C call failure:
     if (!b2cRes.ok || b2cData?.ResponseCode !== "0") {
       const errorDesc = b2cData?.ResponseDescription || `HTTP error ${b2cRes.status}`;
       
@@ -281,7 +262,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // STEP 14 — Return success:
+    // STEP 13 - Return success:
     return NextResponse.json({
       withdrawalId,
       status: "processing",
