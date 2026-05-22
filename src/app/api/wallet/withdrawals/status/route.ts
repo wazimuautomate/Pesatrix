@@ -29,10 +29,16 @@ export async function GET() {
 
     if (requests && requests.length > 0) {
       const latest = requests[0];
+      const mappedStatus = latest.status === "sent"
+        ? "received"
+        : ["requested", "processing", "held"].includes(latest.status)
+        ? "held"
+        : latest.status;
+
       return NextResponse.json({
         hasPending: ["requested", "processing", "held"].includes(latest.status),
         id: latest.id,
-        status: latest.status,
+        status: mappedStatus,
         amount: latest.amount,
         phone: latest.phone,
         fee: latest.fee_ksh,

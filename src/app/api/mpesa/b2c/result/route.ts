@@ -64,13 +64,30 @@ export async function POST(request: Request) {
         .update({
           status: "sent",
           mpesa_txn_id: transactionId || null,
+          b2c_result_code: "0",
+          b2c_result_desc: resultDesc,
+          b2c_raw_callback: body,
           processed_at: now,
+          last_reconciled_at: now,
+          failure_reason: null,
         })
         .eq("id", occasion)
         .eq("status", "processing");
 
       if (updateError) {
         console.error(`[M-Pesa B2C Callback Result] Failed to update success status for withdrawal ${occasion}:`, updateError);
+      }
+
+      const { error: walletUpdateError } = await admin
+        .from("wallet_transactions")
+        .update({ status: "available", bucket: "available" })
+        .eq("reference_table", "withdrawal_requests")
+        .eq("reference_id", occasion)
+        .eq("type", "withdrawal")
+        .eq("direction", "debit");
+
+      if (walletUpdateError) {
+        console.error(`[M-Pesa B2C Callback Result] Failed to update wallet transaction for withdrawal ${occasion}:`, walletUpdateError);
       }
     } else {
       // IF resultCode !== 0 (FAILURE):
@@ -82,7 +99,11 @@ export async function POST(request: Request) {
         .update({
           status: "failed",
           failure_reason: resultDesc || `Failed with code ${resultCode}`,
+          b2c_result_code: String(resultCode),
+          b2c_result_desc: resultDesc,
+          b2c_raw_callback: body,
           processed_at: now,
+          last_reconciled_at: now,
         })
         .eq("id", occasion)
         .eq("status", "processing");
@@ -93,22 +114,16 @@ export async function POST(request: Request) {
 
       // Reverse the debit
       console.log(`[M-Pesa B2C Callback Result] Reversing KSh ${requestRow.amount} debit for user ${requestRow.user_id}`);
-      const { error: insertTxError } = await admin
+      const { error: walletUpdateError } = await admin
         .from("wallet_transactions")
-        .insert({
-          user_id: requestRow.user_id,
-          type: "reversal",
-          direction: "credit",
-          amount: requestRow.amount,
-          status: "available",
-          bucket: "available",
-          reference_table: "withdrawal_requests",
-          reference_id: occasion,
-          description: "Withdrawal failed — funds restored",
-        });
+        .update({ status: "reversed", bucket: "locked" })
+        .eq("reference_table", "withdrawal_requests")
+        .eq("reference_id", occasion)
+        .eq("type", "withdrawal")
+        .eq("direction", "debit");
 
-      if (insertTxError) {
-        console.error(`[M-Pesa B2C Callback Result] CRITICAL: Failed to reverse wallet debit for user ${requestRow.user_id}, withdrawal ${occasion}:`, insertTxError);
+      if (walletUpdateError) {
+        console.error(`[M-Pesa B2C Callback Result] Failed to update wallet transaction status to reversed for withdrawal ${occasion}:`, walletUpdateError);
       }
     }
 

@@ -32,12 +32,23 @@ export function mapWalletTransactionForApi(row: WalletLedgerRow) {
     row.available_at &&
     new Date(row.available_at) <= new Date();
 
+  const baseStatus = isAvailableByTime ? "available" : row.status;
+  let status = baseStatus;
+
+  if (row.type === "withdrawal") {
+    if (baseStatus === "available") {
+      status = "received";
+    } else if (baseStatus === "locked") {
+      status = "held";
+    }
+  }
+
   return {
     id: row.id,
     type: row.type,
     direction: row.direction,
     amount: row.amount,
-    status: isAvailableByTime ? "available" : row.status,
+    status,
     availableAt: row.available_at,
     createdAt: row.created_at,
     description: row.description,

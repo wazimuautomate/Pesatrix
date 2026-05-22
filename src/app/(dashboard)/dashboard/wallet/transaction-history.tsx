@@ -42,6 +42,8 @@ const statusVariant: Record<string, "success" | "warning" | "destructive" | "sec
   pending: "warning",
   locked: "secondary",
   reversed: "destructive",
+  received: "success",
+  held: "warning",
 };
 
 type FilterType = "all" | "credit" | "debit";
@@ -191,7 +193,7 @@ export default function TransactionHistory({
                         Available {format(new Date(tx.availableAt), "MMM d, yyyy")}
                       </p>
                     )}
-                    {tx.direction === "debit" && tx.status === "locked" ? (
+                    {tx.direction === "debit" && (tx.status === "locked" || tx.status === "held") ? (
                       <p className="text-xs text-muted-foreground">
                         Reserved while withdrawal is being processed
                       </p>

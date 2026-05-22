@@ -77,7 +77,12 @@ export async function POST(request: Request) {
         .update({
           status: "sent",
           mpesa_txn_id: transactionId ?? null,
+          b2c_result_code: "0",
+          b2c_result_desc: ResultDesc ?? "Success",
+          b2c_raw_callback: raw,
           processed_at: now,
+          last_reconciled_at: now,
+          failure_reason: null,
         })
         .eq("id", withdrawal.id);
 
@@ -85,6 +90,7 @@ export async function POST(request: Request) {
         .update({ status: "available", bucket: "available" })
         .eq("reference_table", "withdrawal_requests")
         .eq("reference_id", withdrawal.id)
+        .eq("type", "withdrawal")
         .eq("direction", "debit");
 
     } else {
@@ -94,27 +100,20 @@ export async function POST(request: Request) {
         .update({
           status: "failed",
           failure_reason: failureReason,
+          b2c_result_code: String(ResultCode),
+          b2c_result_desc: ResultDesc ?? failureReason,
+          b2c_raw_callback: raw,
           processed_at: now,
+          last_reconciled_at: now,
         })
         .eq("id", withdrawal.id);
 
       await (admin.from("wallet_transactions" as never) as any)
-        .update({ status: "reversed" })
+        .update({ status: "reversed", bucket: "locked" })
         .eq("reference_table", "withdrawal_requests")
         .eq("reference_id", withdrawal.id)
+        .eq("type", "withdrawal")
         .eq("direction", "debit");
-
-      await (admin.from("wallet_transactions" as never) as any).insert({
-        user_id: withdrawal.user_id,
-        type: "reversal",
-        direction: "credit",
-        amount: withdrawal.amount,
-        status: "available",
-        bucket: "available",
-        description: `B2C withdrawal reversal: ${failureReason}`,
-        reference_table: "withdrawal_requests",
-        reference_id: withdrawal.id,
-      });
 
     }
 
