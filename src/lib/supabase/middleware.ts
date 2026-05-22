@@ -63,15 +63,7 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/register")) {
-      await supabase.auth.signOut();
-    }
-
     return supabaseResponse;
-  }
-
-  if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/register")) {
-    await supabase.auth.signOut();
   }
 
   return supabaseResponse;

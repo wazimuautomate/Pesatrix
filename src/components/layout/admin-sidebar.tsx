@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Users, CreditCard, ArrowDownToLine, BookOpen,
   Users2, ClipboardList, HeadphonesIcon, Shield, Settings, LogOut,
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 const adminLinks = [
   { href: "/wazim", label: "Overview", icon: LayoutDashboard },
@@ -29,7 +30,17 @@ const adminLinks = [
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [supabase] = useState(() => createClient());
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    await supabase.auth.signOut();
+    router.push("/wazim/login");
+    router.refresh();
+  }
 
   return (
     <aside
@@ -98,17 +109,17 @@ export function AdminSidebar() {
       {/* Logout */}
       <div className="border-t border-white/10 p-3">
         <Button
-          asChild
           variant="ghost"
+          type="button"
+          disabled={signingOut}
+          onClick={handleSignOut}
           className={cn(
             "w-full justify-start rounded-xl text-white/60 hover:bg-white/10 hover:text-white",
             collapsed && "justify-center"
           )}
         >
-          <Link href="/login">
-            <LogOut className="h-4 w-4" />
-            {!collapsed && <span className="ml-3">Sign Out</span>}
-          </Link>
+          <LogOut className="h-4 w-4" />
+          {!collapsed && <span className="ml-3">{signingOut ? "Signing out..." : "Sign Out"}</span>}
         </Button>
       </div>
     </aside>
