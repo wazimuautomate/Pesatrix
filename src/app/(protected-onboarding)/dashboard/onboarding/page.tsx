@@ -63,6 +63,15 @@ export default async function DashboardOnboardingPage() {
     accountStatus = adminStatus as AccountStatusRow | null;
   }
 
+  if (
+    accountStatus?.status === "banned" ||
+    accountStatus?.state === "banned" ||
+    accountStatus?.status === "suspended" ||
+    accountStatus?.state === "suspended"
+  ) {
+    redirect("/login?message=Your account has been suspended or banned. Please contact support.");
+  }
+
   if (accountStatus?.is_setup_complete === true) {
     redirect("/dashboard");
   }

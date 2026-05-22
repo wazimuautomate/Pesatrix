@@ -50,28 +50,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // This is intentionally not an activation or verification gate. Users do
-    // not need phone/email verification or an exact "active" status label to
-    // request payout of available wallet funds.
-    const { data: accountStatus, error: statusError } = await admin
-      .from("account_status")
-      .select("status, state")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (statusError) {
-      return withdrawalError("ACCOUNT_NOT_ELIGIBLE", "Account not eligible for withdrawal", 403);
-    }
-
-    if (
-      accountStatus?.status === "banned" ||
-      accountStatus?.state === "banned" ||
-      accountStatus?.status === "suspended" ||
-      accountStatus?.state === "suspended"
-    ) {
-      return withdrawalError("ACCOUNT_SUSPENDED", "This account is suspended or banned and cannot request withdrawals", 403);
-    }
-
     const { data: verification, error: verificationError } = await admin
       .from("user_verification")
       .select("risk_score")

@@ -87,13 +87,29 @@ function LoginPageContent() {
     try {
       const response = await fetch("/api/me", { cache: "no-store" });
       if (!response.ok) {
-        return defaultRedirect;
+        return { url: defaultRedirect, banned: false };
       }
 
       const payload = await response.json();
-      return payload?.status?.setupComplete ? defaultRedirect : "/dashboard";
+      const status = payload?.status;
+      const isBannedOrSuspended =
+        status?.accountState === "banned" ||
+        status?.accountState === "suspended";
+
+      if (isBannedOrSuspended) {
+        await supabase.auth.signOut();
+        return {
+          url: "/login?message=Your account has been suspended or banned. Please contact support.",
+          banned: true
+        };
+      }
+
+      return {
+        url: status?.setupComplete ? defaultRedirect : "/dashboard",
+        banned: false
+      };
     } catch {
-      return defaultRedirect;
+      return { url: defaultRedirect, banned: false };
     }
   }
 
@@ -124,12 +140,19 @@ function LoginPageContent() {
         return;
       }
 
+      const nextResult = await getPostLoginRedirect(redirect);
+      if (nextResult.banned) {
+        toast.error("Your account has been suspended or banned. Please contact support.");
+        router.push(nextResult.url);
+        router.refresh();
+        return;
+      }
+
       await recordFingerprint(visitorId);
       sessionStorage.setItem("pesatrix_session_active", "true");
 
       toast.success("Login successful");
-      const nextRoute = await getPostLoginRedirect(redirect);
-      router.push(nextRoute);
+      router.push(nextResult.url);
       router.refresh();
     } catch {
       toast.error("Something went wrong. Please try again.");
@@ -148,12 +171,19 @@ function LoginPageContent() {
         return;
       }
 
+      const nextResult = await getPostLoginRedirect(redirect);
+      if (nextResult.banned) {
+        toast.error("Your account has been suspended or banned. Please contact support.");
+        router.push(nextResult.url);
+        router.refresh();
+        return;
+      }
+
       await recordFingerprint(visitorId);
       sessionStorage.setItem("pesatrix_session_active", "true");
 
       toast.success("Login successful");
-      const nextRoute = await getPostLoginRedirect(redirect);
-      router.push(nextRoute);
+      router.push(nextResult.url);
       router.refresh();
     } catch {
       toast.error("Something went wrong. Please try again.");

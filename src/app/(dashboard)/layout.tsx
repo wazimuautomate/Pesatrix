@@ -80,6 +80,15 @@ export default async function DashboardLayout({
       }
     : undefined;
 
+  if (
+    accountStatus?.status === "banned" ||
+    accountStatus?.state === "banned" ||
+    accountStatus?.status === "suspended" ||
+    accountStatus?.state === "suspended"
+  ) {
+    redirect("/login?message=Your account has been suspended or banned. Please contact support.");
+  }
+
   const isSetupComplete = accountStatus?.is_setup_complete === true;
 
   if (!isSetupComplete) {
