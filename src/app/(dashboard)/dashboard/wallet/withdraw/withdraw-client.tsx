@@ -29,7 +29,7 @@ import { motion } from "framer-motion";
 type Limits = {
   allowedPhone: string | null;
   availableBalance: number;
-  minWithdrawal: number;
+  minWithdrawal: number | null;
   maxWithdrawal: number;
   withdrawalFee: number;
   withdrawalHoldDays: number;
@@ -55,22 +55,40 @@ export default function WithdrawClientPage() {
 
   // New state variables for withdrawals toggle and polling
   const [withdrawalsEnabled, setWithdrawalsEnabled] = useState<boolean | null>(null);
-  const [minWithdrawalAmount, setMinWithdrawalAmount] = useState<number | null>(null);
   const [withdrawalErrorReason, setWithdrawalErrorReason] = useState<"disabled" | "configuration_error" | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string | null>(null);
   const [polledAmount, setPolledAmount] = useState<number | null>(null);
   const [polledPhone, setPolledPhone] = useState<string | null>(null);
 
+  const configuredMinWithdrawal = limits?.minWithdrawal ?? null;
+  const maxWithdrawal = limits?.maxWithdrawal ?? 100000;
+
   const schema = z.object({
     amount: z
       .number({ required_error: "Enter an amount" })
       .int("Must be a whole number")
-      .min(limits?.minWithdrawal ?? 1, `Minimum withdrawal is KSh ${limits?.minWithdrawal ?? 1}`)
-      .max(limits?.maxWithdrawal ?? 100000, `Maximum withdrawal is KSh ${(limits?.maxWithdrawal ?? 100000).toLocaleString()}`),
+      .max(maxWithdrawal, `Maximum withdrawal is KSh ${maxWithdrawal.toLocaleString()}`),
     phone: z
       .string()
       .regex(/^(254|0)7\d{8}$|(254|0)1\d{8}$/, "Enter a valid Kenyan M-Pesa number starting with 254, 07, or 01"),
+  }).superRefine((data, context) => {
+    if (configuredMinWithdrawal === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["amount"],
+        message: "Withdrawals are currently unavailable.",
+      });
+      return;
+    }
+
+    if (data.amount < configuredMinWithdrawal) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["amount"],
+        message: `Minimum withdrawal is KSh ${configuredMinWithdrawal}`,
+      });
+    }
   });
 
   const {
@@ -85,11 +103,14 @@ export default function WithdrawClientPage() {
 
   const requestedAmount = Number(watch("amount") || 0);
   const projectedReceive = requestedAmount - (limits?.withdrawalFee ?? 0);
-  const balanceBelowMinimum = (limits?.availableBalance ?? 0) < (limits?.minWithdrawal ?? 0);
+  const balanceBelowMinimum =
+    configuredMinWithdrawal !== null &&
+    (limits?.availableBalance ?? 0) < configuredMinWithdrawal;
   const canSubmitWithdrawal =
     !limitsLoading &&
+    configuredMinWithdrawal !== null &&
     !balanceBelowMinimum &&
-    requestedAmount >= (limits?.minWithdrawal ?? 0) &&
+    requestedAmount >= configuredMinWithdrawal &&
     requestedAmount <= (limits?.availableBalance ?? 0) &&
     projectedReceive > 0 &&
     withdrawalsEnabled !== false;
@@ -108,12 +129,12 @@ export default function WithdrawClientPage() {
 
         if (settingsRes.ok) {
           setWithdrawalsEnabled(settingsData.withdrawalsEnabled);
-          setMinWithdrawalAmount(settingsData.minAmount);
           setWithdrawalErrorReason(settingsData.reason || null);
         }
 
         if (limitsRes.ok) {
-          const finalMin = settingsData.minAmount !== null ? settingsData.minAmount : (limitsData.minWithdrawal ?? null);
+          const finalMin =
+            typeof limitsData.minWithdrawal === "number" ? limitsData.minWithdrawal : null;
           const mergedLimits = {
             ...limitsData,
             minWithdrawal: finalMin,
@@ -266,8 +287,8 @@ export default function WithdrawClientPage() {
   }
 
   // 2. BLOCK UI IF NOT CONFIGURED OR EXPLICITLY DISABLED
-  if (!limitsLoading && (withdrawalsEnabled === false || withdrawalErrorReason !== null || minWithdrawalAmount === null || limits?.minWithdrawal === null)) {
-    const isConfigError = withdrawalErrorReason === "configuration_error" || minWithdrawalAmount === null || (limits !== null && limits.minWithdrawal === null);
+  if (!limitsLoading && (!limits || withdrawalsEnabled === false || withdrawalErrorReason !== null || limits.minWithdrawal === null)) {
+    const isConfigError = withdrawalErrorReason === "configuration_error" || !limits || limits.minWithdrawal === null;
     return (
       <div className="space-y-6">
         <div>
@@ -357,7 +378,7 @@ export default function WithdrawClientPage() {
               typically takes {limits?.withdrawalProcessingDays ?? 3} days after approval.
             </p>
             <p className="mt-2 font-medium text-foreground">
-              Minimum withdrawal: KSh {limits?.minWithdrawal?.toLocaleString() ?? "N/A"} | Processing fee: KSh {limits?.withdrawalFee?.toLocaleString() ?? 30}
+              Minimum withdrawal: KSh {configuredMinWithdrawal?.toLocaleString() ?? "N/A"} | Processing fee: KSh {limits?.withdrawalFee?.toLocaleString() ?? 30}
             </p>
           </div>
         </CardContent>
@@ -378,17 +399,17 @@ export default function WithdrawClientPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="withdraw-amount">Amount (KSh)</Label>
-                  {limits && (
+                  {configuredMinWithdrawal !== null && (
                     <span className="text-xs text-muted-foreground">
-                      Minimum: KSh {limits.minWithdrawal.toLocaleString()}
+                      Minimum: KSh {configuredMinWithdrawal.toLocaleString()}
                     </span>
                   )}
                 </div>
                 <Input
                   id="withdraw-amount"
                   type="number"
-                  placeholder={limitsLoading ? "Loading..." : `Min ${limits?.minWithdrawal ?? ""}`}
-                  min={limits?.minWithdrawal ?? 1}
+                  placeholder={limitsLoading ? "Loading..." : `Min ${configuredMinWithdrawal ?? ""}`}
+                  min={configuredMinWithdrawal ?? undefined}
                   disabled={limitsLoading}
                   {...register("amount", { valueAsNumber: true })}
                 />
@@ -447,7 +468,7 @@ export default function WithdrawClientPage() {
                   </div>
                   {balanceBelowMinimum ? (
                     <p className="mt-2 text-xs font-medium text-destructive">
-                      Your available balance must reach KSh {limits.minWithdrawal.toLocaleString("en-KE")} before you can withdraw.
+                      Your available balance must reach KSh {configuredMinWithdrawal?.toLocaleString("en-KE")} before you can withdraw.
                     </p>
                   ) : null}
                 </div>

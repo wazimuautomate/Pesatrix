@@ -22,7 +22,6 @@ import {
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
   ALLOW_NEW_REGISTRATIONS_KEY,
-  WITHDRAWAL_MIN_AMOUNT_KEY,
   WITHDRAWALS_ENABLED_KEY,
 } from "@/lib/platform-setting-keys";
 
@@ -138,8 +137,7 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       label: "Minimum withdrawal (KSh)",
       description: "Smallest amount a user can request from the wallet.",
       type: "number",
-      step: "any",
-      defaultValue: "200",
+      min: 1,
     },
     {
       key: WITHDRAWAL_FEE_KSH_KEY,
@@ -156,14 +154,6 @@ export function PlatformSettingsForm({ initialSettings }: { initialSettings: Pla
       type: "number",
       step: "any",
       defaultValue: "3",
-    },
-    {
-      key: WITHDRAWAL_MIN_AMOUNT_KEY,
-      label: "Minimum B2C withdrawal (KSh)",
-      description: "Minimum amount a user can request via M-Pesa B2C withdrawals.",
-      type: "number",
-      min: 1,
-      defaultValue: "200",
     },
     {
       key: WITHDRAWAL_N8N_WEBHOOK_URL_KEY,

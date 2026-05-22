@@ -5,7 +5,6 @@ import { requireAdmin, auditLog } from "../_lib";
 import {
   ACTIVATION_FEE_KSH_KEY,
   DAILY_TASK_LIMIT_KEY,
-  LEGACY_MIN_WITHDRAWAL_KSH_KEY,
   MAX_TASK_BATCH_VALUE_KSH_KEY,
   MAX_TASK_PAYOUT_KSH_KEY,
   MIN_WITHDRAWAL_KSH_KEY,
@@ -17,7 +16,6 @@ import {
   WITHDRAWAL_N8N_WEBHOOK_URL_KEY,
   WITHDRAWAL_PROCESSING_DAYS_KEY,
   ALLOW_NEW_REGISTRATIONS_KEY,
-  WITHDRAWAL_MIN_AMOUNT_KEY,
   WITHDRAWALS_ENABLED_KEY,
 } from "@/lib/platform-setting-keys";
 
@@ -61,7 +59,6 @@ export async function PATCH(request: Request) {
     ACTIVATION_FEE_KSH_KEY,
     TRAINING_REWARD_SETTING_KEY,
     "task_unlock_delay_hours",
-    LEGACY_MIN_WITHDRAWAL_KSH_KEY,
     MIN_WITHDRAWAL_KSH_KEY,
     WITHDRAWAL_FEE_KSH_KEY,
     MAX_TASK_PAYOUT_KSH_KEY,
@@ -72,7 +69,6 @@ export async function PATCH(request: Request) {
     WITHDRAWAL_HOLD_DAYS_KEY,
     WITHDRAWAL_PROCESSING_DAYS_KEY,
     REFERRAL_LEVEL_1_REWARD_KEY,
-    WITHDRAWAL_MIN_AMOUNT_KEY,
   ];
 
   if (key === ALLOW_NEW_REGISTRATIONS_KEY) {
@@ -95,7 +91,7 @@ export async function PATCH(request: Request) {
     }
   }
 
-  if (key === WITHDRAWAL_MIN_AMOUNT_KEY) {
+  if (key === MIN_WITHDRAWAL_KSH_KEY) {
     const numValue = Number(value);
     if (!Number.isInteger(numValue) || numValue <= 0) {
       return NextResponse.json(

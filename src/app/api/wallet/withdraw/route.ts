@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getMpesaAccessToken, generateSecurityCredential } from "@/lib/mpesa";
 import { getMinWithdrawalKsh } from "@/lib/platform-settings";
+import { WITHDRAWALS_ENABLED_KEY } from "@/lib/platform-setting-keys";
 
 export async function POST(request: Request) {
   let withdrawalId: string | null = null;
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     const { data: enabledSetting } = await admin
       .from("platform_settings")
       .select("value")
-      .eq("key", "withdrawals_enabled")
+      .eq("key", WITHDRAWALS_ENABLED_KEY)
       .maybeSingle();
 
     if (enabledSetting && enabledSetting.value === "false") {
