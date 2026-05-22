@@ -26,7 +26,7 @@ export async function processWithdrawalPayout(withdrawalId: string) {
     };
   }
 
-  const [{ data: accountStatus }, { data: reservedDebit }] = await Promise.all([
+  const [{ data: accountStatus }, { data: reservedDebit }, { data: verification }] = await Promise.all([
     (admin.from("account_status" as never) as any)
       .select("status, state")
       .eq("user_id", withdrawal.user_id)
@@ -38,14 +38,34 @@ export async function processWithdrawalPayout(withdrawalId: string) {
       .eq("direction", "debit")
       .eq("type", "withdrawal")
       .maybeSingle(),
+    (admin.from("user_verification" as never) as any)
+      .select("risk_score")
+      .eq("user_id", withdrawal.user_id)
+      .maybeSingle(),
   ]);
 
-  if (accountStatus?.status === "banned" || accountStatus?.state === "banned") {
+  if (
+    accountStatus?.status === "banned" ||
+    accountStatus?.state === "banned" ||
+    accountStatus?.status === "suspended" ||
+    accountStatus?.state === "suspended"
+  ) {
     return {
       ok: false as const,
       status: 409,
       code: "ACCOUNT_BANNED",
-      message: "Banned accounts cannot receive payouts",
+      message: "Banned or suspended accounts cannot receive payouts",
+      withdrawal,
+    };
+  }
+
+  const riskScore = verification?.risk_score ? Number(verification.risk_score) : 0;
+  if (riskScore >= 70) {
+    return {
+      ok: false as const,
+      status: 409,
+      code: "HIGH_RISK_ACCOUNT",
+      message: "High risk accounts (risk score >= 70) cannot receive payouts",
       withdrawal,
     };
   }

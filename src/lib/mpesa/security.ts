@@ -1,8 +1,23 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 
 export const KENYAN_MPESA_PHONE_REGEX = /^(?:\+?254|0)[17]\d{8}$/;
 export const DARAJA_PHONE_REGEX = /^254[17]\d{8}$/;
-const DEFAULT_SAFARICOM_CALLBACK_IPS = ["196.201.212.74"];
+const DEFAULT_SAFARICOM_CALLBACK_IPS = [
+  "196.201.212.74",
+  "196.201.212.129",
+  "196.201.212.138",
+  "196.201.212.0/24",
+  "196.201.213.0/24",
+  "196.201.214.0/24",
+  "196.201.214.200",
+  "196.201.214.206",
+  "196.201.213.114",
+  "196.201.214.207",
+  "196.201.214.208",
+  "196.201.213.44",
+];
 
 function getEnvValue(name: string) {
   const value = process.env[name]?.trim();
@@ -37,17 +52,48 @@ export function encryptCredential(plainText: string, certificate: string): strin
 
 export function resolveSecurityCredential(): string {
   const directCredential = process.env.DARAJA_SECURITY_CREDENTIAL?.trim();
-  if (directCredential) {
+  
+  // If the direct credential is set and looks like a valid pre-encrypted base64 RSA block,
+  // we can use it directly. We assume it is pre-encrypted if its length is >= 100 characters.
+  if (directCredential && directCredential.length >= 100) {
     return directCredential;
   }
 
-  const initiatorPassword = process.env.DARAJA_INITIATOR_PASSWORD?.trim();
-  const certificate = process.env.DARAJA_CERTIFICATE?.trim();
-  if (initiatorPassword && certificate) {
-    return encryptCredential(initiatorPassword, certificate);
+  // Otherwise, treat directCredential (if short) or other variables as the plain password to encrypt
+  const initiatorPassword =
+    process.env.DARAJA_INITIATOR_PASSWORD?.trim() ||
+    process.env.MPESA_INITIATOR_PASSWORD?.trim() ||
+    (directCredential && directCredential.length < 100 ? directCredential : null);
+
+  if (!initiatorPassword) {
+    throw new Error("Missing M-Pesa B2C initiator password configuration (neither DARAJA_INITIATOR_PASSWORD nor plain DARAJA_SECURITY_CREDENTIAL is set)");
   }
 
-  throw new Error("Missing Daraja B2C security credential configuration");
+  // Load the public certificate
+  let certificate = process.env.DARAJA_CERTIFICATE?.trim() || process.env.MPESA_PUBLIC_CERT?.trim();
+
+  if (!certificate) {
+    const env = process.env.DARAJA_ENV?.trim().toLowerCase();
+    const isProd = env === "production" || env === "live";
+    const certFilename = isProd ? "ProductionCertificate.cer" : "SandboxCertificate.cer";
+    const certPath = path.join(process.cwd(), certFilename);
+
+    try {
+      if (fs.existsSync(certPath)) {
+        certificate = fs.readFileSync(certPath, "utf8");
+      } else {
+        console.warn(`[M-Pesa Security] Fallback certificate file not found: ${certPath}`);
+      }
+    } catch (err) {
+      console.error(`[M-Pesa Security] Failed to read certificate from fallback path: ${certPath}`, err);
+    }
+  }
+
+  if (!certificate) {
+    throw new Error("Missing M-Pesa B2C public certificate for password encryption. Please set DARAJA_CERTIFICATE or place SandboxCertificate.cer/ProductionCertificate.cer in the project root.");
+  }
+
+  return encryptCredential(initiatorPassword, certificate);
 }
 
 export function normalizeKenyanPhone(input: string): string {

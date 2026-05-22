@@ -63,8 +63,32 @@ export async function POST(request: Request) {
       return withdrawalError("ACCOUNT_NOT_ELIGIBLE", "Account not eligible for withdrawal", 403);
     }
 
-    if (accountStatus?.status === "banned" || accountStatus?.state === "banned") {
-      return withdrawalError("ACCOUNT_BANNED", "This account cannot request withdrawals", 403);
+    if (
+      accountStatus?.status === "banned" ||
+      accountStatus?.state === "banned" ||
+      accountStatus?.status === "suspended" ||
+      accountStatus?.state === "suspended"
+    ) {
+      return withdrawalError("ACCOUNT_SUSPENDED", "This account is suspended or banned and cannot request withdrawals", 403);
+    }
+
+    const { data: verification, error: verificationError } = await admin
+      .from("user_verification")
+      .select("risk_score")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (verificationError) {
+      return withdrawalError("ACCOUNT_NOT_ELIGIBLE", "Failed to verify account risk status", 403);
+    }
+
+    const riskScore = verification?.risk_score ? Number(verification.risk_score) : 0;
+    if (riskScore >= 70) {
+      return withdrawalError(
+        "HIGH_RISK_ACCOUNT",
+        "Your withdrawal request cannot be processed due to elevated account risk indicators. Please contact support.",
+        403
+      );
     }
 
     const [minAmount, withdrawalFee, withdrawalProcessingDays, contact] = await Promise.all([

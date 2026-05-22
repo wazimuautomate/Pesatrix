@@ -48,6 +48,12 @@ export async function POST(request: Request) {
       return acceptedResponse;
     }
 
+    const b2cEvents = (global as any).b2cEvents;
+    if (b2cEvents) {
+      console.log(`[B2C Result] Emitting callback event for ConversationID: ${conversationId}`);
+      b2cEvents.emit(conversationId, raw);
+    }
+
     const { data: withdrawal, error: fetchError } = await (admin.from("withdrawal_requests" as never) as any)
       .select("id, user_id, amount, status, b2c_conversation_id")
       .eq("b2c_conversation_id", conversationId)

@@ -92,6 +92,36 @@ function getAccessTokenMismatchHint() {
   return "Invalid Access Token. Daraja is rejecting the live STK request. Confirm the consumer key/secret, shortcode, and passkey all belong to the same approved live app.";
 }
 
+export function getDarajaEnvironment() {
+  return DARAJA_ENVIRONMENT;
+}
+
+export function getDarajaBaseUrl() {
+  return DARAJA_BASE;
+}
+
+export function buildB2CRequestPayload(params: {
+  phone: string;
+  amount: number;
+  remarks: string;
+  occasion: string;
+  resultUrl?: string;
+  timeoutUrl?: string;
+}): B2CRequest {
+  return {
+    InitiatorName: getRequiredEnv("DARAJA_INITIATOR_NAME"),
+    SecurityCredential: resolveSecurityCredential(),
+    CommandID: "SalaryPayment",
+    Amount: String(params.amount),
+    PartyA: getRequiredEnv("DARAJA_SHORTCODE"),
+    PartyB: params.phone,
+    Remarks: params.remarks,
+    QueueTimeOutURL: params.timeoutUrl ?? getRequiredEnv("DARAJA_B2C_TIMEOUT_URL"),
+    ResultURL: params.resultUrl ?? getRequiredEnv("DARAJA_B2C_RESULT_URL"),
+    Occasion: params.occasion,
+  };
+}
+
 export async function getDarajaToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
     return cachedToken.token;
@@ -189,19 +219,7 @@ export async function initiateB2C(params: {
   timeoutUrl?: string;
 }) {
   const token = await getDarajaToken();
-
-  const payload: B2CRequest = {
-    InitiatorName: getRequiredEnv("DARAJA_INITIATOR_NAME"),
-    SecurityCredential: resolveSecurityCredential(),
-    CommandID: "SalaryPayment",
-    Amount: String(params.amount),
-    PartyA: getRequiredEnv("DARAJA_SHORTCODE"),
-    PartyB: params.phone,
-    Remarks: params.remarks,
-    QueueTimeOutURL: params.timeoutUrl ?? getRequiredEnv("DARAJA_B2C_TIMEOUT_URL"),
-    ResultURL: params.resultUrl ?? getRequiredEnv("DARAJA_B2C_RESULT_URL"),
-    Occasion: params.occasion,
-  };
+  const payload = buildB2CRequestPayload(params);
 
   const response = await fetch(`${DARAJA_BASE}/mpesa/b2c/v1/paymentrequest`, {
     method: "POST",

@@ -66,7 +66,7 @@ test("production Safaricom IP validation supports configured CIDR ranges", () =>
     process.env.SAFARICOM_IP_WHITELIST = "196.201.212.0/24";
 
     assert.equal(validateSafaricomIP("196.201.212.74"), true);
-    assert.equal(validateSafaricomIP("196.201.213.74"), false);
+    assert.equal(validateSafaricomIP("196.201.215.74"), false);
   } finally {
     if (originalDarajaEnv === undefined) {
       delete process.env.DARAJA_ENV;
