@@ -21,20 +21,22 @@ export function WithdrawalActions({ withdrawalId }: { withdrawalId: string }) {
   const router = useRouter();
   const [openSent, setOpenSent] = useState(false);
   const [openFail, setOpenFail] = useState(false);
-  const [mpesaTxnId, setMpesaTxnId] = useState("");
   const [failReason, setFailReason] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function markSent() {
+  async function approveWithdrawal() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/withdrawals/${withdrawalId}`, {
+      const res = await fetch(`/api/admin/withdrawals/${withdrawalId}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "mark-sent", mpesaTxnId }),
       });
-      if (!res.ok) { toast.error("Failed to approve withdrawal"); return; }
-      toast.success("Withdrawal approved");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to approve withdrawal");
+        return;
+      }
+      toast.success("Withdrawal approved and payout request sent");
       setOpenSent(false);
       router.refresh();
     } finally {
@@ -43,15 +45,16 @@ export function WithdrawalActions({ withdrawalId }: { withdrawalId: string }) {
   }
 
   async function markFailed() {
-    if (!failReason.trim()) { toast.error("Reason required"); return; }
+    if (failReason.trim().length < 5) { toast.error("Reason must be at least 5 characters"); return; }
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/withdrawals/${withdrawalId}`, {
+      const res = await fetch(`/api/admin/withdrawals/${withdrawalId}/fail`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "fail", reason: failReason }),
+        body: JSON.stringify({ reason: failReason.trim() }),
       });
-      if (!res.ok) { toast.error("Action failed"); return; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(data.error ?? "Action failed"); return; }
       toast.success("Withdrawal declined and amount reversed");
       setOpenFail(false);
       router.refresh();
@@ -62,7 +65,7 @@ export function WithdrawalActions({ withdrawalId }: { withdrawalId: string }) {
 
   return (
     <div className="flex gap-2 justify-end">
-      {/* Mark Sent */}
+      {/* Approve and initiate B2C */}
       <Dialog open={openSent} onOpenChange={setOpenSent}>
         <DialogTrigger asChild>
           <Button size="sm" className="gap-1">
@@ -74,18 +77,12 @@ export function WithdrawalActions({ withdrawalId }: { withdrawalId: string }) {
           <DialogHeader>
             <DialogTitle>Approve Withdrawal</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="mpesa-txn-id">M-Pesa Transaction ID (optional)</Label>
-            <Input
-              id="mpesa-txn-id"
-              value={mpesaTxnId}
-              onChange={(e) => setMpesaTxnId(e.target.value)}
-              placeholder="Leave blank to use a mock payout reference"
-            />
-          </div>
+          <p className="text-sm text-muted-foreground">
+            This will send the payout request to M-Pesa B2C immediately.
+          </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpenSent(false)}>Cancel</Button>
-            <Button onClick={markSent} disabled={loading}>
+            <Button onClick={approveWithdrawal} disabled={loading}>
               {loading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
               Confirm Approval
             </Button>
@@ -132,19 +129,16 @@ export function WithdrawalEditActions({
   initialAmount,
   initialPhone,
   initialStatus,
-  initialMpesaTxnId,
 }: {
   withdrawalId: string;
   initialAmount: number;
   initialPhone: string;
   initialStatus: string;
-  initialMpesaTxnId?: string | null;
 }) {
   const router = useRouter();
   const [amount, setAmount] = useState(String(initialAmount));
   const [phone, setPhone] = useState(initialPhone);
-  const [status, setStatus] = useState(initialStatus);
-  const [mpesaTxnId, setMpesaTxnId] = useState(initialMpesaTxnId ?? "");
+  const [status, setStatus] = useState(["requested", "held"].includes(initialStatus) ? initialStatus : "");
   const [loading, setLoading] = useState(false);
 
   async function save() {
@@ -156,8 +150,7 @@ export function WithdrawalEditActions({
         body: JSON.stringify({
           amount: Number(amount),
           phone,
-          status,
-          mpesaTxnId,
+          ...(status ? { status } : {}),
           reason: "Withdrawal admin update",
         }),
       });
@@ -190,7 +183,7 @@ export function WithdrawalEditActions({
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-[1fr_1fr_1fr_1fr_auto_auto] md:items-end">
+    <div className="grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto_auto] md:items-end">
       <div className="space-y-2">
         <Label htmlFor="withdrawal-amount">Amount</Label>
         <Input id="withdrawal-amount" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} />
@@ -202,17 +195,13 @@ export function WithdrawalEditActions({
       <div className="space-y-2">
         <Label>Status</Label>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder={initialStatus} /></SelectTrigger>
           <SelectContent>
-            {["requested", "processing", "sent", "failed", "held"].map((value) => (
+            {["requested", "held"].map((value) => (
               <SelectItem key={value} value={value}>{value}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="withdrawal-mpesa">M-Pesa TXN</Label>
-        <Input id="withdrawal-mpesa" value={mpesaTxnId} onChange={(event) => setMpesaTxnId(event.target.value)} />
       </div>
       <Button onClick={save} disabled={loading}>
         {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}

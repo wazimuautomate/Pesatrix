@@ -16,24 +16,27 @@ export async function processWithdrawalPayout(withdrawalId: string) {
     return { ok: false as const, status: 404, code: "NOT_FOUND", message: "Withdrawal not found" };
   }
 
-  if (withdrawal.status !== "requested") {
+  if (!["requested", "held"].includes(withdrawal.status)) {
     return {
       ok: false as const,
       status: 409,
       code: "INVALID_STATE",
-      message: "Only requested withdrawals can be processed",
+      message: "Only requested or held withdrawals can be approved for payout",
       withdrawal,
     };
   }
 
-  const [{ data: accountStatus }, { data: wallet }] = await Promise.all([
+  const [{ data: accountStatus }, { data: reservedDebit }] = await Promise.all([
     (admin.from("account_status" as never) as any)
       .select("status, state")
       .eq("user_id", withdrawal.user_id)
       .maybeSingle(),
-    (admin.from("wallets" as never) as any)
-      .select("available_balance")
-      .eq("user_id", withdrawal.user_id)
+    (admin.from("wallet_transactions" as never) as any)
+      .select("id, amount, status, bucket")
+      .eq("reference_table", "withdrawal_requests")
+      .eq("reference_id", withdrawalId)
+      .eq("direction", "debit")
+      .eq("type", "withdrawal")
       .maybeSingle(),
   ]);
 
@@ -58,12 +61,16 @@ export async function processWithdrawalPayout(withdrawalId: string) {
     };
   }
 
-  if (Number(wallet?.available_balance ?? 0) < Number(withdrawal.amount ?? 0)) {
+  if (
+    !reservedDebit ||
+    reservedDebit.status !== "locked" ||
+    Number(reservedDebit.amount ?? 0) < Number(withdrawal.amount ?? 0)
+  ) {
     return {
       ok: false as const,
       status: 409,
-      code: "INSUFFICIENT_BALANCE",
-      message: "Wallet balance no longer covers this withdrawal",
+      code: "WITHDRAWAL_NOT_RESERVED",
+      message: "Withdrawal funds are not reserved correctly",
       withdrawal,
     };
   }
@@ -99,16 +106,18 @@ export async function processWithdrawalPayout(withdrawalId: string) {
 
   const initiatedAt = new Date().toISOString();
 
-  const { error: lockError } = await (admin.from("withdrawal_requests" as never) as any)
+  const { data: lockedWithdrawal, error: lockError } = await (admin.from("withdrawal_requests" as never) as any)
     .update({
       status: "processing",
       b2c_initiated_at: initiatedAt,
       failure_reason: null,
     })
     .eq("id", withdrawalId)
-    .eq("status", "requested");
+    .in("status", ["requested", "held"])
+    .select("id")
+    .maybeSingle();
 
-  if (lockError) {
+  if (lockError || !lockedWithdrawal) {
     return {
       ok: false as const,
       status: 409,
@@ -122,8 +131,8 @@ export async function processWithdrawalPayout(withdrawalId: string) {
     const darajaResult = await initiateB2C({
       amount: payoutAmount,
       phone: normalizedPhone,
-      remarks: "May Salary Payment",
-      occasion: "Bonus",
+      remarks: `Withdrawal payout ${withdrawalId}`,
+      occasion: withdrawalId,
     });
 
     const { data: updated, error: updateError } = await (admin.from("withdrawal_requests" as never) as any)
@@ -153,8 +162,15 @@ export async function processWithdrawalPayout(withdrawalId: string) {
       .update({
         status: "failed",
         failure_reason: "Daraja payout initiation failed",
+        processed_at: new Date().toISOString(),
       })
       .eq("id", withdrawalId);
+
+    await (admin.from("wallet_transactions" as never) as any)
+      .update({ status: "reversed", bucket: "locked" })
+      .eq("reference_table", "withdrawal_requests")
+      .eq("reference_id", withdrawalId)
+      .eq("direction", "debit");
 
     return {
       ok: false as const,

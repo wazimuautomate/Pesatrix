@@ -13,14 +13,12 @@ type RouteContext = {
 const updateSchema = z.object({
   amount: z.number().int().positive().optional(),
   phone: z.string().trim().optional(),
-  status: z.enum(["requested", "processing", "sent", "failed", "held"]).optional(),
-  mpesaTxnId: z.string().trim().optional(),
+  status: z.enum(["requested", "held"]).optional(),
   reason: z.string().trim().optional(),
 });
 
 const withdrawalActionSchema = z.object({
-  action: z.enum(["mark-sent", "fail"]),
-  mpesaTxnId: z.string().trim().optional(),
+  action: z.enum(["fail"]),
   reason: z.string().trim().optional(),
 });
 
@@ -70,18 +68,6 @@ export async function POST(request: Request, context: RouteContext) {
   }
   const body = parsed.data;
 
-  if (body?.action === "mark-sent") {
-    const { POST: markSent } = await import("./send/route");
-    return markSent(
-      new Request(request.url, {
-        method: "POST",
-        headers: request.headers,
-        body: JSON.stringify({ mpesaTxnId: body.mpesaTxnId, reason: body.reason }),
-      }),
-      context
-    );
-  }
-
   if (body?.action === "fail") {
     const { POST: fail } = await import("./fail/route");
     return fail(
@@ -124,7 +110,6 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const patch: Record<string, unknown> = {};
   if (parsed.data.amount !== undefined) patch.amount = parsed.data.amount;
   if (parsed.data.phone !== undefined) patch.phone = normalizeWithdrawalStoragePhone(parsed.data.phone);
-  if (parsed.data.mpesaTxnId !== undefined) patch.mpesa_txn_id = parsed.data.mpesaTxnId || null;
 
   if (parsed.data.status === "requested" && before.status === "failed") {
     patch.status = "requested";

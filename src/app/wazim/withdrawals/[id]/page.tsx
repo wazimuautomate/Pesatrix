@@ -20,7 +20,7 @@ export default async function AdminWithdrawalDetailPage({ params }: PageProps) {
       admin={adminSession}
       title="Withdrawal Detail"
       description="Confirm payout state, user, target phone, M-Pesa transaction reference, and failure reason."
-      actions={["requested", "processing"].includes(withdrawal.status) ? <WithdrawalActions withdrawalId={withdrawal.id} /> : null}
+      actions={["requested", "held"].includes(withdrawal.status) ? <WithdrawalActions withdrawalId={withdrawal.id} /> : null}
     >
       <Card className="mb-6 border border-outline-variant/40 shadow-sm">
         <CardHeader><CardTitle className="text-lg text-navy">Withdrawal Operations</CardTitle></CardHeader>
@@ -30,7 +30,6 @@ export default async function AdminWithdrawalDetailPage({ params }: PageProps) {
             initialAmount={withdrawal.amount}
             initialPhone={withdrawal.phone}
             initialStatus={withdrawal.status}
-            initialMpesaTxnId={withdrawal.mpesa_txn_id}
           />
         </CardContent>
       </Card>

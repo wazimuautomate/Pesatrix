@@ -21,14 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   Loader2,
-  Send,
   CheckCircle2,
   XCircle,
   RefreshCw,
@@ -80,12 +78,9 @@ export default function WithdrawalsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [b2cModal, setB2cModal] = useState<Withdrawal | null>(null);
-  const [sendModal, setSendModal] = useState<Withdrawal | null>(null);
   const [failModal, setFailModal] = useState<Withdrawal | null>(null);
   const [retryModal, setRetryModal] = useState<Withdrawal | null>(null);
 
-  const [mpesaTxnId, setMpesaTxnId] = useState("");
-  const [sendReason, setSendReason] = useState("");
   const [failReason, setFailReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -132,33 +127,8 @@ export default function WithdrawalsPage() {
         toast.error(data.error ?? "B2C initiation failed");
         return;
       }
-      toast.success(`B2C initiated — Conversation: ${data.conversationId}`);
+      toast.success(`Withdrawal approved. Payout request sent: ${data.conversationId}`);
       setB2cModal(null);
-      fetchWithdrawals();
-    } catch {
-      toast.error("Network error");
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function markSent(withdrawal: Withdrawal) {
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/admin/withdrawals/${withdrawal.id}/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mpesaTxnId: mpesaTxnId.trim(), reason: sendReason }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error ?? "Failed to approve withdrawal");
-        return;
-      }
-      toast.success("Withdrawal approved");
-      setSendModal(null);
-      setMpesaTxnId("");
-      setSendReason("");
       fetchWithdrawals();
     } catch {
       toast.error("Network error");
@@ -215,12 +185,6 @@ export default function WithdrawalsPage() {
     } finally {
       setActionLoading(false);
     }
-  }
-
-  function openSendModal(w: Withdrawal) {
-    setSendModal(w);
-    setMpesaTxnId("");
-    setSendReason("");
   }
 
   function openFailModal(w: Withdrawal) {
@@ -386,15 +350,6 @@ export default function WithdrawalsPage() {
                                 className="gap-1 bg-pesatrix-blue text-xs"
                                 onClick={() => openB2cModal(w)}
                               >
-                                <Send className="h-3 w-3" />
-                                Send via B2C
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1 text-xs"
-                                onClick={() => openSendModal(w)}
-                              >
                                 <CheckCircle2 className="h-3 w-3" />
                                 Approve
                               </Button>
@@ -411,15 +366,7 @@ export default function WithdrawalsPage() {
                           )}
                           {w.status === "processing" && (
                             <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1 text-xs"
-                                onClick={() => openSendModal(w)}
-                              >
-                                <CheckCircle2 className="h-3 w-3" />
-                                Approve
-                              </Button>
+                              <span className="text-xs text-muted-foreground">B2C processing</span>
                               <Button
                                 size="sm"
                                 variant="destructive"
@@ -438,15 +385,6 @@ export default function WithdrawalsPage() {
                                 variant="default"
                                 className="gap-1 bg-pesatrix-blue text-xs"
                                 onClick={() => openB2cModal(w)}
-                              >
-                                <Send className="h-3 w-3" />
-                                Send via B2C
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1 text-xs"
-                                onClick={() => openSendModal(w)}
                               >
                                 <CheckCircle2 className="h-3 w-3" />
                                 Approve
@@ -495,16 +433,16 @@ export default function WithdrawalsPage() {
         </CardContent>
       </Card>
 
-      {/* B2C Confirmation Modal */}
+      {/* Approve and B2C Confirmation Modal */}
       <Dialog open={!!b2cModal} onOpenChange={(open) => !open && setB2cModal(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Send className="h-4 w-4 text-pesatrix-blue" />
-              Confirm B2C Payout
+              <CheckCircle2 className="h-4 w-4 text-pesatrix-blue" />
+              Approve Withdrawal
             </DialogTitle>
             <DialogDescription>
-              This will trigger an M-Pesa B2C payout via the Daraja API.
+              This will approve the request and trigger an M-Pesa B2C payout via the Daraja API.
             </DialogDescription>
           </DialogHeader>
           {b2cModal && (
@@ -537,55 +475,6 @@ export default function WithdrawalsPage() {
               onClick={() => b2cModal && triggerB2C(b2cModal)}
               disabled={actionLoading}
               className="bg-pesatrix-blue"
-            >
-              {actionLoading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-              Confirm & Send
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Manual Mark Sent Modal */}
-      <Dialog open={!!sendModal} onOpenChange={(open) => !open && setSendModal(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-teal" />
-              Approve Withdrawal
-            </DialogTitle>
-            <DialogDescription>
-              Mark this withdrawal as sent manually. Use this only when the payout was completed outside the automated Daraja callback flow.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="mpesa-txn-id">M-Pesa Transaction ID (optional)</Label>
-              <Input
-                id="mpesa-txn-id"
-                value={mpesaTxnId}
-                onChange={(e) => setMpesaTxnId(e.target.value)}
-                placeholder="Leave blank to generate a manual payout reference"
-                className="font-mono"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="send-reason">Reason (optional)</Label>
-              <Textarea
-                id="send-reason"
-                value={sendReason}
-                onChange={(e) => setSendReason(e.target.value)}
-                placeholder="e.g. Manual B2C via M-Pesa portal"
-                rows={2}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSendModal(null)} disabled={actionLoading}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => sendModal && markSent(sendModal)}
-              disabled={actionLoading}
             >
               {actionLoading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
               Confirm Approval

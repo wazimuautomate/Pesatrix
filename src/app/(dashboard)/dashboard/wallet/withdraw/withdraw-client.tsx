@@ -49,6 +49,7 @@ export default function WithdrawClientPage() {
     amountRequested: number;
     fee: number;
     amountToReceive: number;
+    processingDays: number;
   } | null>(null);
   const [limits, setLimits] = useState<Limits | null>(null);
   const [limitsLoading, setLimitsLoading] = useState(true);
@@ -56,10 +57,10 @@ export default function WithdrawClientPage() {
   // New state variables for withdrawals toggle and polling
   const [withdrawalsEnabled, setWithdrawalsEnabled] = useState<boolean | null>(null);
   const [withdrawalErrorReason, setWithdrawalErrorReason] = useState<"disabled" | "configuration_error" | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStatus, setProcessingStatus] = useState<string | null>(null);
-  const [polledAmount, setPolledAmount] = useState<number | null>(null);
-  const [polledPhone, setPolledPhone] = useState<string | null>(null);
+  const [latestFailure, setLatestFailure] = useState<{
+    amount: number | null;
+    reason: string;
+  } | null>(null);
 
   const configuredMinWithdrawal = limits?.minWithdrawal ?? null;
   const maxWithdrawal = limits?.maxWithdrawal ?? 100000;
@@ -164,44 +165,27 @@ export default function WithdrawClientPage() {
     fetchLimitsAndSettings();
   }, [setValue]);
 
-  // 4. DUPLICATE WITHDRAWAL LOCK — UI LAYER (CHECK PENDING & POLL ON MOUNT)
+  // 4. DUPLICATE WITHDRAWAL LOCK - show the active request without waiting for payout processing.
   useEffect(() => {
-    let activeInterval: NodeJS.Timeout | null = null;
-
     async function checkPendingStatus() {
       try {
         const res = await fetch("/api/wallet/withdrawals/status");
         const data = await res.json();
-        
+
         if (res.ok && data.hasPending) {
-          setIsProcessing(true);
-          setProcessingStatus("processing");
-          setPolledAmount(data.amount);
-          setPolledPhone(data.phone);
-          
-          activeInterval = setInterval(async () => {
-            try {
-              const statusRes = await fetch("/api/wallet/withdrawals/status");
-              const statusData = await statusRes.json();
-              if (statusRes.ok) {
-                if (statusData.status === "sent") {
-                  clearInterval(activeInterval!);
-                  setIsProcessing(false);
-                  setProcessingStatus(null);
-                  toast.success(`KSh ${statusData.amount} sent to ${statusData.phone}. Check your M-Pesa.`);
-                  router.refresh();
-                } else if (statusData.status === "failed") {
-                  clearInterval(activeInterval!);
-                  setIsProcessing(false);
-                  setProcessingStatus(null);
-                  toast.error("Withdrawal failed. Your balance has been restored.");
-                  router.refresh();
-                }
-              }
-            } catch (err) {
-              console.error("Polling error", err);
-            }
-          }, 10000);
+          setWithdrawalId(data.id ?? null);
+          setSuccessSummary({
+            amountRequested: Number(data.amount ?? 0),
+            fee: Number(data.fee ?? limits?.withdrawalFee ?? 0),
+            amountToReceive: Number(data.amountToReceive ?? 0),
+            processingDays: limits?.withdrawalProcessingDays ?? 3,
+          });
+          setStep("success");
+        } else if (res.ok && data.status === "failed" && data.failureReason) {
+          setLatestFailure({
+            amount: typeof data.amount === "number" ? data.amount : null,
+            reason: data.failureReason,
+          });
         }
       } catch (err) {
         console.error("Failed to check pending withdrawals", err);
@@ -209,23 +193,15 @@ export default function WithdrawClientPage() {
     }
 
     checkPendingStatus();
-
-    return () => {
-      if (activeInterval) clearInterval(activeInterval);
-    };
-  }, [router]);
+  }, [limits?.withdrawalFee, limits?.withdrawalProcessingDays]);
 
   async function onSubmit(data: FormData) {
-    // 4. DUPLICATE WITHDRAWAL LOCK — DISABLE BUTTON IMMEDIATELY & SHOW STATE
-    setIsProcessing(true);
-    setProcessingStatus("processing");
-    setPolledAmount(data.amount);
-
+    // 4. DUPLICATE WITHDRAWAL LOCK - the API rejects active duplicate requests.
     let phoneToSubmit = data.phone.trim();
     if (phoneToSubmit.startsWith("0")) {
       phoneToSubmit = "254" + phoneToSubmit.slice(1);
     }
-    setPolledPhone(phoneToSubmit);
+    setLatestFailure(null);
 
     try {
       const res = await fetch("/api/wallet/withdraw", {
@@ -240,8 +216,6 @@ export default function WithdrawClientPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        setIsProcessing(false);
-        setProcessingStatus(null);
         toast.error(json.error?.message || json.message || "Withdrawal failed. Please try again.");
         return;
       }
@@ -251,39 +225,13 @@ export default function WithdrawClientPage() {
         amountRequested: Number(json.amountRequested ?? data.amount),
         fee: Number(json.fee ?? limits?.withdrawalFee ?? 0),
         amountToReceive: Number(json.amountToReceive ?? 0),
+        processingDays: Number(json.processingDays ?? limits?.withdrawalProcessingDays ?? 3),
       });
 
-      toast.success("Withdrawal initiated. Processing payment...");
-
-      // Start polling status every 10 seconds
-      const activeInterval = setInterval(async () => {
-        try {
-          const statusRes = await fetch("/api/wallet/withdrawals/status");
-          const statusData = await statusRes.json();
-          if (statusRes.ok) {
-            if (statusData.status === "sent") {
-              clearInterval(activeInterval);
-              setIsProcessing(false);
-              setProcessingStatus(null);
-              toast.success(`KSh ${statusData.amount} sent to ${statusData.phone}. Check your M-Pesa.`);
-              router.refresh();
-              setStep("success");
-            } else if (statusData.status === "failed") {
-              clearInterval(activeInterval);
-              setIsProcessing(false);
-              setProcessingStatus(null);
-              toast.error("Withdrawal failed. Your balance has been restored.");
-              router.refresh();
-            }
-          }
-        } catch (err) {
-          console.error("Polling error", err);
-        }
-      }, 10000);
-
+      toast.success("Withdrawal request sent.");
+      setStep("success");
+      router.refresh();
     } catch {
-      setIsProcessing(false);
-      setProcessingStatus(null);
       toast.error("Something went wrong. Please try again.");
     }
   }
@@ -323,39 +271,6 @@ export default function WithdrawClientPage() {
     );
   }
 
-  // Processing screen for Polling State
-  if (isProcessing) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-navy">
-            Withdraw to M-Pesa
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Withdraw your available earnings to your M-Pesa wallet
-          </p>
-        </div>
-
-        <Card className="border-primary/20 bg-accent animate-pulse">
-          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <div>
-              <p className="font-semibold text-navy">Withdrawal Processing</p>
-              <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
-                Withdrawal processing... You will receive M-Pesa confirmation shortly.
-              </p>
-              {polledAmount !== null && (
-                <p className="mt-2 text-xs font-semibold text-navy">
-                  Amount: KSh {polledAmount.toLocaleString("en-KE")} {polledPhone && `to ${formatPhone(polledPhone)}`}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -385,6 +300,23 @@ export default function WithdrawClientPage() {
           </div>
         </CardContent>
       </Card>
+
+      {latestFailure && step === "form" ? (
+        <Card className="border-destructive/25 bg-destructive/5">
+          <CardContent className="flex items-start gap-3 pb-4 pt-4">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <div className="text-sm">
+              <p className="font-medium text-destructive">Previous withdrawal declined</p>
+              <p className="mt-1 text-muted-foreground">
+                {latestFailure.amount !== null
+                  ? `KSh ${latestFailure.amount.toLocaleString("en-KE")} was declined. `
+                  : ""}
+                Reason: {latestFailure.reason}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {step === "form" && (
         <Card className="border-outline-variant/40">
@@ -481,9 +413,9 @@ export default function WithdrawClientPage() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={isSubmitting || isProcessing || !canSubmitWithdrawal}
+                  disabled={isSubmitting || !canSubmitWithdrawal}
                 >
-                  {isSubmitting || isProcessing ? (
+                  {isSubmitting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <ArrowUpRight className="mr-2 h-4 w-4" />
@@ -504,9 +436,11 @@ export default function WithdrawClientPage() {
             </div>
             <div>
               <p className="font-semibold text-navy">Withdrawal Requested</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Reference: {withdrawalId?.slice(0, 8).toUpperCase()}
-              </p>
+              {withdrawalId ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Reference: {withdrawalId.slice(0, 8).toUpperCase()}
+                </p>
+              ) : null}
               <p className="mt-2 text-sm text-muted-foreground">
                 Request recorded for KSh {successSummary?.amountRequested.toLocaleString("en-KE") ?? 0}.
               </p>
@@ -516,7 +450,7 @@ export default function WithdrawClientPage() {
                 </p>
               ) : null}
               <p className="mt-2 text-sm text-muted-foreground">
-                Processing typically takes {limits?.withdrawalProcessingDays ?? 3} days.
+                Request sent. It will be processed within {successSummary?.processingDays ?? limits?.withdrawalProcessingDays ?? 3} days.
               </p>
             </div>
             <Button

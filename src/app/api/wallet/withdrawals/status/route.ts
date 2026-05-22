@@ -18,7 +18,7 @@ export async function GET() {
     // Query the absolute latest withdrawal request for the current user
     const { data: requests, error } = await admin
       .from("withdrawal_requests")
-      .select("status, amount, phone")
+      .select("id, status, amount, phone, fee_ksh, amount_after_fee, failure_reason, created_at, processed_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1);
@@ -30,18 +30,30 @@ export async function GET() {
     if (requests && requests.length > 0) {
       const latest = requests[0];
       return NextResponse.json({
-        hasPending: ["requested", "processing"].includes(latest.status),
+        hasPending: ["requested", "processing", "held"].includes(latest.status),
+        id: latest.id,
         status: latest.status,
         amount: latest.amount,
         phone: latest.phone,
+        fee: latest.fee_ksh,
+        amountToReceive: latest.amount_after_fee,
+        failureReason: latest.failure_reason,
+        createdAt: latest.created_at,
+        processedAt: latest.processed_at,
       });
     }
 
     return NextResponse.json({
       hasPending: false,
+      id: null,
       status: null,
       amount: null,
       phone: null,
+      fee: null,
+      amountToReceive: null,
+      failureReason: null,
+      createdAt: null,
+      processedAt: null,
     });
   } catch (err) {
     console.error("[GET /api/wallet/withdrawals/status] Error:", err);
