@@ -231,7 +231,7 @@ function LoginPageContent() {
 
         {callbackError ? (
           <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-            The email link could not be completed. Try logging in with the email and password.
+            <strong>You have successfully confirmed your email. Please sign in with the email and password.</strong>
           </div>
         ) : null}
 
