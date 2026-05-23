@@ -48,6 +48,8 @@ type Task = {
   canStartTask: boolean;
   blockedReason: string | null;
   blockedMessage: string | null;
+  locked?: boolean;
+  lock_reason?: string | null;
 };
 
 const CATEGORIES: TaskCategory[] = [
@@ -194,6 +196,10 @@ function TimeBlock({ value, label }: { value: string; label: string }) {
 }
 
 function getBlockedDialogTitle(task: Task | null, gateReason: string | null, isActivated: boolean) {
+  if (task?.lock_reason === "community_size" || task?.blockedReason === "community_size") {
+    return "Grow your community";
+  }
+
   if (task?.blockedReason === "referral_gated") {
     return "Referral rule not met";
   }
@@ -230,6 +236,10 @@ function getBlockedDialogDescription(task: Task | null, gateMessage: string | nu
 }
 
 function getBlockedActionHref(task: Task | null, gateReason: string | null, isActivated: boolean) {
+  if (task?.lock_reason === "community_size" || task?.blockedReason === "community_size") {
+    return "/dashboard/referrals";
+  }
+
   if (task?.blockedReason === "referral_gated") {
     return "/dashboard/referrals";
   }
@@ -254,6 +264,10 @@ function getBlockedActionHref(task: Task | null, gateReason: string | null, isAc
 }
 
 function getBlockedActionLabel(task: Task | null, gateReason: string | null, isActivated: boolean) {
+  if (task?.lock_reason === "community_size" || task?.blockedReason === "community_size") {
+    return "Invite friends";
+  }
+
   if (task?.blockedReason === "referral_gated") {
     return "View Referrals";
   }
@@ -330,6 +344,11 @@ function TaskCard({
               </p>
             )}
             <div className="mt-2 flex flex-wrap gap-1.5">
+              {task.locked && (
+                <Badge variant="warning">
+                  Invite friends to unlock
+                </Badge>
+              )}
               {isSocialEngagement ? (
                 <>
                   <Badge
@@ -737,7 +756,7 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-2xl bg-accent p-4 text-sm text-muted-foreground">
-            You can still browse available tasks and payouts. Starting and submitting tasks unlock only after the required rule is met.
+            You can still browse available tasks and payouts. Grow your account signals to get priority access.
           </div>
           <DialogFooter className="gap-2 sm:flex-col">
             {getBlockedActionHref(blockedTask, gateReason, isActivated) && (

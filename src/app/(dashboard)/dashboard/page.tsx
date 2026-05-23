@@ -8,6 +8,8 @@ import { getWalletSummaryForUser } from "@/lib/wallet";
 import { redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { DashboardOverviewClient } from "@/components/dashboard/DashboardOverviewClient";
+import { ReferralNudgeCard } from "@/components/dashboard/ReferralNudgeCard";
+import { countActivatedReferrals } from "@/lib/wallet/withdrawalLimits";
 
 type WalletSummaryTxn = {
   amount: number;
@@ -66,10 +68,11 @@ export default async function DashboardPage() {
     .select("id", { count: "exact", head: true })
     .eq("referred_by", user!.id);
 
-  const [{ data: rewardSpinRows }] = await Promise.all([
+  const [{ data: rewardSpinRows }, activatedReferralCount] = await Promise.all([
     (supabase.from("reward_spins" as never) as any)
       .select("payout_amount")
       .eq("user_id", user!.id),
+    countActivatedReferrals(user!.id, createAdminSupabaseClient()),
   ]);
 
   const [accountStatusResult, { data: profileRow }, trainingSnapshot] = await Promise.all([
@@ -200,6 +203,9 @@ export default async function DashboardPage() {
   return (
     <>
       <BannerStrip />
+      <div className="mb-6">
+        <ReferralNudgeCard activatedReferralCount={activatedReferralCount} />
+      </div>
       <DashboardOverviewClient
         stateLabel={accountStatus.state.replace(/_/g, " ").toUpperCase()}
       stateVariant={stateVariant}

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
-export const ADMIN_ROLES = ["admin"] as const;
+export const ADMIN_ROLES = ["admin", "finance", "super_admin"] as const;
 
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 
@@ -44,6 +44,14 @@ export async function requireAdmin(options: RequireAdminOptions = {}) {
   const normalizedAdminUser = normalizeAdminUser(adminUser);
 
   if (!normalizedAdminUser) {
+    return {
+      error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+      adminUser: null,
+      userId: null,
+    };
+  }
+
+  if (options.allowedRoles?.length && !isRoleAllowed(normalizedAdminUser.role, options.allowedRoles)) {
     return {
       error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
       adminUser: null,
@@ -123,8 +131,18 @@ function normalizeAdminUser(value: unknown): AdminUserRecord | null {
   return {
     id: candidate.id,
     user_id: candidate.user_id,
-    role: "admin",
+    role: normalizeRole(candidate.role),
     status:
       candidate.status === "disabled" ? "disabled" : "active",
   };
+}
+
+function normalizeRole(value: unknown): AdminRole {
+  return value === "finance" || value === "super_admin" ? value : "admin";
+}
+
+function isRoleAllowed(role: AdminRole, allowedRoles: string[]) {
+  if (allowedRoles.includes(role)) return true;
+  if (allowedRoles.includes("admin") && (role === "finance" || role === "super_admin")) return true;
+  return false;
 }

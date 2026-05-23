@@ -5,6 +5,7 @@ import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { getActivationFeeKsh, getDailyTaskLimit } from "@/lib/platform-settings";
 import { sanitizeTaskDataForClient } from "@/lib/task-data";
 import { evaluateTaskAccess, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
+import { countActivatedReferrals, getHighTaskGateSettings } from "@/lib/wallet/withdrawalLimits";
 
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -19,9 +20,11 @@ export async function GET() {
 
   const access = await getTrainingProgramSnapshotForUser(user.id);
   const admin = createAdminSupabaseClient();
-  const [dailyLimit, activationFeeKsh] = await Promise.all([
+  const [dailyLimit, activationFeeKsh, highTaskGate, activatedReferralCount] = await Promise.all([
     getDailyTaskLimit(),
     getActivationFeeKsh(),
+    getHighTaskGateSettings(admin),
+    countActivatedReferrals(user.id, admin),
   ]);
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
@@ -55,9 +58,20 @@ export async function GET() {
 
   const formattedTasks = visibleTasks.map((task: Record<string, unknown>) => {
     const taskEligibility = evaluateTaskAccess(task as { id: string }, taskAccess);
-    const canStartTask = access.canStartTasks && taskEligibility.canAccess;
-    const blockedReason = access.canStartTasks ? taskEligibility.reason : access.gateReason;
-    const blockedMessage = access.canStartTasks ? taskEligibility.message : access.gateMessage;
+    const communityLocked =
+      Number(task.payout_ksh ?? 0) >= highTaskGate.payoutThreshold &&
+      activatedReferralCount < highTaskGate.referralRequirement;
+    const canStartTask = access.canStartTasks && taskEligibility.canAccess && !communityLocked;
+    const blockedReason = communityLocked
+      ? "community_size"
+      : access.canStartTasks
+        ? taskEligibility.reason
+        : access.gateReason;
+    const blockedMessage = communityLocked
+      ? "This task is filling up fast. Users with larger communities get priority access. Grow your community to unlock."
+      : access.canStartTasks
+        ? taskEligibility.message
+        : access.gateMessage;
 
     return {
       id: task.id as string,
@@ -76,6 +90,8 @@ export async function GET() {
       canStartTask,
       blockedReason,
       blockedMessage,
+      locked: communityLocked,
+      lock_reason: communityLocked ? "community_size" : null,
     };
   });
 

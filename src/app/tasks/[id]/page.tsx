@@ -6,6 +6,7 @@ import { TaskDetailsPreview, TaskSubmissionForm } from "@/components/tasks/task-
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { sanitizeTaskForClient } from "@/lib/task-data";
 import { evaluateTaskAccess, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
+import { countActivatedReferrals, getHighTaskGateSettings } from "@/lib/wallet/withdrawalLimits";
 
 export const metadata = {
   title: "Task Detail",
@@ -31,11 +32,13 @@ export default async function TaskDetailPage({ params, searchParams }: RouteCont
   }
 
   const admin = createAdminSupabaseClient();
-  const [{ data: profile }, { data: task }, access, taskAccess] = await Promise.all([
+  const [{ data: profile }, { data: task }, access, taskAccess, highTaskGate, activatedReferralCount] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
     admin.from("tasks").select("*").eq("id", id).maybeSingle(),
     getTrainingProgramSnapshotForUser(user.id),
     getTaskAccessContext(admin, user.id),
+    getHighTaskGateSettings(admin),
+    countActivatedReferrals(user.id, admin),
   ]);
 
   if (!access.canStartTasks && access.gateReason === "onboarding") {
@@ -47,10 +50,15 @@ export default async function TaskDetailPage({ params, searchParams }: RouteCont
   }
 
   const taskEligibility = evaluateTaskAccess(task, taskAccess);
-  const canStartTask = access.canStartTasks && taskEligibility.canAccess;
-  const blockedMessage = access.canStartTasks
-    ? taskEligibility.message
-    : access.gateMessage;
+  const communityLocked =
+    Number(task.payout_ksh ?? 0) >= highTaskGate.payoutThreshold &&
+    activatedReferralCount < highTaskGate.referralRequirement;
+  const canStartTask = access.canStartTasks && taskEligibility.canAccess && !communityLocked;
+  const blockedMessage = communityLocked
+    ? "This task is filling up fast. Users with larger communities get priority access. Grow your community to unlock."
+    : access.canStartTasks
+      ? taskEligibility.message
+      : access.gateMessage;
 
   const { data: existingSubmissions } = await admin
     .from("task_submissions")

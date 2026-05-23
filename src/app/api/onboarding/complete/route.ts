@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { hasPaidActivationPayment } from "@/lib/activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { creditDirectReferralBonus } from "@/lib/referral";
 import { internalErrorResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -148,6 +149,10 @@ export async function POST(request: Request) {
         },
         { status: 500 }
       );
+    }
+
+    if (activated) {
+      void creditDirectReferralBonus(user.id);
     }
 
     return NextResponse.json({ ok: true, setupComplete: true });

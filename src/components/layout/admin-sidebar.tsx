@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Users, CreditCard, ArrowDownToLine, BookOpen,
   Users2, ClipboardList, HeadphonesIcon, Shield, Settings, LogOut,
-  ChevronLeft, ChevronRight, FileText, Megaphone,
+  ChevronLeft, ChevronRight, FileText, Megaphone, LineChart, FileClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
@@ -21,7 +21,9 @@ const adminLinks = [
   { href: "/wazim/submissions", label: "Submissions", icon: FileText },
   { href: "/wazim/withdrawals", label: "Withdrawals", icon: ArrowDownToLine },
   { href: "/wazim/payments", label: "Payments", icon: CreditCard },
+  { href: "/wazim/finance", label: "Finance", icon: LineChart },
   { href: "/wazim/referrals", label: "Referrals", icon: Users2 },
+  { href: "/wazim/activity", label: "Activity", icon: FileClock },
   { href: "/wazim/support", label: "Support", icon: HeadphonesIcon },
   { href: "/wazim/banners", label: "Banners", icon: Megaphone },
   { href: "/wazim/fraud", label: "Fraud & Risk", icon: Shield },

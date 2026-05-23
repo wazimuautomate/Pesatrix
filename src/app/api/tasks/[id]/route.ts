@@ -4,6 +4,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { sanitizeTaskForClient } from "@/lib/task-data";
 import { evaluateTaskAccess, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
+import { countActivatedReferrals, getHighTaskGateSettings } from "@/lib/wallet/withdrawalLimits";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -24,7 +25,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   const access = await getTrainingProgramSnapshotForUser(user.id);
 
   const admin = createAdminSupabaseClient();
-  const [taskResult, taskAccess] = await Promise.all([
+  const [taskResult, taskAccess, highTaskGate, activatedReferralCount] = await Promise.all([
     admin
       .from("tasks")
       .select("*")
@@ -34,6 +35,8 @@ export async function GET(request: Request, { params }: RouteContext) {
       .or("expires_at.is.null,expires_at.gt.now()")
       .maybeSingle(),
     getTaskAccessContext(admin, user.id),
+    getHighTaskGateSettings(admin),
+    countActivatedReferrals(user.id, admin),
   ]);
 
   const task = taskResult.data;
@@ -42,9 +45,20 @@ export async function GET(request: Request, { params }: RouteContext) {
   }
 
   const taskEligibility = evaluateTaskAccess(task, taskAccess);
-  const canStartTask = access.canStartTasks && taskEligibility.canAccess;
-  const blockedReason = access.canStartTasks ? taskEligibility.reason : access.gateReason;
-  const blockedMessage = access.canStartTasks ? taskEligibility.message : access.gateMessage;
+  const communityLocked =
+    Number(task.payout_ksh ?? 0) >= highTaskGate.payoutThreshold &&
+    activatedReferralCount < highTaskGate.referralRequirement;
+  const canStartTask = access.canStartTasks && taskEligibility.canAccess && !communityLocked;
+  const blockedReason = communityLocked
+    ? "community_size"
+    : access.canStartTasks
+      ? taskEligibility.reason
+      : access.gateReason;
+  const blockedMessage = communityLocked
+    ? "This task is filling up fast. Users with larger communities get priority access. Grow your community to unlock."
+    : access.canStartTasks
+      ? taskEligibility.message
+      : access.gateMessage;
 
   const { data: existingSubmission } = await admin
     .from("task_submissions")

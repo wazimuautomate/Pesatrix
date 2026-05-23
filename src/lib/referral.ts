@@ -110,6 +110,19 @@ export async function creditDirectReferralBonus(activatedUserId: string): Promis
     return;
   }
 
+  const { data: accountStatus, error: accountStatusError } = await (supabase.from("account_status" as never) as any)
+    .select("is_setup_complete")
+    .eq("user_id", activatedUserId)
+    .maybeSingle();
+
+  if (accountStatusError) {
+    throw accountStatusError;
+  }
+
+  if (accountStatus?.is_setup_complete !== true) {
+    return;
+  }
+
   const { data: activatedProfile, error: activatedProfileError } = await supabase
     .from("profiles")
     .select("id, full_name, email, referred_by")

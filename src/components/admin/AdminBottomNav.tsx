@@ -15,6 +15,8 @@ import {
   CreditCard,
   Users2,
   HeadphonesIcon,
+  LineChart,
+  FileClock,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -27,7 +29,9 @@ const adminLinks = [
   { href: "/wazim/submissions", label: "Submissions", icon: FileCheck },
   { href: "/wazim/withdrawals", label: "With", icon: Wallet },
   { href: "/wazim/payments", label: "Pay", icon: CreditCard },
+  { href: "/wazim/finance", label: "Finance", icon: LineChart },
   { href: "/wazim/referrals", label: "Referrals", icon: Users2 },
+  { href: "/wazim/activity", label: "Activity", icon: FileClock },
   { href: "/wazim/support", label: "Sup", icon: HeadphonesIcon },
   { href: "/wazim/banners", label: "Banners", icon: Megaphone },
   { href: "/wazim/fraud", label: "Fraud", icon: Shield },

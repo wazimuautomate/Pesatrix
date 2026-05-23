@@ -82,36 +82,6 @@ export async function POST(
     // 4. Derive the user's activation state from paid activation payments only.
     await syncAccountActivationFromPaidPayments(supabase, payment.user_id);
 
-    // Ensure wallet transaction exists for this activation payment in the ledger
-    try {
-      const { data: existingTxn, error: checkTxnError } = await (supabase.from("wallet_transactions" as never) as any)
-        .select("id")
-        .eq("reference_table", "activation_payments")
-        .eq("reference_id", id)
-        .maybeSingle();
-
-      if (!checkTxnError && !existingTxn) {
-        const { error: walletInsertError } = await (supabase.from("wallet_transactions" as never) as any).insert({
-          user_id: payment.user_id,
-          type: "activation_fee",
-          direction: "credit",
-          amount: Number(payment.amount),
-          status: "available",
-          bucket: "available",
-          description: note || "Manual verification by admin",
-          reference_table: "activation_payments",
-          reference_id: id,
-          available_at: now,
-        });
-
-        if (walletInsertError) {
-          console.error("[Verify Payment] Failed to insert activation_fee wallet transaction:", walletInsertError);
-        }
-      }
-    } catch (txnErr) {
-      console.error("[Verify Payment] Error during ledger transaction processing:", txnErr);
-    }
-
     // 5. Write to audit_log
     await auditLog({
       adminId: adminUser.id,

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.1] - 2026-05-23
+
+### Fixed
+- Removed activation payment credits from user wallet ledgers in Daraja callbacks and admin payment updates.
+- Added per-user withdrawal daily amount, daily count, and single-request limits backed by `platform_settings` and enforced in the withdrawal RPC.
+- Added withdrawal eligibility checks for activation, phone verification, email verification, and community-priority review.
+
+### Added
+- Added admin user intelligence pages with wallet ledger, task history, referrals, withdrawals, action menu, and audited balance adjustments.
+- Added finance dashboard and summary API for activation revenue, withdrawals, referral bonus outflow, net position, daily inflow/outflow chart, and top withdrawers.
+- Added user activity logging table, server logger, client-safe log endpoint, admin activity viewer, and activity hooks for login, task submission, and withdrawals.
+- Added referral nudges and high-payout task community-priority locks with configurable settings.
+- Added fraud signal API and populated fraud dashboard sections for high-risk users, zero-task withdrawers, velocity alerts, and recent admin actions.
+- Added wallet balance and activated referral count columns to the admin user directory.
+
 ## [0.9.0] - 2026-05-20
 
 ### Added

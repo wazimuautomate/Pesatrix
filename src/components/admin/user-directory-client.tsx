@@ -26,6 +26,7 @@ import {
   ClipboardList,
   Edit3,
   MessageCircle,
+  MoreVertical,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,13 @@ import Skeleton from "react-loading-skeleton";
 import { TableSkeleton } from "@/components/ui/skeleton-loaders";
 import { Separator } from "@/components/ui/separator";
 import { EmptyState } from "@/components/admin/admin-native";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type UserRow = {
   id: string;
@@ -65,6 +73,9 @@ type UserRow = {
   is_activated: boolean;
   activated_at: string | null;
   is_setup_complete: boolean;
+  available_balance?: number;
+  pending_balance?: number;
+  activated_referrals_count?: number;
 };
 
 type WalletSummary = {
@@ -326,13 +337,16 @@ export function UserDirectoryClient({
                     <TableHead>County</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Activated</TableHead>
+                    <TableHead className="text-right">Available</TableHead>
+                    <TableHead className="text-right">Pending</TableHead>
+                    <TableHead className="text-right">Referrals</TableHead>
                     <TableHead>Joined</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableSkeleton rows={8} columns={8} />
+                    <TableSkeleton rows={8} columns={11} />
                   ) : (
                     users.map((user) => (
                       <TableRow key={user.id}>
@@ -363,56 +377,97 @@ export function UserDirectoryClient({
                           </span>
                         )}
                       </TableCell>
+                      <TableCell className="text-right text-sm font-medium">
+                        KSh {Number(user.available_balance ?? 0).toLocaleString("en-KE")}
+                      </TableCell>
+                      <TableCell className="text-right text-sm">
+                        KSh {Number(user.pending_balance ?? 0).toLocaleString("en-KE")}
+                      </TableCell>
+                      <TableCell className="text-right text-sm">
+                        {Number(user.activated_referrals_count ?? 0).toLocaleString("en-KE")}
+                      </TableCell>
                       <TableCell className="text-sm">{formatDate(user.created_at)}</TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap justify-end gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => openDetail(user.id)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="ghost" asChild title="Edit user">
-                            <Link href={`/wazim/users/${user.id}`}>
-                              <Edit3 className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                          {user.phone && (
-                            <>
-                              <Button size="sm" variant="ghost" asChild title="Call user">
-                                <a href={`tel:${normalizePhoneForTel(user.phone)}`}>
-                                  <Phone className="h-4 w-4" />
-                                </a>
+                        <div className="flex justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" aria-label={`Actions for ${user.full_name ?? "user"}`}>
+                                <MoreVertical className="h-4 w-4" />
                               </Button>
-                              <Button size="sm" variant="ghost" asChild title="Chat on WhatsApp">
-                                <a href={`https://wa.me/${normalizePhoneForWhatsApp(user.phone)}`} target="_blank" rel="noopener noreferrer">
-                                  <MessageCircle className="h-4 w-4 text-teal" />
-                                </a>
-                              </Button>
-                            </>
-                          )}
-                          <Button size="sm" variant="ghost" asChild title="Assign task">
-                            <Link href={actionHref(user.id)}>
-                              <ClipboardList className="h-4 w-4 text-pesatrix-blue" />
-                            </Link>
-                          </Button>
-                          {user.status !== "suspended" && user.status !== "banned" && !isSelf(user.id) && (
-                            <Button size="sm" variant="ghost" onClick={() => openAction("suspend", user.id, user.full_name ?? "User")}>
-                              <ShieldAlert className="h-4 w-4 text-amber-600" />
-                            </Button>
-                          )}
-                          {user.status !== "suspended" && user.status !== "banned" && !isSelf(user.id) && (
-                            <Button size="sm" variant="ghost" onClick={() => openAction("ban", user.id, user.full_name ?? "User")}>
-                              <ShieldX className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
-                          {(user.status === "suspended" || user.status === "banned") && !isSelf(user.id) && (
-                            <Button size="sm" variant="ghost" onClick={() => openAction("unblock", user.id, user.full_name ?? "User")}>
-                              <ShieldCheck className="h-4 w-4 text-teal" />
-                            </Button>
-                          )}
-                          {!isSelf(user.id) && (
-                            <Button size="sm" variant="ghost" onClick={() => openAction("delete", user.id, user.full_name ?? "User")}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem onClick={() => openDetail(user.id)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View quick summary
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/wazim/users/${user.id}`}>
+                                  <Edit3 className="mr-2 h-4 w-4" />
+                                  View profile
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/wazim/users/${user.id}?adjust=1`}>
+                                  <Wallet className="mr-2 h-4 w-4" />
+                                  Adjust balance
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/wazim/activity?user_id=${encodeURIComponent(user.id)}`}>
+                                  <ClipboardList className="mr-2 h-4 w-4" />
+                                  View activity
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {user.phone && (
+                                <>
+                                  <DropdownMenuItem asChild>
+                                    <a href={`tel:${normalizePhoneForTel(user.phone)}`}>
+                                      <Phone className="mr-2 h-4 w-4" />
+                                      Call user
+                                    </a>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem asChild>
+                                    <a href={`https://wa.me/${normalizePhoneForWhatsApp(user.phone)}`} target="_blank" rel="noopener noreferrer">
+                                      <MessageCircle className="mr-2 h-4 w-4" />
+                                      WhatsApp
+                                    </a>
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              <DropdownMenuItem asChild>
+                                <Link href={actionHref(user.id)}>
+                                  <ClipboardList className="mr-2 h-4 w-4" />
+                                  Assign task
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {user.status !== "suspended" && user.status !== "banned" && !isSelf(user.id) && (
+                                <DropdownMenuItem onClick={() => openAction("suspend", user.id, user.full_name ?? "User")}>
+                                  <ShieldAlert className="mr-2 h-4 w-4 text-amber-600" />
+                                  Suspend
+                                </DropdownMenuItem>
+                              )}
+                              {user.status !== "suspended" && user.status !== "banned" && !isSelf(user.id) && (
+                                <DropdownMenuItem onClick={() => openAction("ban", user.id, user.full_name ?? "User")}>
+                                  <ShieldX className="mr-2 h-4 w-4 text-destructive" />
+                                  Ban
+                                </DropdownMenuItem>
+                              )}
+                              {(user.status === "suspended" || user.status === "banned") && !isSelf(user.id) && (
+                                <DropdownMenuItem onClick={() => openAction("unblock", user.id, user.full_name ?? "User")}>
+                                  <ShieldCheck className="mr-2 h-4 w-4 text-teal" />
+                                  Restore access
+                                </DropdownMenuItem>
+                              )}
+                              {!isSelf(user.id) && (
+                                <DropdownMenuItem onClick={() => openAction("delete", user.id, user.full_name ?? "User")}>
+                                  <Trash2 className="mr-2 h-4 w-4 text-destructive" />
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>

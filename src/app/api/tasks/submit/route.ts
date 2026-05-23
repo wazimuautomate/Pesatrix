@@ -11,6 +11,8 @@ import { isDataLabelingTaskData, isSocialEngagementTaskData } from "@/lib/task-d
 import { normalizeSocialTaskData } from "@/lib/social-engagement";
 import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 import { TASK_SCREENSHOT_BUCKET, parseTaskScreenshotUrl } from "@/lib/task-screenshots";
+import { logActivity } from "@/lib/activity/logActivity";
+import { countActivatedReferrals, getHighTaskGateSettings } from "@/lib/wallet/withdrawalLimits";
 
 const submissionSchema = z.object({
   taskId: z.string().uuid(),
@@ -61,13 +63,15 @@ export async function POST(request: Request) {
 
   const admin = createAdminSupabaseClient();
 
-  const [taskResult, taskAccess] = await Promise.all([
+  const [taskResult, taskAccess, highTaskGate, activatedReferralCount] = await Promise.all([
     admin
       .from("tasks")
       .select("id, title, instructions, ai_rubric, min_word_count, slots_remaining, status, publish_at, expires_at, ai_grading_enabled, task_data, category, min_completion_seconds, visibility_mode, min_referrals_required")
       .eq("id", taskId)
       .single(),
     getTaskAccessContext(admin, user.id),
+    getHighTaskGateSettings(admin),
+    countActivatedReferrals(user.id, admin),
   ]);
   const task = taskResult.data;
 
@@ -93,9 +97,18 @@ export async function POST(request: Request) {
     }
   }
 
-  if (!task || !isTaskLive(task) || !canUserAccessTask(task, taskAccess) || task.status !== "active") {
+  const communityLocked =
+    task &&
+    Number(task.payout_ksh ?? 0) >= highTaskGate.payoutThreshold &&
+    activatedReferralCount < highTaskGate.referralRequirement;
+
+  if (!task || !isTaskLive(task) || !canUserAccessTask(task, taskAccess) || communityLocked || task.status !== "active") {
     return NextResponse.json(
-      { error: "This task is no longer available" },
+      {
+        error: communityLocked
+          ? "This task is filling up fast. Users with larger communities get priority access. Grow your community to unlock."
+          : "This task is no longer available",
+      },
       { status: 409 }
     );
   }
@@ -399,6 +412,14 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+
+  void logActivity({
+    userId: user.id,
+    eventType: "task_submitted",
+    pagePath: `/tasks/${taskId}`,
+    metadata: { taskId, taskTitle: task.title, status: submission.status },
+    request,
+  });
 
   const { data: decremented, error: slotError } = await admin
     .rpc("decrement_task_slot", { p_task_id: taskId });

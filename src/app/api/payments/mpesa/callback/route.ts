@@ -226,36 +226,6 @@ export async function POST(request: Request) {
 
     await syncAccountActivationFromPaidPayments(admin, payment.user_id);
 
-    // Ensure wallet transaction exists for this activation payment in the ledger
-    try {
-      const { data: existingTxn, error: checkTxnError } = await (admin.from("wallet_transactions" as never) as any)
-        .select("id")
-        .eq("reference_table", "activation_payments")
-        .eq("reference_id", payment.id)
-        .maybeSingle();
-
-      if (!checkTxnError && !existingTxn) {
-        const { error: walletInsertError } = await (admin.from("wallet_transactions" as never) as any).insert({
-          user_id: payment.user_id,
-          type: "activation_fee",
-          direction: "credit",
-          amount: Number(payment.amount),
-          status: "available",
-          bucket: "available",
-          description: "Account activation payment via M-Pesa",
-          reference_table: "activation_payments",
-          reference_id: payment.id,
-          available_at: paidAt,
-        });
-
-        if (walletInsertError) {
-          console.error("[Daraja Callback] Failed to insert activation_fee wallet transaction:", walletInsertError);
-        }
-      }
-    } catch (txnErr) {
-      console.error("[Daraja Callback] Error during ledger transaction processing:", txnErr);
-    }
-
     try {
       await creditDirectReferralBonus(payment.user_id);
     } catch (referralError) {

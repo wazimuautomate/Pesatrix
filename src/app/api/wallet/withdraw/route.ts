@@ -3,6 +3,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getMinWithdrawalKsh, getWithdrawalProcessingDays } from "@/lib/platform-settings";
 import { WITHDRAWALS_ENABLED_KEY } from "@/lib/platform-setting-keys";
+import { checkWithdrawalLimits, countActivatedReferrals } from "@/lib/wallet/withdrawalLimits";
+import { logActivity } from "@/lib/activity/logActivity";
 import {
   buildWithdrawalWebhookPayload,
   getWithdrawalContactForUser,
@@ -50,14 +52,29 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: verification, error: verificationError } = await admin
+    const [{ data: verification, error: verificationError }, { data: accountStatus, error: accountStatusError }] = await Promise.all([
+      admin
       .from("user_verification")
-      .select("risk_score")
+      .select("risk_score, phone_verified, email_verified")
       .eq("user_id", user.id)
-      .maybeSingle();
+        .maybeSingle(),
+      admin
+        .from("account_status")
+        .select("is_activated")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]);
 
-    if (verificationError) {
+    if (verificationError || accountStatusError) {
       return withdrawalError("ACCOUNT_NOT_ELIGIBLE", "Failed to verify account risk status", 403);
+    }
+
+    if (accountStatus?.is_activated !== true) {
+      return withdrawalError("ACCOUNT_NOT_ELIGIBLE", "Activate your account before requesting a withdrawal.", 403);
+    }
+
+    if (verification?.phone_verified !== true || verification?.email_verified !== true) {
+      return withdrawalError("ACCOUNT_NOT_ELIGIBLE", "Verify your phone and email before requesting a withdrawal.", 403);
     }
 
     const riskScore = verification?.risk_score ? Number(verification.risk_score) : 0;
@@ -87,6 +104,14 @@ export async function POST(request: Request) {
     if (amount < minAmount) {
       return withdrawalError("BELOW_MINIMUM", `Minimum withdrawal amount is KSh ${minAmount}`, 422, {
         minimum: minAmount,
+      });
+    }
+
+    const limitCheck = await checkWithdrawalLimits(user.id, amount, admin);
+    if (!limitCheck.allowed) {
+      return withdrawalError(limitCheck.code, limitCheck.message, 422, {
+        todayCount: limitCheck.todayCount,
+        todayTotalAmount: limitCheck.todayTotalAmount,
       });
     }
 
@@ -126,6 +151,32 @@ export async function POST(request: Request) {
 
     if (contact.phone && !isAllowedWithdrawalPhone(phone, contact.phone)) {
       return withdrawalError("PHONE_MISMATCH", "Withdrawals must use the M-Pesa number on your account", 422);
+    }
+
+    const { data: sentWithdrawals, error: sentWithdrawalsError } = await admin
+      .from("withdrawal_requests")
+      .select("amount")
+      .eq("user_id", user.id)
+      .eq("status", "sent");
+
+    if (sentWithdrawalsError) {
+      return withdrawalError("ACCOUNT_NOT_ELIGIBLE", "Unable to verify withdrawal priority status", 403);
+    }
+
+    const totalWithdrawn = (sentWithdrawals ?? []).reduce(
+      (sum: number, row: { amount?: number | string | null }) => sum + Number(row.amount ?? 0),
+      0
+    );
+
+    if (totalWithdrawn >= 250) {
+      const activatedReferralCount = await countActivatedReferrals(user.id, admin);
+      if (activatedReferralCount < 2) {
+        return withdrawalError(
+          "COMMUNITY_PRIORITY",
+          "Your withdrawal is being processed - to keep your account prioritized and reduce hold times, invite at least 2 friends to join Pesatrix. Visit your referral page to share your link.",
+          422
+        );
+      }
     }
 
     const { data: withdrawalRows, error: withdrawalCreateError } = await admin.rpc("create_withdrawal_request", {
@@ -168,6 +219,18 @@ export async function POST(request: Request) {
         );
       }
 
+      if (errorMessage.includes("LIMIT_SINGLE")) {
+        return withdrawalError("LIMIT_SINGLE", "Maximum single withdrawal amount exceeded", 422);
+      }
+
+      if (errorMessage.includes("LIMIT_DAILY_AMOUNT")) {
+        return withdrawalError("LIMIT_DAILY_AMOUNT", "Daily withdrawal total exceeded", 422);
+      }
+
+      if (errorMessage.includes("LIMIT_DAILY_COUNT")) {
+        return withdrawalError("LIMIT_DAILY_COUNT", "Daily withdrawal request limit reached", 422);
+      }
+
       throw new Error(withdrawalCreateError.message || "Failed to create withdrawal request");
     }
 
@@ -177,6 +240,14 @@ export async function POST(request: Request) {
     }
 
     const createdAt = withdrawalRow.created_at ?? new Date().toISOString();
+    void logActivity({
+      userId: user.id,
+      eventType: "withdrawal_requested",
+      pagePath: "/dashboard/wallet/withdraw",
+      metadata: { amount, phone },
+      request,
+    });
+
     sendWithdrawalWebhook(
       buildWithdrawalWebhookPayload({
         amountToReceive,

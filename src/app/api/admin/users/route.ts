@@ -49,9 +49,39 @@ export async function GET(request: Request) {
   }
 
   const statusByUserId = new Map<string, any>((statuses ?? []).map((status: any) => [status.user_id, status]));
+  const [{ data: wallets }, { data: referrals }] = userIds.length
+    ? await Promise.all([
+        (admin.from("wallets" as never) as any)
+          .select("user_id, available_balance, pending_balance")
+          .in("user_id", userIds),
+        (admin.from("referrals" as never) as any)
+          .select("referrer_id, referee_id")
+          .in("referrer_id", userIds),
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const walletByUserId = new Map<string, any>((wallets ?? []).map((wallet: any) => [wallet.user_id, wallet]));
+  const refereeIds = [...new Set((referrals ?? []).map((row: any) => row.referee_id).filter(Boolean))];
+  const { data: activatedReferees } = refereeIds.length
+    ? await (admin.from("account_status" as never) as any)
+        .select("user_id")
+        .in("user_id", refereeIds)
+        .eq("is_activated", true)
+    : { data: [] };
+  const activatedRefereeIds = new Set((activatedReferees ?? []).map((row: any) => row.user_id));
+  const activatedReferralCountByUserId = new Map<string, number>();
+  for (const referral of referrals ?? []) {
+    if (activatedRefereeIds.has(referral.referee_id)) {
+      activatedReferralCountByUserId.set(
+        referral.referrer_id,
+        (activatedReferralCountByUserId.get(referral.referrer_id) ?? 0) + 1
+      );
+    }
+  }
 
   const normalizedUsers = userRows.map((u: any) => {
     const status = statusByUserId.get(u.id);
+    const wallet = walletByUserId.get(u.id);
     return {
       id: u.id,
       full_name: u.full_name,
@@ -68,6 +98,9 @@ export async function GET(request: Request) {
       is_setup_complete: status?.is_setup_complete ?? false,
       suspended_at: status?.suspended_at ?? null,
       suspension_reason: status?.suspension_reason ?? null,
+      available_balance: Number(wallet?.available_balance ?? 0),
+      pending_balance: Number(wallet?.pending_balance ?? 0),
+      activated_referrals_count: activatedReferralCountByUserId.get(u.id) ?? 0,
     };
   });
 
