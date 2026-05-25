@@ -90,10 +90,12 @@ const OPENROUTER_VISION_MODELS: VisionModelConfig[] = [
 
 const VISION_MODELS = [...NVIDIA_VISION_MODELS, ...OPENROUTER_VISION_MODELS];
 
-const VISION_MODEL_TIMEOUT_MS = 30000;
+const AI_REQUEST_TIMEOUT_MS = 25000;
+const VISION_MODEL_TIMEOUT_MS = 25000;
 const VISION_MODEL_MAX_TOKENS = 1024;
 
 export async function gradeSubmission(submissionId: string): Promise<void> {
+  const start = Date.now();
   const supabaseAdmin = createAdminSupabaseClient();
 
   const { data: submission, error: submissionError } = await supabaseAdmin
@@ -208,7 +210,7 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
   let result: GradingResult;
 
   try {
-    const response = await fetch(`${trimTrailingSlash(provider.base_url)}/chat/completions`, {
+    const response = await fetchWithTimeout(`${trimTrailingSlash(provider.base_url)}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -224,7 +226,7 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
         max_tokens: Number(provider.max_tokens ?? 8192),
         stream: false,
       }),
-    });
+    }, AI_REQUEST_TIMEOUT_MS);
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
@@ -261,6 +263,7 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
   }
 
   await writeGradingResultAndCredit(supabaseAdmin, submission, task, result);
+  console.log(`[AI Grade] submission=${submissionId} model=${provider.model_id} elapsed=${Date.now() - start}ms`);
 }
 
 async function writeGradingResultAndCredit(
@@ -825,7 +828,8 @@ async function callOpenRouterTextJson(prompt: string): Promise<{
 
   for (const model of OPENROUTER_TEXT_MODELS) {
     try {
-      const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      const modelStart = Date.now();
+      const response = await fetchWithTimeout(`${OPENROUTER_BASE_URL}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -841,21 +845,22 @@ async function callOpenRouterTextJson(prompt: string): Promise<{
           max_tokens: 1200,
           stream: false,
         }),
-      });
+      }, AI_REQUEST_TIMEOUT_MS);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "");
-        console.warn("[OpenRouter Grading] Model failed:", model, response.status, errorText.slice(0, 200));
+        console.error("[OpenRouter Grading] Model failed:", model, response.status, errorText.slice(0, 200));
         continue;
       }
 
       const payload = await response.json();
       const content = payload?.choices?.[0]?.message?.content;
+      console.log(`[AI Grade] model=${model} elapsed=${Date.now() - modelStart}ms`);
       if (typeof content === "string" && content.trim()) {
         return { success: true, content, modelUsed: model };
       }
     } catch (error) {
-      console.warn("[OpenRouter Grading] Request failed:", model, error);
+      console.error("[OpenRouter Grading] Request failed:", model, error instanceof Error ? error.message : error);
     }
   }
 
@@ -956,6 +961,7 @@ async function flagForManualReview(
     .update({
       status: "flagged",
       ai_reasoning: reasoning,
+      ai_score: null,
       ai_reviewed_at: new Date().toISOString(),
     })
     .eq("id", submissionId)
@@ -1377,6 +1383,19 @@ function normalizeCriteriaScores(value: unknown) {
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -3,7 +3,7 @@ import { TASK_SCREENSHOT_BUCKET, parseTaskScreenshotUrl } from "@/lib/task-scree
 
 const FALLBACK_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const VISION_MODEL_TIMEOUT_MS = 30000;
+const VISION_MODEL_TIMEOUT_MS = 25000;
 const VISION_MODEL_MAX_TOKENS = 1024;
 
 type VisionModelConfig = {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, AlertTriangle, CheckCircle, Info, X } from "lucide-react";
+import DOMPurify from "dompurify";
 import { createClient } from "@/lib/supabase/client";
 
 export type Banner = {
@@ -113,6 +114,7 @@ export function BannerStrip() {
 
   const config = BANNER_CONFIG[currentBanner.type] || BANNER_CONFIG.info;
   const Icon = config.Icon;
+  const sanitizedMessage = sanitizeBannerHtml(currentBanner.message);
 
   const dismissBanner = (id: string) => {
     const dismissedStr = localStorage.getItem("pesatrix_dismissed_banners");
@@ -141,7 +143,12 @@ export function BannerStrip() {
             
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-sm">{currentBanner.title}</h3>
-              <p className="mt-1 text-sm opacity-90">{currentBanner.message}</p>
+              {sanitizedMessage ? (
+                <div
+                  className="banner-content prose prose-sm mt-1 max-w-none opacity-90 prose-a:font-semibold prose-a:underline prose-ul:my-1 prose-ol:my-1 prose-p:my-0"
+                  dangerouslySetInnerHTML={{ __html: sanitizedMessage }}
+                />
+              ) : null}
             </div>
 
             {currentBanner.is_dismissible && (
@@ -174,4 +181,20 @@ export function BannerStrip() {
       </AnimatePresence>
     </div>
   );
+}
+
+function sanitizeBannerHtml(value: string | null | undefined) {
+  if (!value || typeof window === "undefined") return "";
+
+  const clean = DOMPurify.sanitize(value, {
+    ADD_ATTR: ["target", "rel"],
+  });
+  const template = document.createElement("template");
+  template.innerHTML = clean;
+  template.content.querySelectorAll("a").forEach((link) => {
+    link.setAttribute("target", "_blank");
+    link.setAttribute("rel", "noopener noreferrer");
+  });
+
+  return template.innerHTML;
 }

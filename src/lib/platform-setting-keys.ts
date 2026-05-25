@@ -17,3 +17,6 @@ export const WITHDRAWAL_MAX_DAILY_AMOUNT_KEY = "withdrawal_max_daily_amount";
 export const WITHDRAWAL_MAX_DAILY_COUNT_KEY = "withdrawal_max_daily_count";
 export const HIGH_TASK_PAYOUT_THRESHOLD_KEY = "high_task_payout_threshold";
 export const HIGH_TASK_REFERRAL_REQUIREMENT_KEY = "high_task_referral_requirement";
+export const ADMIN_SMS_PHONE_KEY = "admin_sms_phone";
+export const MIN_WITHDRAWAL_AMOUNT_KSH_KEY = "min_withdrawal_amount_ksh";
+export const FRAUD_AI_MODE_KEY = "fraud_ai_mode";

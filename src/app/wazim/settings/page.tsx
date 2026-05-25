@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AdminPageShell, MetricCard } from "@/components/admin/admin-native";
 import { AiProviderManager } from "@/components/admin/ai-provider-manager";
+import { AiHealthPanel } from "@/components/admin/ai-health-panel";
 import { TrainingSettingsForm } from "@/components/admin/training-settings-form";
 import { PlatformSettingsForm } from "@/components/admin/platform-settings-form";
 import { TaskLimitsSettingsForm } from "@/components/admin/task-limits-settings-form";
@@ -50,10 +51,26 @@ async function getAiProviderConfigs() {
   return data ?? [];
 }
 
+async function getStuckAiReviewCount() {
+  const admin = createAdminSupabaseClient();
+  const { count, error } = await admin
+    .from("task_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "ai_reviewing");
+
+  if (error) {
+    console.error("Failed to count stuck AI submissions:", error);
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
 export default async function AdminSettingsPage() {
   const adminSession = await requireWazimAdmin();
   const settings = await getPlatformSettings();
   const aiProviders = await getAiProviderConfigs();
+  const stuckAiReviewCount = await getStuckAiReviewCount();
 
   const trainingRewardSetting = settings.find((s: { key: string }) => s.key === "training_completion_reward_ksh");
   const activationFeeSetting = settings.find((s: { key: string }) => s.key === ACTIVATION_FEE_KSH_KEY);
@@ -105,6 +122,8 @@ export default async function AdminSettingsPage() {
       </section>
 
       <PlatformSettingsForm initialSettings={settings} />
+
+      <AiHealthPanel initialStuckCount={stuckAiReviewCount} />
 
       <AiProviderManager initialProviders={aiProviders} />
 

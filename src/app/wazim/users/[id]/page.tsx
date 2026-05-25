@@ -21,6 +21,7 @@ import { UserActionMenu } from "./components/UserActionMenu";
 import { WalletLedger } from "./components/WalletLedger";
 import { TaskHistory } from "./components/TaskHistory";
 import { ReferralTree } from "./components/ReferralTree";
+import { TrainingTimerOverride } from "./components/TrainingTimerOverride";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -41,6 +42,7 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
     { data: referralsMade },
     { data: referralBonuses },
     { data: withdrawalRequests },
+    { data: trainingProgress },
   ] = await Promise.all([
     (admin.from("profiles" as never) as any).select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
     (admin.from("account_status" as never) as any).select("*").eq("user_id", id).maybeSingle(),
@@ -69,6 +71,10 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
       .eq("user_id", id)
       .order("created_at", { ascending: false })
       .limit(20),
+    (admin.from("training_progress" as never) as any)
+      .select("*")
+      .eq("user_id", id)
+      .maybeSingle(),
   ]);
 
   if (!profile) {
@@ -182,6 +188,7 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
                 ["Updated", shortDate(walletData.updated_at)],
               ]}
             />
+            <TrainingTimerOverride userId={id} training={trainingProgress ?? null} />
           </div>
         </TabsContent>
 

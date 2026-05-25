@@ -58,6 +58,8 @@ type VisionGrade = {
   passed: boolean;
 };
 
+const AI_REQUEST_TIMEOUT_MS = 25000;
+
 export async function gradeVerificationSubmission(
   task: Task,
   submission: TaskSubmission
@@ -168,7 +170,7 @@ async function gradeTextSubmission(args: {
     throw new Error("AI provider secret could not be loaded.");
   }
 
-  const response = await fetch(`${trimTrailingSlash(provider.base_url)}/chat/completions`, {
+  const response = await fetchWithTimeout(`${trimTrailingSlash(provider.base_url)}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -186,7 +188,7 @@ async function gradeTextSubmission(args: {
       max_tokens: Number(provider.max_tokens ?? 1024),
       stream: false,
     }),
-  });
+  }, AI_REQUEST_TIMEOUT_MS);
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
@@ -376,6 +378,19 @@ function getVerificationType(
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

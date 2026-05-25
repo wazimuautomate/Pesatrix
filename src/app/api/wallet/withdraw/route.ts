@@ -3,6 +3,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getMinWithdrawalKsh, getWithdrawalProcessingDays } from "@/lib/platform-settings";
 import { WITHDRAWALS_ENABLED_KEY } from "@/lib/platform-setting-keys";
+import { ADMIN_SMS_PHONE_KEY } from "@/lib/platform-setting-keys";
+import { notifyAdminWithdrawal } from "@/lib/sms/scopeClient";
 import { checkWithdrawalLimits, countActivatedReferrals } from "@/lib/wallet/withdrawalLimits";
 import { logActivity } from "@/lib/activity/logActivity";
 import {
@@ -264,6 +266,28 @@ export async function POST(request: Request) {
         error,
       });
     });
+
+    admin
+      .from("platform_settings")
+      .select("value")
+      .eq("key", ADMIN_SMS_PHONE_KEY)
+      .maybeSingle()
+      .then(({ data: setting }: { data: { value?: string | null } | null }) => {
+        const adminPhone = setting?.value?.trim();
+        if (!adminPhone) {
+          console.warn("[SMS] admin_sms_phone is not configured; skipping withdrawal notification");
+          return;
+        }
+
+        notifyAdminWithdrawal({
+          adminPhone,
+          userName: contact.fullName ?? contact.email ?? "Unknown user",
+          userPhone: phone,
+          amount,
+          withdrawalId: withdrawalRow.id,
+        }).catch((error) => console.error("[SMS] withdrawal notification failed:", error));
+      })
+      .catch((error: unknown) => console.error("[SMS] Failed to load admin SMS phone:", error));
 
     return NextResponse.json({
       withdrawalId: withdrawalRow.id,

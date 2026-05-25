@@ -4,7 +4,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
 import { validateTaskFinancials } from "@/lib/financial-limits";
 import { getMaxTaskBatchValueKsh, getMaxTaskPayoutKsh } from "@/lib/platform-settings";
-import { taskInsertSchema } from "@/lib/task-types";
+import { draftTaskInsertSchema, taskInsertSchema } from "@/lib/task-types";
 import { normalizeTaskDatetimes } from "@/lib/datetime";
 
 export async function GET(request: Request) {
@@ -37,7 +37,8 @@ export async function POST(request: Request) {
 
   const body = normalizeTaskDatetimes(await request.json());
 
-  const parsed = taskInsertSchema.safeParse(body);
+  const isDraftSave = !body.publish_at;
+  const parsed = (isDraftSave ? draftTaskInsertSchema : taskInsertSchema).safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0]?.message } },
@@ -115,7 +116,7 @@ export async function POST(request: Request) {
       requires_screenshot,
       requires_url,
       min_word_count,
-      task_data,
+      task_data: task_data ?? {},
     })
     .select("*")
     .single();

@@ -17,6 +17,13 @@ import {
   WITHDRAWAL_PROCESSING_DAYS_KEY,
   ALLOW_NEW_REGISTRATIONS_KEY,
   WITHDRAWALS_ENABLED_KEY,
+  ADMIN_SMS_PHONE_KEY,
+  HIGH_TASK_PAYOUT_THRESHOLD_KEY,
+  HIGH_TASK_REFERRAL_REQUIREMENT_KEY,
+  MIN_WITHDRAWAL_AMOUNT_KSH_KEY,
+  WITHDRAWAL_MAX_DAILY_AMOUNT_KEY,
+  WITHDRAWAL_MAX_DAILY_COUNT_KEY,
+  WITHDRAWAL_MAX_SINGLE_AMOUNT_KEY,
 } from "@/lib/platform-setting-keys";
 
 const settingsUpdateSchema = z.object({
@@ -69,6 +76,13 @@ export async function PATCH(request: Request) {
     WITHDRAWAL_HOLD_DAYS_KEY,
     WITHDRAWAL_PROCESSING_DAYS_KEY,
     REFERRAL_LEVEL_1_REWARD_KEY,
+    HIGH_TASK_PAYOUT_THRESHOLD_KEY,
+    HIGH_TASK_REFERRAL_REQUIREMENT_KEY,
+    MIN_WITHDRAWAL_AMOUNT_KSH_KEY,
+    WITHDRAWAL_MAX_DAILY_AMOUNT_KEY,
+    WITHDRAWAL_MAX_DAILY_COUNT_KEY,
+    WITHDRAWAL_MAX_SINGLE_AMOUNT_KEY,
+    "withdrawal_min_amount",
   ];
 
   if (key === ALLOW_NEW_REGISTRATIONS_KEY) {
@@ -138,6 +152,16 @@ export async function PATCH(request: Request) {
     ) {
       return NextResponse.json(
         { error: "Withdrawal webhook URL must be a valid http or https URL" },
+        { status: 422 }
+      );
+    }
+  }
+
+  if (key === ADMIN_SMS_PHONE_KEY) {
+    const trimmed = String(value).trim();
+    if (trimmed.length > 0 && !/^(?:\+?254|0)7\d{8}$/.test(trimmed)) {
+      return NextResponse.json(
+        { error: "Admin SMS phone must use 07XXXXXXXX, 2547XXXXXXXX, or +2547XXXXXXXX" },
         { status: 422 }
       );
     }
