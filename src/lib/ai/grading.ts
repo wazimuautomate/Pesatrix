@@ -1,5 +1,6 @@
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getVaultSecret } from "@/lib/ai/provider-secrets";
+import { callTextModelWithFallback } from "@/lib/ai/modelRouter";
 import { getWithdrawalHoldDays } from "@/lib/platform-settings";
 import { isDataLabelingTaskData, isSocialEngagementTaskData, isVerificationTaskData } from "@/lib/task-data";
 import { normalizeSocialTaskData } from "@/lib/social-engagement";
@@ -43,7 +44,7 @@ RULES:
 
 type ProviderConfig = {
   id?: string;
-  provider: "nvidia" | "openrouter" | "groq" | "ollama";
+  provider: "nvidia" | "openrouter" | "groq" | "gemini" | "ollama";
   model_id: string;
   display_name?: string | null;
   api_key_secret_name?: string | null;
@@ -64,10 +65,6 @@ type GradingResult = {
 const FALLBACK_NVIDIA_MODEL = "minimaxai/minimax-m2.7";
 const FALLBACK_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const OPENROUTER_TEXT_MODELS = [
-  "qwen/qwen3-235b-a22b:free",
-  "meta-llama/llama-4-maverick:free",
-] as const;
 type VisionModelConfig = {
   modelId: string;
   provider: "nvidia" | "openrouter";
@@ -77,23 +74,22 @@ type VisionModelConfig = {
 };
 
 const NVIDIA_VISION_MODELS: VisionModelConfig[] = [
-  { modelId: "mistralai/mistral-large-3-675b-instruct-2512", provider: "nvidia", supportsVision: false, baseUrl: FALLBACK_NVIDIA_BASE_URL, apiKeyName: "NVIDIA_API_KEY" },
-  { modelId: "meta/llama-4-maverick-17b-128e-instruct", provider: "nvidia", supportsVision: false, baseUrl: FALLBACK_NVIDIA_BASE_URL, apiKeyName: "NVIDIA_API_KEY" },
+  { modelId: "mistralai/mistral-large-3-675b-instruct-2512", provider: "nvidia", supportsVision: true, baseUrl: FALLBACK_NVIDIA_BASE_URL, apiKeyName: "NVIDIA_API_KEY" },
   { modelId: "google/paligemma-3b-pt-224", provider: "nvidia", supportsVision: true, baseUrl: FALLBACK_NVIDIA_BASE_URL, apiKeyName: "NVIDIA_API_KEY" },
 ];
 
 const OPENROUTER_VISION_MODELS: VisionModelConfig[] = [
-  { modelId: "qwen/qwen2.5-vl-72b-instruct:free", provider: "openrouter", supportsVision: true, baseUrl: OPENROUTER_BASE_URL, apiKeyName: "OPENROUTER_API_KEY" },
-  { modelId: "meta-llama/llama-3.2-11b-vision-instruct:free", provider: "openrouter", supportsVision: true, baseUrl: OPENROUTER_BASE_URL, apiKeyName: "OPENROUTER_API_KEY" },
   { modelId: "google/gemma-3-27b-it:free", provider: "openrouter", supportsVision: true, baseUrl: OPENROUTER_BASE_URL, apiKeyName: "OPENROUTER_API_KEY" },
 ];
 
 const VISION_MODELS = [...NVIDIA_VISION_MODELS, ...OPENROUTER_VISION_MODELS];
 
-const VISION_MODEL_TIMEOUT_MS = 30000;
+const AI_REQUEST_TIMEOUT_MS = 25000;
+const VISION_MODEL_TIMEOUT_MS = 25000;
 const VISION_MODEL_MAX_TOKENS = 1024;
 
 export async function gradeSubmission(submissionId: string): Promise<void> {
+  const start = Date.now();
   const supabaseAdmin = createAdminSupabaseClient();
 
   const { data: submission, error: submissionError } = await supabaseAdmin
@@ -171,27 +167,6 @@ export async function gradeSubmission(submissionId: string): Promise<void> {
     return;
   }
 
-  const provider = await getActiveProviderConfig(supabaseAdmin);
-  if (!provider) {
-    await flagForManualReview(
-      supabaseAdmin,
-      submissionId,
-      "No active AI provider configured. Manual review required."
-    );
-    return;
-  }
-
-  const apiKey = await getProviderApiKey(supabaseAdmin, provider);
-  if (!apiKey) {
-    console.warn("[Grading] Missing API key for provider:", provider.provider, provider.id);
-    await flagForManualReview(
-      supabaseAdmin,
-      submissionId,
-      "AI provider secret could not be loaded. Manual review required."
-    );
-    return;
-  }
-
   const userMessage = `TASK TITLE: ${task.title}
 CATEGORY: ${task.category}
 INSTRUCTIONS: ${task.instructions}
@@ -208,39 +183,28 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
   let result: GradingResult;
 
   try {
-    const response = await fetch(`${trimTrailingSlash(provider.base_url)}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: provider.model_id,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userMessage },
-        ],
-        temperature: Number(provider.temperature ?? 0.3),
-        max_tokens: Number(provider.max_tokens ?? 8192),
-        stream: false,
-      }),
+    const ai = await callTextModelWithFallback({
+      admin: supabaseAdmin,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+      maxTokens: 1600,
+      temperature: 0.3,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.error("[Grading] AI API error:", response.status, errorText);
+    if (!ai.ok) {
+      console.error("[Grading] All AI providers failed:", submissionId, ai.errors);
       await flagForManualReview(
         supabaseAdmin,
         submissionId,
-        "AI provider returned an error. Manual review required."
+        "AI grading unavailable - flagged for manual review"
       );
       return;
     }
 
-    const payload = await response.json();
-    const content = payload?.choices?.[0]?.message?.content;
     try {
-      result = parseAiResult(typeof content === "string" ? content : "");
+      result = parseAiResult(ai.content);
     } catch (parseError) {
       console.error("[Grading] AI response parse failed:", submissionId, parseError);
       await flagForManualReview(
@@ -249,6 +213,35 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
         "AI response could not be parsed. Manual review required."
       );
       return;
+    }
+
+    const review = await callTextModelWithFallback({
+      admin: supabaseAdmin,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: `You are the second-pass quality controller for this Pesatrix grading result.
+
+Original grading input:
+${userMessage}
+
+First model grading JSON:
+${ai.content}
+
+Check whether the first model was fair and consistent with the task, rubric, and user submission. Return ONLY the same JSON shape, correcting the score, decision, reasoning, and criteria_scores only if needed.`,
+        },
+      ],
+      maxTokens: 1600,
+      temperature: 0.2,
+    });
+
+    if (review.ok) {
+      try {
+        result = parseAiResult(review.content);
+      } catch (reviewParseError) {
+        console.error("[Grading] Second-pass AI response parse failed:", submissionId, reviewParseError);
+      }
     }
   } catch (error) {
     console.error("[Grading] AI request failed:", submissionId, error);
@@ -261,6 +254,7 @@ SCREENSHOT PROVIDED: ${submission.screenshot_url ? "Yes" : "No"}`;
   }
 
   await writeGradingResultAndCredit(supabaseAdmin, submission, task, result);
+  console.log(`[AI Grade] submission=${submissionId} elapsed=${Date.now() - start}ms`);
 }
 
 async function writeGradingResultAndCredit(
@@ -642,7 +636,7 @@ Respond ONLY with valid JSON (no markdown):
 "ai_generated_flag": <true if content appears AI-generated>
 }`;
 
-  const ai = await callOpenRouterTextJson(prompt);
+  const ai = await callFallbackTextJson(prompt);
   if (!ai.success) {
     return {
       score: 50,
@@ -666,6 +660,35 @@ Respond ONLY with valid JSON (no markdown):
       grading_detail: { content_ai_error: "malformed_json", raw_response: ai.content.slice(0, 2000) },
     };
   }
+
+  const review = await callFallbackTextJson(`You are the second-pass quality controller for a Pesatrix content creation grading result.
+Original task prompt:
+${String(taskData.prompt ?? "")}
+
+User submission:
+"${content}"
+
+First model grading JSON:
+${ai.content}
+
+Check whether the first model was fair and consistent. Return ONLY the same JSON shape, correcting the score/reasoning/flags only if needed:
+{
+"score": <0-100>,
+"reasoning": "<2-3 sentences>",
+"passed": <true if score >= 60>,
+"similarity_flag": <true if suspiciously similar to prior submissions>,
+"ai_generated_flag": <true if likely AI-generated>
+}`);
+
+  if (review.success) {
+    try {
+      parsed = parseContentCreationResult(review.content);
+      ai.modelUsed = `${ai.modelUsed ?? "unknown"} -> ${review.modelUsed ?? "review"}`;
+    } catch (error) {
+      console.error("[Content Grading] Second-pass AI JSON malformed:", submission.id, error);
+    }
+  }
+
   const notes: string[] = [];
   if (parsed.similarity_flag) notes.push("AI flagged: similar to prior submission");
   if (parsed.ai_generated_flag) notes.push("AI flagged: possible AI-generated content");
@@ -750,7 +773,7 @@ User answer: "${answer}"
 Grade answer relevance and quality from 0-100. For multiple choice without a correct option, grade whether the answer is plausible for the question. For open-ended answers, grade relevance, specificity, and comprehension. Respond ONLY with valid JSON:
 {"score": <0-100>, "reasoning": "<one sentence>"}`;
 
-    const ai = await callOpenRouterTextJson(prompt);
+    const ai = await callFallbackTextJson(prompt);
     if (!ai.success) {
       scores.push(50);
       details.push({ question_id: question.id, score: 50, error: ai.error });
@@ -775,7 +798,7 @@ Grade answer relevance and quality from 0-100. For multiple choice without a cor
     decision,
     reasoning: `Watch & Respond answers scored ${score}%. ${decision === "approved" ? "Answers met the comprehension threshold." : "Manual review or decline is needed based on answer quality."}`,
     criteria_scores: { comprehension: score },
-    // FIXED: Watch & Respond uses free OpenRouter text models for open-ended grading and exact code checks for known MC answers.
+    // FIXED: Watch & Respond uses the configured fallback chain for open-ended grading and exact code checks for known MC answers.
     grading_detail: {
       type: "watch_respond",
       question_results: details,
@@ -812,54 +835,26 @@ async function getActiveProviderConfig(supabaseAdmin: ReturnType<typeof createAd
   return null;
 }
 
-async function callOpenRouterTextJson(prompt: string): Promise<{
+async function callFallbackTextJson(prompt: string): Promise<{
   success: boolean;
   content: string;
   modelUsed?: string;
   error?: string;
 }> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    return { success: false, content: "", error: "Missing OPENROUTER_API_KEY" };
-  }
+  const admin = createAdminSupabaseClient();
+  const result = await callTextModelWithFallback({
+    admin,
+    messages: [{ role: "user", content: prompt }],
+    maxTokens: 1200,
+    temperature: 0.2,
+  });
 
-  for (const model of OPENROUTER_TEXT_MODELS) {
-    try {
-      const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://pesatrix.com",
-          "X-Title": "Pesatrix",
-        },
-        body: JSON.stringify({
-          // FIXED: Category-specific text grading uses free OpenRouter models, not Anthropic/Claude or paid providers.
-          model,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.2,
-          max_tokens: 1200,
-          stream: false,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        console.warn("[OpenRouter Grading] Model failed:", model, response.status, errorText.slice(0, 200));
-        continue;
-      }
-
-      const payload = await response.json();
-      const content = payload?.choices?.[0]?.message?.content;
-      if (typeof content === "string" && content.trim()) {
-        return { success: true, content, modelUsed: model };
-      }
-    } catch (error) {
-      console.warn("[OpenRouter Grading] Request failed:", model, error);
-    }
-  }
-
-  return { success: false, content: "", error: "All free OpenRouter text models failed" };
+  return {
+    success: result.ok,
+    content: result.content,
+    modelUsed: result.model,
+    error: result.ok ? undefined : result.errors.map((item) => `${item.provider}/${item.model}: ${item.error}`).join("; "),
+  };
 }
 
 function parseContentCreationResult(content: string) {
@@ -956,6 +951,7 @@ async function flagForManualReview(
     .update({
       status: "flagged",
       ai_reasoning: reasoning,
+      ai_score: null,
       ai_reviewed_at: new Date().toISOString(),
     })
     .eq("id", submissionId)
@@ -1377,6 +1373,19 @@ function normalizeCriteriaScores(value: unknown) {
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

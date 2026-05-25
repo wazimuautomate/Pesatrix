@@ -5,7 +5,7 @@ import { auditLog, requireAdmin } from "@/app/api/admin/_lib";
 import { createVaultSecret } from "@/lib/ai/provider-secrets";
 
 const providerSchema = z.object({
-  provider: z.enum(["nvidia", "openrouter", "groq", "ollama"]),
+  provider: z.enum(["nvidia", "openrouter", "groq", "gemini", "ollama"]),
   displayName: z.string().trim().min(1).max(120),
   modelId: z.string().trim().min(1).max(200),
   apiKey: z.string().min(1),
@@ -21,6 +21,9 @@ export async function GET(request: Request) {
     allowedRoles: ["admin"],
   });
   if (authResult.error) return authResult.error;
+  if (!authResult.adminUser || !["admin", "super_admin"].includes(authResult.adminUser.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const admin = createAdminSupabaseClient();
   const { data, error } = await admin
@@ -42,7 +45,7 @@ export async function POST(request: Request) {
     allowedRoles: ["admin"],
   });
   if (authResult.error) return authResult.error;
-  if (!authResult.userId || !authResult.adminUser) {
+  if (!authResult.userId || !authResult.adminUser || !["admin", "super_admin"].includes(authResult.adminUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

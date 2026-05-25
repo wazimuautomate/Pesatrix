@@ -5,33 +5,68 @@ import { X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { RichTextEditor } from "@/components/admin/RichTextEditor";
 
 type CreateBannerModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  banner?: BannerFormValue | null;
 };
 
-export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBannerModalProps) {
+export type BannerFormValue = {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  target: string;
+  target_user_id?: string | null;
+  is_dismissible: boolean;
+  expires_at: string | null;
+};
+
+const EMPTY_FORM = {
+  title: "",
+  message: "",
+  type: "info",
+  target: "all",
+  target_user_id: "",
+  is_dismissible: true,
+  expires_at: "",
+};
+
+export function CreateBannerModal({ open, onOpenChange, onSuccess, banner }: CreateBannerModalProps) {
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    title: "",
-    message: "",
-    type: "info",
-    target: "all",
-    target_user_id: "",
-    is_dismissible: true,
-    expires_at: "",
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
 
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const isEditing = Boolean(banner?.id);
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (banner) {
+      setFormData({
+        title: banner.title ?? "",
+        message: banner.message ?? "",
+        type: banner.type ?? "info",
+        target: banner.target ?? "all",
+        target_user_id: banner.target_user_id ?? "",
+        is_dismissible: banner.is_dismissible ?? true,
+        expires_at: toDatetimeLocalInputValue(banner.expires_at),
+      });
+    } else {
+      setFormData(EMPTY_FORM);
+      setSelectedUser(null);
+      setSearch("");
+    }
+  }, [banner, open]);
 
   useEffect(() => {
     if (!search || formData.target !== "specific_user") {
@@ -58,8 +93,8 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
     setLoading(true);
 
     try {
-      const res = await fetch("/api/admin/banners", {
-        method: "POST",
+      const res = await fetch(isEditing ? `/api/admin/banners/${banner!.id}` : "/api/admin/banners", {
+        method: isEditing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             ...formData,
@@ -68,24 +103,16 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to create banner");
+      if (!res.ok) throw new Error(isEditing ? "Failed to update banner" : "Failed to create banner");
 
       onSuccess();
       onOpenChange(false);
-      setFormData({
-        title: "",
-        message: "",
-        type: "info",
-        target: "all",
-        target_user_id: "",
-        is_dismissible: true,
-        expires_at: "",
-      });
+      setFormData(EMPTY_FORM);
       setSelectedUser(null);
       setSearch("");
     } catch (error) {
       console.error(error);
-      alert("Failed to create banner");
+      alert(isEditing ? "Failed to update banner" : "Failed to create banner");
     } finally {
       setLoading(false);
     }
@@ -93,8 +120,8 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogTitle>Create New Banner</DialogTitle>
+      <DialogContent className="max-h-[92vh] w-[calc(100vw-1.5rem)] overflow-y-auto p-4 sm:max-w-[680px] sm:p-6">
+        <DialogTitle>{isEditing ? "Edit Banner" : "Create New Banner"}</DialogTitle>
         <DialogDescription>
           Broadcast a message to users. You can target specific users or everyone.
         </DialogDescription>
@@ -112,15 +139,14 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
 
           <div className="space-y-2">
             <Label>Message</Label>
-            <Textarea
-              required
+            <RichTextEditor
               value={formData.message}
-              onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+              onChange={(message) => setFormData({ ...formData, message })}
               placeholder="Banner details..."
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Type</Label>
               <Select
@@ -239,11 +265,18 @@ export function CreateBannerModal({ open, onOpenChange, onSuccess }: CreateBanne
               type="submit"
               disabled={loading || (formData.target === "specific_user" && !formData.target_user_id)}
             >
-              {loading ? "Creating..." : "Create Banner"}
+              {loading ? (isEditing ? "Saving..." : "Creating...") : (isEditing ? "Save Changes" : "Create Banner")}
             </Button>
           </div>
         </form>
       </DialogContent>
     </Dialog>
   );
+}
+
+function toDatetimeLocalInputValue(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }

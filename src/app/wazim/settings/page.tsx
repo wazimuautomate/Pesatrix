@@ -2,6 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AdminPageShell, MetricCard } from "@/components/admin/admin-native";
 import { AiProviderManager } from "@/components/admin/ai-provider-manager";
+import { AiHealthPanel } from "@/components/admin/ai-health-panel";
+import { SmsHealthPanel } from "@/components/admin/sms-health-panel";
 import { TrainingSettingsForm } from "@/components/admin/training-settings-form";
 import { PlatformSettingsForm } from "@/components/admin/platform-settings-form";
 import { TaskLimitsSettingsForm } from "@/components/admin/task-limits-settings-form";
@@ -50,16 +52,33 @@ async function getAiProviderConfigs() {
   return data ?? [];
 }
 
+async function getStuckAiReviewCount() {
+  const admin = createAdminSupabaseClient();
+  const { count, error } = await admin
+    .from("task_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "ai_reviewing");
+
+  if (error) {
+    console.error("Failed to count stuck AI submissions:", error);
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
 export default async function AdminSettingsPage() {
   const adminSession = await requireWazimAdmin();
   const settings = await getPlatformSettings();
   const aiProviders = await getAiProviderConfigs();
+  const stuckAiReviewCount = await getStuckAiReviewCount();
 
   const trainingRewardSetting = settings.find((s: { key: string }) => s.key === "training_completion_reward_ksh");
   const activationFeeSetting = settings.find((s: { key: string }) => s.key === ACTIVATION_FEE_KSH_KEY);
   const holdSetting = settings.find((s: { key: string }) => s.key === WITHDRAWAL_HOLD_DAYS_KEY);
   const dailyTaskLimitSetting = settings.find((s: { key: string }) => s.key === DAILY_TASK_LIMIT_KEY);
   const referralLevel1Setting = settings.find((s: { key: string }) => s.key === REFERRAL_LEVEL_1_REWARD_KEY);
+  const adminSmsPhoneSetting = settings.find((s: { key: string }) => s.key === "admin_sms_phone");
   const environmentSettings = getEnvironmentReadiness();
   const dailyTaskLimit = Number.isInteger(Number(dailyTaskLimitSetting?.value))
     ? Number(dailyTaskLimitSetting?.value)
@@ -105,6 +124,10 @@ export default async function AdminSettingsPage() {
       </section>
 
       <PlatformSettingsForm initialSettings={settings} />
+
+      <AiHealthPanel initialStuckCount={stuckAiReviewCount} />
+
+      <SmsHealthPanel adminPhone={adminSmsPhoneSetting?.value ?? null} />
 
       <AiProviderManager initialProviders={aiProviders} />
 

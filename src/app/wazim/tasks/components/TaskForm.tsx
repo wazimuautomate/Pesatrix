@@ -28,6 +28,7 @@ import {
   generateItemId,
   generateQuestionId,
   createEmptyTaskData,
+  draftTaskInsertSchema,
   taskInsertSchema,
 } from "@/lib/task-types";
 import { validateTaskFinancials } from "@/lib/financial-limits";
@@ -265,7 +266,7 @@ export function TaskForm({ task, initialAssignedUsers = [], onSave, onCancel }: 
         payload.id = task.id;
       }
 
-      const parsed = taskInsertSchema.safeParse(payload);
+      const parsed = (publish ? taskInsertSchema : draftTaskInsertSchema).safeParse(payload);
       if (!parsed.success) {
         toast.error(parsed.error.errors[0]?.message ?? "Validation failed");
         return;

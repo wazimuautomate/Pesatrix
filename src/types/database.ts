@@ -54,7 +54,7 @@ export type RewardSpinOutcome =
   | "double"
   | "jackpot";
 
-export type AiProvider = "nvidia" | "openrouter" | "groq" | "ollama";
+export type AiProvider = "nvidia" | "openrouter" | "groq" | "gemini" | "ollama";
 
 export type NotificationStatus = "pending" | "sent" | "failed";
 

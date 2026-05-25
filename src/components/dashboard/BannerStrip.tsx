@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, AlertTriangle, CheckCircle, Info, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, Info, X } from "lucide-react";
+import DOMPurify from "dompurify";
 import { createClient } from "@/lib/supabase/client";
 
 export type Banner = {
@@ -113,6 +114,7 @@ export function BannerStrip() {
 
   const config = BANNER_CONFIG[currentBanner.type] || BANNER_CONFIG.info;
   const Icon = config.Icon;
+  const sanitizedMessage = sanitizeBannerHtml(currentBanner.message);
 
   const dismissBanner = (id: string) => {
     const dismissedStr = localStorage.getItem("pesatrix_dismissed_banners");
@@ -124,6 +126,14 @@ export function BannerStrip() {
     if (currentIndex >= banners.length - 1) {
       setCurrentIndex(0);
     }
+  };
+
+  const showPrevious = () => {
+    setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
+  };
+
+  const showNext = () => {
+    setCurrentIndex((prev) => (prev + 1) % banners.length);
   };
 
   return (
@@ -138,11 +148,35 @@ export function BannerStrip() {
         >
           <div className="mx-auto flex max-w-[1440px] items-start gap-3">
             <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${config.iconColor}`} />
+            {banners.length > 1 && (
+              <button
+                onClick={showPrevious}
+                className={`mt-0.5 shrink-0 rounded-lg p-1 transition-colors hover:bg-black/5 ${config.iconColor}`}
+                aria-label="Previous banner"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            )}
             
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-sm">{currentBanner.title}</h3>
-              <p className="mt-1 text-sm opacity-90">{currentBanner.message}</p>
+              {sanitizedMessage ? (
+                <div
+                  className="banner-content prose prose-sm mt-1 max-w-none opacity-90 prose-a:font-semibold prose-a:underline prose-ul:my-1 prose-ol:my-1 prose-p:my-0"
+                  dangerouslySetInnerHTML={{ __html: sanitizedMessage }}
+                />
+              ) : null}
             </div>
+
+            {banners.length > 1 && (
+              <button
+                onClick={showNext}
+                className={`mt-0.5 shrink-0 rounded-lg p-1 transition-colors hover:bg-black/5 ${config.iconColor}`}
+                aria-label="Next banner"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
 
             {currentBanner.is_dismissible && (
               <button
@@ -174,4 +208,20 @@ export function BannerStrip() {
       </AnimatePresence>
     </div>
   );
+}
+
+function sanitizeBannerHtml(value: string | null | undefined) {
+  if (!value || typeof window === "undefined") return "";
+
+  const clean = DOMPurify.sanitize(value, {
+    ADD_ATTR: ["target", "rel"],
+  });
+  const template = document.createElement("template");
+  template.innerHTML = clean;
+  template.content.querySelectorAll("a").forEach((link) => {
+    link.setAttribute("target", "_blank");
+    link.setAttribute("rel", "noopener noreferrer");
+  });
+
+  return template.innerHTML;
 }

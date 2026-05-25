@@ -27,7 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type Provider = "nvidia" | "openrouter" | "groq" | "ollama";
+type Provider = "nvidia" | "openrouter" | "groq" | "gemini" | "ollama";
 
 export type AiProviderConfig = {
   id: string;
@@ -60,13 +60,15 @@ const DEFAULT_BASE_URLS: Record<Provider, string> = {
   nvidia: "https://integrate.api.nvidia.com/v1",
   openrouter: "https://openrouter.ai/api/v1",
   groq: "https://api.groq.com/openai/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta",
   ollama: "http://localhost:11434/v1",
 };
 
 const MODEL_EXAMPLES: Record<Provider, string> = {
-  nvidia: "Examples: minimaxai/minimax-m2.7, moonshotai/kimi-k2.6, deepseek-ai/deepseek-v4-flash",
-  openrouter: "Example: openai/gpt-4.1-mini or provider/model from OpenRouter",
-  groq: "Example: llama-3.3-70b-versatile",
+  nvidia: "Examples: minimaxai/minimax-m2.7, mistralai/mistral-large-3-675b-instruct-2512, google/paligemma-3b-pt-224",
+  openrouter: "Examples: deepseek/deepseek-v4-flash:free, nvidia/nemotron-3-super-120b-a12b:free, minimax/minimax-m2.5:free",
+  groq: "Examples: openai/gpt-oss-120b, qwen/qwen3-32b",
+  gemini: "Examples: gemini-2.5-flash, gemini-2.5-flash-lite, gemini-2.0-flash",
   ollama: "Example: llama3.1 or a locally installed Ollama model",
 };
 
@@ -318,6 +320,7 @@ export function AiProviderManager({
                 <SelectItem value="nvidia">NVIDIA</SelectItem>
                 <SelectItem value="openrouter">OpenRouter</SelectItem>
                 <SelectItem value="groq">Groq</SelectItem>
+                <SelectItem value="gemini">Gemini</SelectItem>
                 <SelectItem value="ollama">Ollama</SelectItem>
               </SelectContent>
             </Select>

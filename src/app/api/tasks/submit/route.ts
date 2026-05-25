@@ -6,7 +6,9 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getTrainingProgramSnapshotForUser } from "@/lib/training";
 import { gradeSubmission } from "@/lib/ai/grading";
 import { checkSubmissionFraud } from "@/lib/fraud/riskScorer";
-import { getDailyTaskLimit } from "@/lib/platform-settings";
+import { getDailyTaskLimit, getPlatformSetting } from "@/lib/platform-settings";
+import { ADMIN_SMS_PHONE_KEY } from "@/lib/platform-setting-keys";
+import { notifyAdminTaskSubmission } from "@/lib/sms/scopeClient";
 import { isDataLabelingTaskData, isSocialEngagementTaskData } from "@/lib/task-data";
 import { normalizeSocialTaskData } from "@/lib/social-engagement";
 import { canUserAccessTask, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
@@ -488,15 +490,56 @@ export async function POST(request: Request) {
       .maybeSingle()
     : { data: null };
 
+  const finalStatus = reviewedSubmission?.status ?? submission.status;
+  if (finalStatus === "pending" || finalStatus === "flagged") {
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("full_name, phone, email")
+      .eq("id", user.id)
+      .maybeSingle();
+    void notifyAdminForManualTaskReview({
+      submissionId: submission.id,
+      taskTitle: task.title,
+      userName: profile?.full_name ?? profile?.phone ?? profile?.email ?? user.email ?? "Unknown user",
+    });
+  }
+
   return NextResponse.json({
     submission: {
       id: reviewedSubmission?.id ?? submission.id,
-      status: reviewedSubmission?.status ?? submission.status,
+      status: finalStatus,
       submittedAt: reviewedSubmission?.submitted_at ?? submission.submitted_at,
       aiScore: reviewedSubmission?.ai_score ?? null,
       aiReasoning: reviewedSubmission?.ai_reasoning ?? null,
     },
   });
+}
+
+async function notifyAdminForManualTaskReview({
+  submissionId,
+  taskTitle,
+  userName,
+}: {
+  submissionId: string;
+  taskTitle: string;
+  userName: string;
+}) {
+  const setting = await getPlatformSetting(ADMIN_SMS_PHONE_KEY).catch((error) => {
+    console.warn("[SMS] Failed to load admin SMS phone:", error);
+    return null;
+  });
+  const adminPhone = setting?.value?.trim();
+  if (!adminPhone) {
+    console.warn("[SMS] admin_sms_phone is not configured; skipping task notification");
+    return;
+  }
+
+  notifyAdminTaskSubmission({
+    adminPhone,
+    userName,
+    taskTitle,
+    submissionId,
+  }).catch((error) => console.error("[SMS] fire-and-forget failed:", error));
 }
 
 async function validateSocialEngagementSubmission({

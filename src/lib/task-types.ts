@@ -189,6 +189,10 @@ export const taskInsertSchemaBase = z.object({
   task_data: taskDataSchema,
 });
 
+export const draftTaskInsertSchemaBase = taskInsertSchemaBase.extend({
+  task_data: z.record(z.unknown()).optional().default({}),
+});
+
 function validateTaskDistributionFields(
   data: { visibility_mode: TaskVisibilityMode; assigned_user_ids: string[] },
   ctx: z.RefinementCtx
@@ -206,6 +210,8 @@ function validateTaskDistributionFields(
 }
 
 export const taskInsertSchema = taskInsertSchemaBase.superRefine(validateTaskDistributionFields);
+
+export const draftTaskInsertSchema = draftTaskInsertSchemaBase.superRefine(validateTaskDistributionFields);
 
 export const bulkImportTaskSchema = taskInsertSchemaBase.extend({
   publish_at: z.string().datetime().nullable().default(null),

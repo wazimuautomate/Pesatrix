@@ -1,10 +1,11 @@
 import { getVaultSecret } from "@/lib/ai/provider-secrets";
 import { analyzeImageWithVision } from "@/lib/ai/visionClient";
+import { callTextModelWithFallback } from "@/lib/ai/modelRouter";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 type ProviderConfig = {
   id?: string;
-  provider: "nvidia" | "openrouter" | "groq" | "ollama";
+  provider: "nvidia" | "openrouter" | "groq" | "gemini" | "ollama";
   model_id: string;
   api_key_secret_name?: string | null;
   base_url: string;
@@ -158,44 +159,54 @@ async function gradeTextSubmission(args: {
   submittedUrl?: string | null;
 }): Promise<TextGrade> {
   const admin = createAdminSupabaseClient();
-  const provider = await getActiveProviderConfig(admin);
-  if (!provider) {
-    throw new Error("No active AI provider configured.");
-  }
-
-  const apiKey = await getProviderApiKey(admin, provider);
-  if (!apiKey) {
-    throw new Error("AI provider secret could not be loaded.");
-  }
-
-  const response = await fetch(`${trimTrailingSlash(provider.base_url)}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: provider.model_id,
-      messages: [
-        {
-          role: "user",
-          content: buildTextPrompt(args),
-        },
-      ],
-      temperature: Number(provider.temperature ?? 0.2),
-      max_tokens: Number(provider.max_tokens ?? 1024),
-      stream: false,
-    }),
+  const prompt = buildTextPrompt(args);
+  const result = await callTextModelWithFallback({
+    admin,
+    messages: [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+    maxTokens: 1024,
+    temperature: 0.2,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    throw new Error(`AI provider returned ${response.status}: ${errorText.slice(0, 200)}`);
+  if (!result.ok) {
+    throw new Error(`AI providers failed: ${result.errors.map((item) => `${item.provider}/${item.model}: ${item.error}`).join("; ")}`);
   }
 
-  const payload = await response.json();
-  const content = payload?.choices?.[0]?.message?.content;
-  return parseTextGrade(typeof content === "string" ? content : "");
+  let parsed = parseTextGrade(result.content);
+  const review = await callTextModelWithFallback({
+    admin,
+    messages: [
+      {
+        role: "user",
+        content: `You are the second-pass quality controller for this Pesatrix verification grading result.
+
+Original grading input:
+${prompt}
+
+First model grading JSON:
+${result.content}
+
+Check whether the first model was fair and consistent. Return ONLY the same JSON shape, correcting the score/reasoning/pass flag only if needed:
+{ "text_score": <0-100>, "text_reasoning": "<1-2 sentences>", "text_passed": <true if text_score >= 60> }`,
+      },
+    ],
+    maxTokens: 1024,
+    temperature: 0.2,
+  });
+
+  if (review.ok) {
+    try {
+      parsed = parseTextGrade(review.content);
+    } catch (error) {
+      console.error("[Verification Grading] Second-pass text grading failed:", error);
+    }
+  }
+
+  return parsed;
 }
 
 function buildTextPrompt({
@@ -376,6 +387,19 @@ function getVerificationType(
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

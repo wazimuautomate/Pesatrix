@@ -462,6 +462,7 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
   const [activationFeeKsh, setActivationFeeKsh] = useState<number | null>(null);
   const [activationDialogOpen, setActivationDialogOpen] = useState(false);
   const [blockedTask, setBlockedTask] = useState<Task | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [selectedCategories, setSelectedCategories] = useState<TaskCategory[]>([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
@@ -525,6 +526,28 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
     return () => window.clearInterval(interval);
   }, [fetchTasks, tasksLocked, trainingIncomplete]);
 
+  useEffect(() => {
+    if (!tasksLocked || !unlockAt) return;
+    const interval = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [tasksLocked, unlockAt]);
+
+  useEffect(() => {
+    if (!tasksLocked || !unlockAt) return;
+    const unlockTime = new Date(unlockAt).getTime();
+    const delay = unlockTime - Date.now();
+    if (delay <= 0) {
+      fetchTasks({ background: true });
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      fetchTasks({ background: true });
+    }, Math.min(delay + 1000, 2147483647));
+
+    return () => window.clearTimeout(timeout);
+  }, [fetchTasks, tasksLocked, unlockAt]);
+
   const handleCategoryToggle = (category: TaskCategory) => {
     setSelectedCategories((prev) =>
       prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
@@ -572,6 +595,8 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
   }, [tasks, selectedCategories, selectedDifficulty, searchQuery, sortBy]);
 
   const hasActiveFilters = selectedCategories.length > 0 || selectedDifficulty || searchQuery.trim().length > 0;
+  const timeRemaining = tasksLocked && unlockAt ? formatRemainingTime(new Date(unlockAt).getTime() - nowMs) : null;
+  const showTaskGateNotice = !canStartTasks && !(gateReason === "tasks_locked" && unlockAt && new Date(unlockAt).getTime() <= nowMs);
 
   if (loading) {
     return (
@@ -612,7 +637,7 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
 
   return (
     <div className="space-y-6">
-      {!canStartTasks && (
+      {showTaskGateNotice && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
           <div className="flex items-start gap-3">
             <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
@@ -625,7 +650,10 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
               </p>
               {gateReason === "tasks_locked" && unlockAt && (
                 <p className="mt-1 text-xs font-medium text-amber-800">
-                  Unlock time: {new Date(unlockAt).toLocaleString()}
+                  {timeRemaining && timeRemaining !== "Unlocked"
+                    ? `Time remaining: ${timeRemaining}`
+                    : "Tasks are unlocking now. Refreshing shortly."}
+                  {" "}Unlock time: {new Date(unlockAt).toLocaleString()}
                 </p>
               )}
             </div>
@@ -655,6 +683,18 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+        <select
+          value={selectedCategories[0] ?? ""}
+          onChange={(e) => setSelectedCategories(e.target.value ? [e.target.value as TaskCategory] : [])}
+          className="rounded-md border px-3 py-2 text-sm"
+        >
+          <option value="">Filter Task Categories</option>
+          {CATEGORIES.map((cat) => (
+            <option key={cat} value={cat}>
+              {CATEGORY_LABELS[cat]}
+            </option>
+          ))}
+        </select>
         <select value={selectedDifficulty ?? ""} onChange={(e) => setSelectedDifficulty(e.target.value || null)} className="rounded-md border px-3 py-2 text-sm">
           <option value="">All Difficulties</option>
           {DIFFICULTIES.map((d) => (
@@ -694,20 +734,6 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
           </Button>
         </div>
       )}
-
-      <div className="flex flex-wrap gap-2">
-        {CATEGORIES.map((cat) => (
-          <motion.div key={cat} whileTap={{ scale: 0.97 }}>
-            <Button
-              variant={selectedCategories.includes(cat) ? "default" : "outline"}
-              size="sm"
-              onClick={() => handleCategoryToggle(cat)}
-            >
-              {CATEGORY_LABELS[cat]}
-            </Button>
-          </motion.div>
-        ))}
-      </div>
 
       {filteredTasks.length === 0 ? (
         !hasActiveFilters && !isAdmin ? (
@@ -778,4 +804,18 @@ export function TaskListClient({ isAdmin = false }: { isAdmin?: boolean }) {
       </Dialog>
     </div>
   );
+}
+
+function formatRemainingTime(milliseconds: number) {
+  if (milliseconds <= 0) return "Unlocked";
+  const totalSeconds = Math.ceil(milliseconds / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
 }
