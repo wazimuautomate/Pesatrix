@@ -9,11 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 type AiTestResult = {
-  model: string;
+  provider?: string | null;
+  model?: string | null;
   status: "ok" | "timeout" | "error";
   latency_ms: number;
   response_preview: string;
   error: string | null;
+  errors?: Array<{ provider: string; model: string; error: string }>;
 };
 
 export function AiHealthPanel({ initialStuckCount }: { initialStuckCount: number }) {
@@ -86,8 +88,19 @@ export function AiHealthPanel({ initialStuckCount }: { initialStuckCount: number
               {healthy ? <CheckCircle2 className="h-4 w-4 text-teal" /> : <XCircle className="h-4 w-4 text-destructive" />}
               {result.status.toUpperCase()} - {result.latency_ms.toLocaleString()} ms
             </div>
-            <p className="mt-2 font-mono text-xs text-muted-foreground">{result.model}</p>
+            <p className="mt-2 font-mono text-xs text-muted-foreground">
+              {result.provider ? `${result.provider} / ` : ""}{result.model ?? "No model selected"}
+            </p>
             {result.error ? <p className="mt-2 text-destructive">{result.error}</p> : null}
+            {result.errors?.length ? (
+              <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                {result.errors.slice(0, 4).map((item) => (
+                  <li key={`${item.provider}-${item.model}`}>
+                    {item.provider}/{item.model}: {item.error}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             {result.response_preview ? (
               <pre className="mt-3 max-h-32 overflow-auto rounded bg-muted p-3 text-xs text-muted-foreground">
                 {result.response_preview}
@@ -96,7 +109,7 @@ export function AiHealthPanel({ initialStuckCount }: { initialStuckCount: number
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Run a live OpenRouter request to measure current grading latency.
+            Run a live grading request through the configured provider chain.
           </p>
         )}
       </CardContent>

@@ -9,7 +9,7 @@ type RouteContext = {
 };
 
 const updateProviderSchema = z.object({
-  provider: z.enum(["nvidia", "openrouter", "groq", "ollama"]).optional(),
+  provider: z.enum(["nvidia", "openrouter", "groq", "gemini", "ollama"]).optional(),
   displayName: optionalNonEmptyString(120),
   modelId: optionalNonEmptyString(200),
   apiKey: optionalNonEmptyString(),
@@ -29,7 +29,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     allowedRoles: ["admin"],
   });
   if (authResult.error) return authResult.error;
-  if (!authResult.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!authResult.userId || !authResult.adminUser || !["admin", "super_admin"].includes(authResult.adminUser.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { id } = await params;
   const body = await request.json();
@@ -140,7 +142,9 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     allowedRoles: ["admin"],
   });
   if (authResult.error) return authResult.error;
-  if (!authResult.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!authResult.userId || !authResult.adminUser || !["admin", "super_admin"].includes(authResult.adminUser.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { id } = await params;
   const admin = createAdminSupabaseClient();

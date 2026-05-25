@@ -105,7 +105,7 @@ export async function GET() {
     activationFeeKsh,
     trainingStatus: access.training.status,
     taskUnlockAt: access.taskUnlockAt,
-    tasksLocked: !access.canStartTasks,
+    tasksLocked: access.tasksLocked,
     canStartTasks: access.canStartTasks,
     gateReason: access.gateReason,
     gateMessage: access.gateMessage,

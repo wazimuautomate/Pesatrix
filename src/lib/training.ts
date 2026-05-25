@@ -376,12 +376,9 @@ export async function getTrainingProgramSnapshotForUser(
     ? addHours(completedAt, configuredTaskUnlockDelayHours)
     : null;
   const storedTaskUnlockAt = validDate(trainingProgress.task_unlock_at);
-  const effectiveTaskUnlockAt =
-    trainingProgress.task_unlock_accelerated && storedTaskUnlockAt && configuredTaskUnlockAt
-      ? storedTaskUnlockAt.getTime() < configuredTaskUnlockAt.getTime()
-        ? storedTaskUnlockAt
-        : configuredTaskUnlockAt
-      : configuredTaskUnlockAt ?? storedTaskUnlockAt;
+  const effectiveTaskUnlockAt = trainingProgress.task_unlock_accelerated
+    ? storedTaskUnlockAt
+    : configuredTaskUnlockAt ?? storedTaskUnlockAt;
   const effectiveTaskUnlockAtIso = effectiveTaskUnlockAt?.toISOString() ?? null;
 
   const now = new Date();

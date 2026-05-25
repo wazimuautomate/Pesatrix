@@ -2,39 +2,31 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { TASK_SCREENSHOT_BUCKET, parseTaskScreenshotUrl } from "@/lib/task-screenshots";
 
 const FALLBACK_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
-const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const VISION_MODEL_TIMEOUT_MS = 25000;
 const VISION_MODEL_MAX_TOKENS = 1024;
 
 type VisionModelConfig = {
   modelId: string;
-  provider: "nvidia" | "openrouter";
+  provider: "nvidia";
   supportsVision: boolean;
   baseUrl: string;
-  apiKeyName: "NVIDIA_API_KEY" | "OPENROUTER_API_KEY";
+  apiKeyName: "NVIDIA_API_KEY";
 };
 
 const VISION_MODELS: VisionModelConfig[] = [
   {
-    modelId: "google/paligemma-3b-pt-224",
+    modelId: "mistralai/mistral-large-3-675b-instruct-2512",
     provider: "nvidia",
     supportsVision: true,
     baseUrl: FALLBACK_NVIDIA_BASE_URL,
     apiKeyName: "NVIDIA_API_KEY",
   },
   {
-    modelId: "qwen/qwen2.5-vl-72b-instruct:free",
-    provider: "openrouter",
+    modelId: "google/paligemma-3b-pt-224",
+    provider: "nvidia",
     supportsVision: true,
-    baseUrl: OPENROUTER_BASE_URL,
-    apiKeyName: "OPENROUTER_API_KEY",
-  },
-  {
-    modelId: "meta-llama/llama-3.2-11b-vision-instruct:free",
-    provider: "openrouter",
-    supportsVision: true,
-    baseUrl: OPENROUTER_BASE_URL,
-    apiKeyName: "OPENROUTER_API_KEY",
+    baseUrl: FALLBACK_NVIDIA_BASE_URL,
+    apiKeyName: "NVIDIA_API_KEY",
   },
 ];
 
@@ -81,11 +73,6 @@ async function callVisionModel(
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     };
-
-    if (modelConfig.provider === "openrouter") {
-      headers["HTTP-Referer"] = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://pesatrix.com";
-      headers["X-Title"] = "Pesatrix";
-    }
 
     const response = await fetch(`${modelConfig.baseUrl}/chat/completions`, {
       method: "POST",

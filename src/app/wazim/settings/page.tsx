@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { AdminPageShell, MetricCard } from "@/components/admin/admin-native";
 import { AiProviderManager } from "@/components/admin/ai-provider-manager";
 import { AiHealthPanel } from "@/components/admin/ai-health-panel";
+import { SmsHealthPanel } from "@/components/admin/sms-health-panel";
 import { TrainingSettingsForm } from "@/components/admin/training-settings-form";
 import { PlatformSettingsForm } from "@/components/admin/platform-settings-form";
 import { TaskLimitsSettingsForm } from "@/components/admin/task-limits-settings-form";
@@ -77,6 +78,7 @@ export default async function AdminSettingsPage() {
   const holdSetting = settings.find((s: { key: string }) => s.key === WITHDRAWAL_HOLD_DAYS_KEY);
   const dailyTaskLimitSetting = settings.find((s: { key: string }) => s.key === DAILY_TASK_LIMIT_KEY);
   const referralLevel1Setting = settings.find((s: { key: string }) => s.key === REFERRAL_LEVEL_1_REWARD_KEY);
+  const adminSmsPhoneSetting = settings.find((s: { key: string }) => s.key === "admin_sms_phone");
   const environmentSettings = getEnvironmentReadiness();
   const dailyTaskLimit = Number.isInteger(Number(dailyTaskLimitSetting?.value))
     ? Number(dailyTaskLimitSetting?.value)
@@ -124,6 +126,8 @@ export default async function AdminSettingsPage() {
       <PlatformSettingsForm initialSettings={settings} />
 
       <AiHealthPanel initialStuckCount={stuckAiReviewCount} />
+
+      <SmsHealthPanel adminPhone={adminSmsPhoneSetting?.value ?? null} />
 
       <AiProviderManager initialProviders={aiProviders} />
 

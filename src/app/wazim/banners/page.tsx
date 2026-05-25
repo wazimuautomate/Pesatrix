@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Loader2, Megaphone } from "lucide-react";
+import { Pencil, Plus, Trash2, Loader2, Megaphone } from "lucide-react";
 import { toast } from "sonner";
 import { TableSkeleton } from "@/components/ui/skeleton-loaders";
 import { AdminPageShell } from "@/components/admin/admin-native";
@@ -24,6 +24,8 @@ type Banner = {
   type: string;
   target: string;
   is_active: boolean;
+  is_dismissible: boolean;
+  target_user_id?: string | null;
   expires_at: string | null;
   created_at: string;
 };
@@ -32,6 +34,7 @@ export default function BannersPage() {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
 
   const fetchBanners = useCallback(async () => {
@@ -105,7 +108,10 @@ export default function BannersPage() {
       description="Manage platform-wide and targeted announcements displayed on the user dashboard."
       headerVariant="logoOnly"
       actions={
-        <Button size="sm" onClick={() => setShowModal(true)}>
+        <Button size="sm" onClick={() => {
+          setEditingBanner(null);
+          setShowModal(true);
+        }}>
           <Plus className="mr-1 h-4 w-4" /> New Banner
         </Button>
       }
@@ -165,6 +171,19 @@ export default function BannersPage() {
                     {new Date(banner.created_at).toLocaleDateString()}
                   </td>
                   <td>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditingBanner(banner);
+                          setShowModal(true);
+                        }}
+                        disabled={actionLoading[banner.id]}
+                        title="Edit banner"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -178,6 +197,7 @@ export default function BannersPage() {
                         <Trash2 className="h-4 w-4" />
                       )}
                     </Button>
+                    </div>
                   </td>
                 </TableRow>
               ))
@@ -188,8 +208,12 @@ export default function BannersPage() {
 
       <CreateBannerModal
         open={showModal}
-        onOpenChange={setShowModal}
+        onOpenChange={(open) => {
+          setShowModal(open);
+          if (!open) setEditingBanner(null);
+        }}
         onSuccess={fetchBanners}
+        banner={editingBanner}
       />
     </AdminPageShell>
   );

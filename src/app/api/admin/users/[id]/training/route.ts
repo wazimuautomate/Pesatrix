@@ -54,9 +54,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Training progress not found" }, { status: 404 });
   }
 
-  const update: Record<string, string | null> = {};
+  const update: Record<string, unknown> = {};
   if (hasTaskUnlock) update.task_unlock_at = parsed.data.task_unlock_at ?? null;
   if (hasNextDayUnlock) update.next_day_unlock_at = parsed.data.next_day_unlock_at ?? null;
+  if (hasTaskUnlock) update.task_unlock_accelerated = true;
 
   const { data: training, error: updateError } = await (admin.from("training_progress" as never) as any)
     .update(update)
