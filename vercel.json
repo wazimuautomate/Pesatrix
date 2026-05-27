@@ -1,6 +1,5 @@
 {
   "crons": [
-    { "path": "/api/cron/release-tasks", "schedule": "0 * * * *" },
     { "path": "/api/cron/release-pending", "schedule": "0 2 * * *" }
   ]
 }
