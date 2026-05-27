@@ -71,6 +71,8 @@ type MetaState = {
   min_word_count: string;
   visibility_mode: TaskVisibilityMode;
   min_referrals_required: string;
+  is_starter: boolean;
+  starter_day: string;
 };
 
 type AssignableUser = {
@@ -98,6 +100,8 @@ const emptyMeta: MetaState = {
   min_word_count: "0",
   visibility_mode: "all",
   min_referrals_required: "3",
+  is_starter: false,
+  starter_day: "1",
 };
 
 export function TaskForm({ task, initialAssignedUsers = [], onSave, onCancel }: TaskFormProps) {
@@ -144,6 +148,8 @@ export function TaskForm({ task, initialAssignedUsers = [], onSave, onCancel }: 
         min_word_count: String(task.min_word_count ?? 0),
         visibility_mode: task.visibility_mode ?? "all",
         min_referrals_required: String(Math.max(3, Number(task.min_referrals_required ?? 0))),
+        is_starter: (task as any).is_starter ?? false,
+        starter_day: (task as any).starter_day ? String((task as any).starter_day) : "1",
       });
       setTaskData(task.task_data ?? {});
       setAssignedUsers(task.assigned_users ?? []);
@@ -234,6 +240,31 @@ export function TaskForm({ task, initialAssignedUsers = [], onSave, onCancel }: 
     );
   }
 
+  function handleStarterToggle(checked: boolean) {
+    setMeta((m) => {
+      const day = Number(m.starter_day || 1);
+      const defaultPayout = day <= 2 ? "10" : day <= 4 ? "13" : "15";
+      return {
+        ...m,
+        is_starter: checked,
+        total_slots: checked ? "9999" : m.total_slots === "9999" ? "100" : m.total_slots,
+        payout_ksh: checked ? defaultPayout : m.payout_ksh,
+      };
+    });
+  }
+
+  function handleStarterDayChange(dayStr: string) {
+    setMeta((m) => {
+      const day = Number(dayStr);
+      const defaultPayout = day <= 2 ? "10" : day <= 4 ? "13" : "15";
+      return {
+        ...m,
+        starter_day: dayStr,
+        payout_ksh: m.is_starter ? defaultPayout : m.payout_ksh,
+      };
+    });
+  }
+
   async function handleSubmit(publish: boolean) {
     setLoading(true);
     setTitleError("");
@@ -260,6 +291,8 @@ export function TaskForm({ task, initialAssignedUsers = [], onSave, onCancel }: 
         task_data: taskData,
         publish_at: publish && publishImmediately ? null : normalizeDatetime(publishAt),
         expires_at: normalizeDatetime(expiresAt),
+        is_starter: meta.is_starter,
+        starter_day: meta.is_starter ? Number(meta.starter_day) : null,
       };
 
       if (task) {
@@ -579,6 +612,37 @@ export function TaskForm({ task, initialAssignedUsers = [], onSave, onCancel }: 
           />
           <Label htmlFor="tf-ai">AI grading</Label>
         </div>
+
+        <div className="flex items-center gap-3">
+          <Switch
+            checked={meta.is_starter}
+            onCheckedChange={handleStarterToggle}
+            id="tf-starter"
+          />
+          <Label htmlFor="tf-starter">Starter Task</Label>
+        </div>
+
+        {meta.is_starter && (
+          <div>
+            <Label>Starter Day</Label>
+            <Select
+              value={meta.starter_day}
+              onValueChange={handleStarterDayChange}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Day 1 (KSh 10)</SelectItem>
+                <SelectItem value="2">Day 2 (KSh 10)</SelectItem>
+                <SelectItem value="3">Day 3 (KSh 13)</SelectItem>
+                <SelectItem value="4">Day 4 (KSh 13)</SelectItem>
+                <SelectItem value="5">Day 5 (KSh 15)</SelectItem>
+                <SelectItem value="6">Day 6 (KSh 15)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {meta.ai_grading_enabled && (
           <div className="sm:col-span-2 lg:col-span-3">

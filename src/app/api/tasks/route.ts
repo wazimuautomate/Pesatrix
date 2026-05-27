@@ -6,6 +6,7 @@ import { getActivationFeeKsh, getDailyTaskLimit } from "@/lib/platform-settings"
 import { sanitizeTaskDataForClient } from "@/lib/task-data";
 import { evaluateTaskAccess, getTaskAccessContext, isTaskLive } from "@/lib/task-distribution";
 import { countActivatedReferrals, getHighTaskGateSettings } from "@/lib/wallet/withdrawalLimits";
+import { assignStarterTasks } from "@/lib/tasks/starterAssignment";
 
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -34,14 +35,46 @@ export async function GET() {
     .eq("user_id", user.id)
     .gte("submitted_at", todayStart.toISOString());
 
-  const [taskResult, submissionsResult, taskAccess] = await Promise.all([
-    admin
-      .from("tasks")
-      .select("id, title, category, description, instructions, payout_ksh, slots_remaining, difficulty, status, publish_at, expires_at, task_data, requires_screenshot, requires_url, min_word_count, visibility_mode, min_referrals_required")
-      .in("status", ["active", "scheduled"])
-      .gt("slots_remaining", 0)
-      .or("expires_at.is.null,expires_at.gt.now()")
-      .order("created_at", { ascending: false }),
+  if (access.activated) {
+    const { count: assignmentCount, error: countAssignError } = await admin
+      .from("task_assignments")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id);
+
+    if (!countAssignError && (assignmentCount === null || assignmentCount === 0)) {
+      try {
+        await assignStarterTasks(user.id);
+      } catch (err) {
+        console.error("[GET /api/tasks] Fallback starter task assignment failed:", err);
+      }
+    }
+  }
+
+  const starterTaskPromise = admin
+    .from("task_assignments")
+    .select(`
+      status,
+      unlocks_at,
+      tasks (
+        id, title, category, description, instructions, payout_ksh, slots_remaining, difficulty, status, publish_at, expires_at, task_data, requires_screenshot, requires_url, min_word_count, visibility_mode, min_referrals_required, is_starter
+      )
+    `)
+    .eq("user_id", user.id)
+    .in("status", ["available", "completed"])
+    .lte("unlocks_at", new Date().toISOString());
+
+  const regularTaskPromise = admin
+    .from("tasks")
+    .select("id, title, category, description, instructions, payout_ksh, slots_remaining, difficulty, status, publish_at, expires_at, task_data, requires_screenshot, requires_url, min_word_count, visibility_mode, min_referrals_required, is_starter")
+    .eq("is_starter", false)
+    .in("status", ["active", "scheduled"])
+    .gt("slots_remaining", 0)
+    .or("expires_at.is.null,expires_at.gt.now()")
+    .order("created_at", { ascending: false });
+
+  const [starterResult, regularResult, submissionsResult, taskAccess] = await Promise.all([
+    starterTaskPromise,
+    regularTaskPromise,
     admin
       .from("task_submissions")
       .select("task_id")
@@ -49,12 +82,18 @@ export async function GET() {
     getTaskAccessContext(admin, user.id),
   ]);
 
-  if (taskResult.error) {
+  if (regularResult.error) {
     return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 });
   }
 
+  const assignedStarterTasks = (starterResult.data ?? [])
+    .map((row: any) => row.tasks)
+    .filter((task: any) => task !== null && task !== undefined);
+
+  const mergedTasks = [...assignedStarterTasks, ...(regularResult.data ?? [])];
+
   const submittedTaskIds = (submissionsResult.data ?? []).map((s: { task_id: string }) => s.task_id);
-  const visibleTasks = (taskResult.data ?? []).filter((task: Record<string, unknown>) => isTaskLive(task));
+  const visibleTasks = mergedTasks.filter((task: Record<string, unknown>) => isTaskLive(task));
 
   const formattedTasks = visibleTasks.map((task: Record<string, unknown>) => {
     const taskEligibility = evaluateTaskAccess(task as { id: string }, taskAccess);

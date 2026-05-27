@@ -18,23 +18,53 @@ export async function GET(request: Request) {
   const statusFilter = searchParams.get("status")?.trim() ?? "";
   const categoryFilter = searchParams.get("category")?.trim() ?? "";
   const search = searchParams.get("search")?.trim() ?? "";
+  const isStarterParam = searchParams.get("is_starter");
 
   const admin = createAdminSupabaseClient();
-  let query = admin.from("tasks").select("*");
+  let selectFields = "*";
+  if (isStarterParam === "true") {
+    selectFields = "*, task_assignments(status)";
+  }
+  let query = admin.from("tasks").select(selectFields);
 
   if (categoryFilter) query = query.eq("category", categoryFilter);
   if (statusFilter) query = query.eq("status", statusFilter);
   if (search) query = query.ilike("title", `%${search}%`);
+  if (isStarterParam === "true") {
+    query = query.eq("is_starter", true);
+  } else if (isStarterParam === "false") {
+    query = query.eq("is_starter", false);
+  }
 
-  const { data: tasks, error: fetchError } = await query.order("created_at", { ascending: false });
+  const { data: rawTasks, error: fetchError } = await query.order("created_at", { ascending: false });
 
   if (fetchError) {
     return NextResponse.json({ error: fetchError.message, items: [] }, { status: 400 });
   }
 
-  const { data: countsData } = await admin
-    .from("tasks")
-    .select("status");
+  const tasks = (rawTasks ?? []).map((task: any) => {
+    if (isStarterParam === "true") {
+      const assignments = task.task_assignments ?? [];
+      const assignedCount = assignments.length;
+      const completedCount = assignments.filter((a: any) => a.status === "completed").length;
+      const cleanTask = { ...task };
+      delete cleanTask.task_assignments;
+      return {
+        ...cleanTask,
+        assigned_count: assignedCount,
+        completed_count: completedCount,
+      };
+    }
+    return task;
+  });
+
+  let countsQuery = admin.from("tasks").select("status");
+  if (isStarterParam === "true") {
+    countsQuery = countsQuery.eq("is_starter", true);
+  } else if (isStarterParam === "false") {
+    countsQuery = countsQuery.eq("is_starter", false);
+  }
+  const { data: countsData } = await countsQuery;
 
   const counts = {
     total: (tasks ?? []).length,
@@ -99,6 +129,8 @@ export async function POST(request: Request) {
     min_referrals_required,
     assigned_user_ids,
     task_data,
+    is_starter,
+    starter_day,
   } = parsed.data;
 
   const [maxTaskPayoutKsh, maxTaskBatchValueKsh] = await Promise.all([
@@ -164,6 +196,8 @@ export async function POST(request: Request) {
       visibility_mode,
       min_referrals_required,
       task_data: task_data ?? {},
+      is_starter: is_starter ?? false,
+      starter_day: starter_day ?? null,
     })
     .select("*")
     .single();

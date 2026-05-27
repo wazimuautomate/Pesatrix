@@ -20,6 +20,8 @@ import {
 } from "@/lib/platform-settings";
 import { getEnvironmentReadiness } from "@/lib/environment-readiness";
 import { requireWazimAdmin } from "@/lib/wazim-admin";
+import { CronSettingsForm } from "@/components/admin/cron-settings-form";
+import { getAppBaseUrl } from "@/lib/app-url";
 
 async function getPlatformSettings() {
   const admin = createAdminSupabaseClient();
@@ -72,6 +74,7 @@ export default async function AdminSettingsPage() {
   const settings = await getPlatformSettings();
   const aiProviders = await getAiProviderConfigs();
   const stuckAiReviewCount = await getStuckAiReviewCount();
+  const appUrl = await getAppBaseUrl();
 
   const trainingRewardSetting = settings.find((s: { key: string }) => s.key === "training_completion_reward_ksh");
   const activationFeeSetting = settings.find((s: { key: string }) => s.key === ACTIVATION_FEE_KSH_KEY);
@@ -144,6 +147,8 @@ export default async function AdminSettingsPage() {
           <TrainingSettingsForm initialMinutes={1} />
         </CardContent>
       </Card>
+
+      <CronSettingsForm appUrl={appUrl} />
 
       <Card className="mt-6 border border-outline-variant/40 shadow-sm">
         <CardHeader><CardTitle className="text-lg text-navy">Environment Readiness</CardTitle></CardHeader>

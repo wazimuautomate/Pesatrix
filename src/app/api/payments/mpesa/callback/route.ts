@@ -4,6 +4,7 @@ import { z } from "zod";
 import { syncAccountActivationFromPaidPayments } from "@/lib/activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { creditDirectReferralBonus } from "@/lib/referral";
+import { assignStarterTasks } from "@/lib/tasks/starterAssignment";
 import { SYSTEM_ADMIN_ID } from "@/lib/fraud/riskScorer";
 import {
   extractIP,
@@ -225,6 +226,12 @@ export async function POST(request: Request) {
     }
 
     await syncAccountActivationFromPaidPayments(admin, payment.user_id);
+
+    try {
+      await assignStarterTasks(payment.user_id);
+    } catch (starterError) {
+      console.error("[Daraja Callback] Starter task assignment post-processing failed", starterError);
+    }
 
     try {
       await creditDirectReferralBonus(payment.user_id);

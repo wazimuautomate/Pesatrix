@@ -187,6 +187,8 @@ export const taskInsertSchemaBase = z.object({
   min_referrals_required: z.number().int().min(0).default(0),
   assigned_user_ids: z.array(z.string().uuid()).default([]),
   task_data: taskDataSchema,
+  is_starter: z.boolean().default(false),
+  starter_day: z.number().int().min(1).max(6).nullable().optional(),
 });
 
 export const draftTaskInsertSchemaBase = taskInsertSchemaBase.extend({

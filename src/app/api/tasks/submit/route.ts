@@ -415,6 +415,17 @@ export async function POST(request: Request) {
     );
   }
 
+  // Mark task_assignment as completed if it exists
+  try {
+    await admin
+      .from("task_assignments")
+      .update({ status: "completed" })
+      .eq("user_id", user.id)
+      .eq("task_id", taskId);
+  } catch (err) {
+    console.error("[Submission] Error updating task assignment status to completed:", err);
+  }
+
   void logActivity({
     userId: user.id,
     eventType: "task_submitted",
