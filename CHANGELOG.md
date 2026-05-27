@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.2] - 2026-05-27
+
+### Added
+- Starter Task Assignment System:
+  - Added schema support to tasks for `is_starter` and `starter_day` (values 1-6).
+  - Added new `task_assignments` DB table columns for `unlocks_at` (staggered release calendar) and `status` ('locked', 'available', 'completed', 'expired').
+  - Added a `BEFORE INSERT` trigger in Postgres to set default status and unlocks_at values, maintaining backward-compatibility with manual assignments.
+  - Implemented automated sequence logic (`assignStarterTasks`) to assign 12 starter tasks upon user activation, unlocking 2 per day over 6 days.
+  - Created a robust recovery fallback check on user task GET fetches to trigger assignment if activation callback fails.
+  - Added a secure hourly release Vercel cron job (`/api/cron/release-tasks`) with cron secret authentication.
+  - Added dedicated columns (Day, Payout, Assigned count, Completed count) and a filter toggle on the admin tasks page (`/wazim/tasks`) to manage and inspect starter tasks.
+  - Wired automated payout and slots default configuration (total slots = 9999) inside the admin task creation form (`TaskForm`) when the "Starter Task" flag is checked.
+
 ## [0.9.1] - 2026-05-23
 
 ### Fixed

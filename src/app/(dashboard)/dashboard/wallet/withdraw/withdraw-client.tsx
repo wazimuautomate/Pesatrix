@@ -295,7 +295,7 @@ export default function WithdrawClientPage() {
               typically takes {limits?.withdrawalProcessingDays ?? 3} days after approval.
             </p>
             <p className="mt-2 font-medium text-foreground">
-              Minimum withdrawal: KSh {configuredMinWithdrawal?.toLocaleString() ?? "N/A"} | Processing fee: KSh {limits?.withdrawalFee?.toLocaleString() ?? 30}
+              Minimum withdrawal: KSh {configuredMinWithdrawal?.toLocaleString() ?? "N/A"} | No processing fees on withdrawals
             </p>
           </div>
         </CardContent>

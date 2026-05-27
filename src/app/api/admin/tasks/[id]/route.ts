@@ -30,6 +30,8 @@ const updateTaskSchema = z.object({
   min_referrals_required: z.number().int().min(0).optional(),
   assigned_user_ids: z.array(z.string().uuid()).optional(),
   task_data: z.record(z.unknown()).optional(),
+  is_starter: z.boolean().optional(),
+  starter_day: z.number().int().min(1).max(6).nullable().optional(),
 }).superRefine((data, ctx) => {
   if (
     data.visibility_mode &&
@@ -133,6 +135,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   if (data.visibility_mode !== undefined) update.visibility_mode = data.visibility_mode;
   if (data.min_referrals_required !== undefined) update.min_referrals_required = data.min_referrals_required;
   if (data.task_data !== undefined) update.task_data = data.task_data;
+  if (data.is_starter !== undefined) update.is_starter = data.is_starter;
+  if (data.starter_day !== undefined) update.starter_day = data.starter_day;
 
   const finalVisibilityMode = (data.visibility_mode ?? before.visibility_mode ?? "all") as string;
   const finalAssignedUserIds = data.assigned_user_ids ?? undefined;

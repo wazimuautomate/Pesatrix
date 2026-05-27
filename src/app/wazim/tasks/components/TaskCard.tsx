@@ -61,7 +61,7 @@ type TaskItemProps = {
   actionLoading?: "status" | "delete" | null;
 };
 
-const STATUS_COLORS: Record<TaskStatus, string> = {
+export const STATUS_COLORS: Record<TaskStatus, string> = {
   draft: "bg-gray-100 text-gray-700 border-gray-200",
   scheduled: "bg-blue-100 text-blue-700 border-blue-200",
   active: "bg-green-100 text-green-700 border-green-200",
@@ -94,7 +94,7 @@ function getVisibilityLabel(task: TaskRow) {
   return "All users";
 }
 
-function getTaskActionState(task: TaskRow, actionLoading?: "status" | "delete" | null) {
+export function getTaskActionState(task: TaskRow, actionLoading?: "status" | "delete" | null) {
   const nextStatus: TaskStatus | null =
     task.status === "active"
       ? "paused"

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, FileEdit, FileUp, Loader2, Plus, Search, Send, Trash2, X } from "lucide-react";
+import { AlertCircle, FileEdit, FileUp, Loader2, Pencil, Pause, Play, Plus, Search, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { CardSkeleton, TableSkeleton, FormSkeleton } from "@/components/ui/skeleton-loaders";
 
@@ -25,8 +25,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { type TaskStatus } from "@/lib/task-types";
-import { TaskMobileCard, TaskTableRow, type TaskRow } from "./components/TaskCard";
+import { type TaskStatus, CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/task-types";
+import { TaskMobileCard, TaskTableRow, type TaskRow, STATUS_COLORS, getTaskActionState } from "./components/TaskCard";
+import { cn } from "@/lib/utils";
 import { TaskForm } from "./components/TaskForm";
 import { TaskImportPanel } from "./components/TaskImportPanel";
 
@@ -51,6 +52,7 @@ export default function TasksPage() {
   const searchParams = useSearchParams();
   const assignUserId = searchParams.get("assignUser");
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [starterFilter, setStarterFilter] = useState(false);
   const [counts, setCounts] = useState<Counts>({
     total: 0,
     draft: 0,
@@ -81,6 +83,11 @@ export default function TasksPage() {
       if (search) params.set("search", search);
       if (categoryFilter && categoryFilter !== "all") params.set("category", categoryFilter);
       if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
+      if (starterFilter) {
+        params.set("is_starter", "true");
+      } else {
+        params.set("is_starter", "false");
+      }
 
       const res = await fetch(`/api/admin/tasks?${params.toString()}`);
       const data = await res.json();
@@ -100,7 +107,7 @@ export default function TasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, categoryFilter, statusFilter]);
+  }, [search, categoryFilter, statusFilter, starterFilter]);
 
   useEffect(() => {
     fetchTasks();
@@ -382,7 +389,15 @@ export default function TasksPage() {
           )}
         </Button>
 
-        {(search || (categoryFilter && categoryFilter !== "all") || (statusFilter && statusFilter !== "all")) && (
+        <Button
+          variant={starterFilter ? "default" : "outline"}
+          size="sm"
+          onClick={() => setStarterFilter(!starterFilter)}
+        >
+          Starter Tasks
+        </Button>
+
+        {(search || (categoryFilter && categoryFilter !== "all") || (statusFilter && statusFilter !== "all") || starterFilter) && (
           <Button
             variant="ghost"
             size="sm"
@@ -390,6 +405,7 @@ export default function TasksPage() {
               setSearch("");
               setCategoryFilter("all");
               setStatusFilter("all");
+              setStarterFilter(false);
             }}
           >
             <X className="mr-1 h-3.5 w-3.5" /> Clear
@@ -481,51 +497,169 @@ export default function TasksPage() {
       <div className="mt-4 hidden rounded-lg border bg-white md:block">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="w-[40px]">
-                <input
-                  type="checkbox"
-                  checked={tasks.length > 0 && selectedTasks.size === tasks.length}
-                  onChange={toggleSelectAll}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-              </TableHead>
-              <TableHead>Title</TableHead>
-              <TableHead>Access</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Payout (KSh)</TableHead>
-              <TableHead>Slots</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>AI</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead className="w-[120px]">Actions</TableHead>
-            </TableRow>
+            {starterFilter ? (
+              <TableRow>
+                <TableHead className="w-[40px]">
+                  <input
+                    type="checkbox"
+                    checked={tasks.length > 0 && selectedTasks.size === tasks.length}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                </TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Day</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Payout (KSh)</TableHead>
+                <TableHead>Assigned Count</TableHead>
+                <TableHead>Completed Count</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[120px]">Actions</TableHead>
+              </TableRow>
+            ) : (
+              <TableRow>
+                <TableHead className="w-[40px]">
+                  <input
+                    type="checkbox"
+                    checked={tasks.length > 0 && selectedTasks.size === tasks.length}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                </TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Access</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Payout (KSh)</TableHead>
+                <TableHead>Slots</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>AI</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="w-[120px]">Actions</TableHead>
+              </TableRow>
+            )}
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableSkeleton rows={8} columns={10} />
+              <TableSkeleton rows={8} columns={starterFilter ? 9 : 10} />
             ) : tasks.length === 0 ? (
               <TableRow>
-                <td colSpan={10} className="p-8 text-center text-muted-foreground">
+                <td colSpan={starterFilter ? 9 : 10} className="p-8 text-center text-muted-foreground">
                   {search || (categoryFilter && categoryFilter !== "all") || (statusFilter && statusFilter !== "all")
                     ? "No tasks found"
                     : "No tasks yet. Create one or import from JSON."}
                 </td>
               </TableRow>
             ) : (
-              tasks.map((task) => (
-                <TaskTableRow
-                  key={task.id}
-                  task={task}
-                  onEdit={(row) => handleEdit(row.id)}
-                  onStatusChange={handleStatusChange}
-                  onDelete={handleDelete}
-                  canDelete={task.status === "draft"}
-                  selected={selectedTasks.has(task.id)}
-                  onToggleSelect={() => toggleSelect(task.id)}
-                  actionLoading={rowActionLoading[task.id] ?? null}
-                />
-              ))
+              tasks.map((task: any) => {
+                if (starterFilter) {
+                  const { nextStatus, statusActionLabel, StatusIcon, statusDisabled } = getTaskActionState(task, rowActionLoading[task.id] ?? null);
+                  return (
+                    <TableRow key={task.id} className="group">
+                      <td className="p-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedTasks.has(task.id)}
+                          onChange={() => toggleSelect(task.id)}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                      </td>
+                      <td className="p-4">
+                        <button
+                          onClick={() => handleEdit(task.id)}
+                          className="text-left font-medium text-navy hover:text-pesatrix-blue underline-offset-2 hover:underline"
+                        >
+                          {task.title}
+                        </button>
+                      </td>
+                      <td className="p-4 font-medium text-navy">
+                        Day {task.starter_day ?? "-"}
+                      </td>
+                      <td className="p-4">
+                        <Badge
+                          variant="outline"
+                          className={cn("border", CATEGORY_COLORS[task.category] ?? "")}
+                        >
+                          {CATEGORY_LABELS[task.category] ?? task.category}
+                        </Badge>
+                      </td>
+                      <td className="p-4 font-mono text-sm">
+                        KSh {Number(task.payout_ksh).toLocaleString("en-KE")}
+                      </td>
+                      <td className="p-4 text-sm font-medium text-navy">
+                        {task.assigned_count ?? 0}
+                      </td>
+                      <td className="p-4 text-sm font-medium text-green-700">
+                        {task.completed_count ?? 0}
+                      </td>
+                      <td className="p-4">
+                        <Badge
+                          variant="outline"
+                          className={cn("border", STATUS_COLORS[task.status] ?? "")}
+                        >
+                          {task.status}
+                        </Badge>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleEdit(task.id)}
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              if (nextStatus) handleStatusChange(task.id, nextStatus);
+                            }}
+                            disabled={statusDisabled}
+                            title={statusActionLabel}
+                          >
+                            {rowActionLoading[task.id] === "status" ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <StatusIcon className="h-4 w-4" />
+                            )}
+                          </Button>
+                          {task.status === "draft" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => handleDelete(task.id)}
+                              title="Delete"
+                            >
+                              {rowActionLoading[task.id] === "delete" ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </TableRow>
+                  );
+                }
+                return (
+                  <TaskTableRow
+                    key={task.id}
+                    task={task}
+                    onEdit={(row) => handleEdit(row.id)}
+                    onStatusChange={handleStatusChange}
+                    onDelete={handleDelete}
+                    canDelete={task.status === "draft"}
+                    selected={selectedTasks.has(task.id)}
+                    onToggleSelect={() => toggleSelect(task.id)}
+                    actionLoading={rowActionLoading[task.id] ?? null}
+                  />
+                );
+              })
             )}
           </TableBody>
         </Table>
