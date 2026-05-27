@@ -42,6 +42,10 @@ type ParsedTask = {
   task_data: Record<string, unknown>;
   publish_at: string | null;
   expires_at: string | null;
+  visibility_mode: string;
+  min_referrals_required: number | string;
+  is_starter: boolean;
+  starter_day: number | string;
   _errors: string[];
   _originalIndex: number;
 };
@@ -143,6 +147,34 @@ function validateRow(raw: Record<string, unknown>, index: number): { errors: str
     }
   }
 
+  const visibilityModeRaw = String(raw.visibility_mode ?? "all").trim();
+  const visibility_mode = ["all", "referral_gated", "assigned_only", "proof_tier"].includes(visibilityModeRaw)
+    ? visibilityModeRaw
+    : "all";
+
+  const minReferralsRaw = raw.min_referrals_required;
+  const min_referrals_required = typeof minReferralsRaw === "number"
+    ? minReferralsRaw
+    : isNaN(Number(minReferralsRaw))
+    ? (visibility_mode === "referral_gated" ? 3 : 0)
+    : Number(minReferralsRaw);
+
+  if (visibility_mode === "referral_gated" && min_referrals_required < 3) {
+    errors.push("min_referrals_required must be at least 3 for referral gated tasks");
+  }
+
+  const is_starter = raw.is_starter === true || raw.is_starter === "true";
+  const starterDayRaw = raw.starter_day;
+  const starter_day = typeof starterDayRaw === "number"
+    ? starterDayRaw
+    : isNaN(Number(starterDayRaw))
+    ? (is_starter ? 1 : "")
+    : Number(starterDayRaw);
+
+  if (is_starter && (isNaN(Number(starter_day)) || Number(starter_day) < 1 || Number(starter_day) > 6)) {
+    errors.push("starter_day must be an integer between 1 and 6 for starter tasks");
+  }
+
   const td = taskData;
   const questions = (td.questions as Array<Record<string, unknown>>) ?? [];
   const normalizedQuestions = questions.map((q) => ({
@@ -226,6 +258,10 @@ function validateRow(raw: Record<string, unknown>, index: number): { errors: str
     task_data: normalizedTaskData,
     publish_at: publishAt,
     expires_at: expiresAt,
+    visibility_mode,
+    min_referrals_required,
+    is_starter,
+    starter_day,
     _errors: errors,
     _originalIndex: index,
   };
@@ -460,6 +496,10 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
       task_data: t.task_data,
       publish_at: t.publish_at,
       expires_at: t.expires_at,
+      visibility_mode: t.visibility_mode,
+      min_referrals_required: Number(t.min_referrals_required),
+      is_starter: t.is_starter,
+      starter_day: t.is_starter ? Number(t.starter_day) : null,
     }));
   }
 
@@ -964,6 +1004,88 @@ function ImportTaskCard({
                 }
               />
             </div>
+
+            <div>
+              <Label>Access Tier</Label>
+              <Select
+                value={task.visibility_mode}
+                onValueChange={(v) => {
+                  const minRefs = v === "referral_gated" ? Math.max(3, Number(task.min_referrals_required || 0)) : task.min_referrals_required;
+                  onUpdate({ visibility_mode: v, min_referrals_required: minRefs });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All eligible users</SelectItem>
+                  <SelectItem value="referral_gated">Referral gated</SelectItem>
+                  <SelectItem value="assigned_only">Assigned only</SelectItem>
+                  <SelectItem value="proof_tier">Proof tier</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {task.visibility_mode === "referral_gated" && (
+              <div>
+                <Label>Minimum Referrals</Label>
+                <Input
+                  type="number"
+                  min="3"
+                  value={task.min_referrals_required}
+                  onChange={(e) =>
+                    onUpdate({ min_referrals_required: e.target.value })
+                  }
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={task.is_starter}
+                onCheckedChange={(checked) => {
+                  const day = Number(task.starter_day || 1);
+                  const defaultPayout = day <= 2 ? 10 : day <= 4 ? 13 : 15;
+                  onUpdate({
+                    is_starter: checked,
+                    total_slots: checked ? 9999 : task.total_slots === 9999 ? 100 : task.total_slots,
+                    payout_ksh: checked ? defaultPayout : task.payout_ksh,
+                    starter_day: checked ? day : "",
+                  });
+                }}
+                id={`starter-${index}`}
+              />
+              <Label htmlFor={`starter-${index}`}>Starter Task</Label>
+            </div>
+
+            {task.is_starter && (
+              <div>
+                <Label>Starter Day</Label>
+                <Select
+                  value={String(task.starter_day || "1")}
+                  onValueChange={(v) => {
+                    const day = Number(v);
+                    const defaultPayout = day <= 2 ? 10 : day <= 4 ? 13 : 15;
+                    onUpdate({
+                      starter_day: v,
+                      payout_ksh: defaultPayout,
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Day 1 (KSh 10)</SelectItem>
+                    <SelectItem value="2">Day 2 (KSh 10)</SelectItem>
+                    <SelectItem value="3">Day 3 (KSh 13)</SelectItem>
+                    <SelectItem value="4">Day 4 (KSh 13)</SelectItem>
+                    <SelectItem value="5">Day 5 (KSh 15)</SelectItem>
+                    <SelectItem value="6">Day 6 (KSh 15)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           {task.category === "watch_respond" && (

@@ -31,6 +31,7 @@ import { KENYA_COUNTIES } from "@/lib/auth/counties";
 import { mapRegisterErrorMessage } from "@/lib/auth/register";
 import { captureAndSendFingerprint, getFingerprint, sendFingerprint } from "@/lib/fraud/fingerprint";
 import { createClient } from "@/lib/supabase/client";
+import { FloatingInfoButton } from "@/components/FloatingInfoButton";
 
 const registerSchema = z
   .object({
@@ -385,6 +386,7 @@ export default function RegisterPage() {
           </Link>
         </p>
       </CardContent>
+      <FloatingInfoButton />
     </Card>
   );
 }

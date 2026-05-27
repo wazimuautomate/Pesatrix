@@ -101,6 +101,34 @@ function validateTaskRow(raw: unknown, rowIndex: number): { valid: true; data: R
     }
   }
 
+  const visibilityModeRaw = typeof obj.visibility_mode === "string" ? obj.visibility_mode.trim() : "all";
+  const visibility_mode = (["all", "referral_gated", "assigned_only", "proof_tier"] as const).includes(visibilityModeRaw as any)
+    ? (visibilityModeRaw as "all" | "referral_gated" | "assigned_only" | "proof_tier")
+    : "all";
+
+  const minReferralsRaw = obj.min_referrals_required;
+  const min_referrals_required = typeof minReferralsRaw === "number"
+    ? minReferralsRaw
+    : isNaN(Number(minReferralsRaw))
+    ? (visibility_mode === "referral_gated" ? 3 : 0)
+    : Number(minReferralsRaw);
+
+  if (visibility_mode === "referral_gated" && min_referrals_required < 3) {
+    errors.push("min_referrals_required must be at least 3 for referral gated tasks");
+  }
+
+  const is_starter = obj.is_starter === true || obj.is_starter === "true";
+  const starterDayRaw = obj.starter_day;
+  const starter_day = typeof starterDayRaw === "number"
+    ? starterDayRaw
+    : isNaN(Number(starterDayRaw))
+    ? (is_starter ? 1 : null)
+    : Number(starterDayRaw);
+
+  if (is_starter && (starter_day === null || isNaN(starter_day) || starter_day < 1 || starter_day > 6)) {
+    errors.push("starter_day must be an integer between 1 and 6 for starter tasks");
+  }
+
   if (errors.length > 0) {
     return { valid: false, error: { row: rowIndex + 1, title: title || "(no title)", errors } };
   }
@@ -125,6 +153,10 @@ function validateTaskRow(raw: unknown, rowIndex: number): { valid: true; data: R
       requires_url: Boolean(obj.requires_url),
       min_word_count: typeof obj.min_word_count === "number" ? obj.min_word_count : 0,
       task_data: taskData,
+      visibility_mode,
+      min_referrals_required,
+      is_starter,
+      starter_day,
     },
   };
 }
