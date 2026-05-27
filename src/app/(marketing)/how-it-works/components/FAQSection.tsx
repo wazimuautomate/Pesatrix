@@ -4,6 +4,18 @@ import { motion } from "framer-motion";
 import * as Accordion from "@radix-ui/react-accordion";
 import { ChevronDown, HelpCircle } from "lucide-react";
 
+const WhatsAppIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 24 24"
+    width="24"
+    height="24"
+    fill="currentColor"
+    {...props}
+  >
+    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.625 1.451 5.403.002 9.803-4.392 9.807-9.799.002-2.618-1.01-5.08-2.857-6.932C16.378 2.023 13.916.99 11.998.99c-5.405 0-9.806 4.394-9.81 9.8.001 1.57.447 3.102 1.291 4.468L2.482 20.6l5.525-1.446zm11.016-5.592c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.149-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+  </svg>
+);
+
 export function FAQSection() {
   const faqs = [
     {
@@ -24,7 +36,7 @@ export function FAQSection() {
     },
     {
       q: "Can I refer people?",
-      a: "Yes. Your referral link is in your dashboard. When someone registers through your link and activates their account, you earn a bonus tracked in your referral dashboard.",
+      a: "Yes. Your referral link is in your dashboard. When someone registers through your link and activates their account, you earn a flat, direct referral bonus of KSh 100.",
     },
     {
       q: "What happens to my pending balance?",
@@ -35,13 +47,13 @@ export function FAQSection() {
       a: "Pesatrix is currently built for Kenyan users with M-Pesa phone numbers.",
     },
     {
-      q: "What if I have a problem?",
-      a: "Open a support ticket from your dashboard. Your ticket is linked to your account, task, and payment history so the support team has full context without you repeating details.",
+      q: "What if I have a problem before registering?",
+      a: "If you have any questions before creating an account, you can reach out directly to our official pre-registration support on WhatsApp using the button below. Once registered, you can open support tickets inside the platform.",
     },
   ];
 
   return (
-    <section className="bg-white py-20 px-6 dark:bg-zinc-950">
+    <section className="bg-white py-20 px-6 dark:bg-zinc-950 space-y-16">
       <div className="mx-auto max-w-4xl space-y-12">
         {/* Section Header */}
         <div className="text-center space-y-4">
@@ -85,6 +97,49 @@ export function FAQSection() {
           ))}
         </Accordion.Root>
       </div>
+
+      {/* Premium WhatsApp Support Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+        className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-500/10 p-8 text-center space-y-6 max-w-2xl mx-auto shadow-sm relative overflow-hidden"
+      >
+        {/* Subtle glowing radial background */}
+        <div className="absolute -inset-x-20 -top-20 h-64 bg-emerald-500/10 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col items-center space-y-4">
+          <div className="h-16 w-16 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 animate-pulse">
+            <WhatsAppIcon className="h-9 w-9" />
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="text-xl font-black tracking-tight text-navy dark:text-zinc-100">
+              Have questions before registering?
+            </h3>
+            <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-md mx-auto">
+              Chat with our official pre-registration support directly. Click the button below to start a secure WhatsApp conversation.
+            </p>
+          </div>
+
+          <motion.a
+            href="https://wa.me/254103144018?text=Hello%20Pesatrix%20Support%2C%20I%20have%20a%20question%20before%20registering%20my%20account%3A"
+            target="_blank"
+            rel="noopener noreferrer"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-8 py-3.5 text-sm font-black text-white shadow-xl shadow-emerald-500/30 hover:bg-emerald-600 transition-colors duration-200"
+          >
+            <WhatsAppIcon className="h-5 w-5" />
+            Chat on WhatsApp
+          </motion.a>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50/50 dark:border-amber-900/30 dark:bg-amber-950/20 p-4 text-xs font-semibold text-amber-800 dark:text-amber-400 max-w-md border-l-4 border-l-amber-500">
+            ⚠️ <span className="font-bold">Caution:</span> This contact channel is strictly dedicated for WhatsApp messaging and text inquiries only. Telephone calls, voice calls, and standard SMS cellular texts are not active and will not be received.
+          </div>
+        </div>
+      </motion.div>
     </section>
   );
 }

@@ -22,128 +22,73 @@ export function ReferralSection() {
             Invite People. Earn When They Activate.
           </p>
           <h2 className="text-3xl font-extrabold tracking-tight text-navy dark:text-zinc-100 sm:text-4xl">
-            A Multi-Level Earning Accelerator.
+            Direct Earning Made Simple.
           </h2>
           <p className="mx-auto max-w-2xl text-base font-semibold leading-relaxed text-zinc-500 dark:text-zinc-400">
-            Every Pesatrix account comes with a personal referral code and link. When someone registers through your link and completes activation, you earn passive bonuses down three tiers.
+            Every Pesatrix account comes with a personal referral code and link. When someone registers through your link and completes activation, you earn a flat, direct referral bonus of KSh 100 — simple, clear, and high-paying. We do not do multi-tier referrals. You refer a person, they activate, you earn KSh 100.
           </p>
         </div>
 
-        {/* 3-Level Visual Section */}
+        {/* Direct Referral Visual Section */}
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
-          {/* Visual: Tree/Pyramid Style */}
-          <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative min-h-[360px]">
-            <h4 className="mb-8 text-center text-xs font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-              3-Level Referral Matrix
+          {/* Visual: Direct 1-Level Referral Flow */}
+          <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative min-h-[380px]">
+            <h4 className="mb-4 text-center text-xs font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+              Direct 1-Level Referral Flow
             </h4>
 
-            {/* Tree Connections (SVG Background) */}
-            <svg className="absolute inset-0 h-full w-full pointer-events-none stroke-zinc-200 dark:stroke-zinc-800" strokeWidth="2.5" fill="none">
-              {/* Lines from L1 to L2 */}
-              <path d="M 280,120 L 160,200" className="stroke-emerald-500/30" />
-              <path d="M 280,120 L 400,200" className="stroke-emerald-500/30" />
-              {/* Lines from L2 Left to L3 */}
-              <path d="M 160,200 L 90,285" className="stroke-emerald-500/20" />
-              <path d="M 160,200 L 230,285" className="stroke-emerald-500/20" />
-              {/* Lines from L2 Right to L3 */}
-              <path d="M 400,200 L 330,285" className="stroke-emerald-500/20" />
-              <path d="M 400,200 L 470,285" className="stroke-emerald-500/20" />
-            </svg>
-
-            {/* Tree Nodes */}
-            <div className="relative w-full max-w-[560px] h-[300px]">
-              
-              {/* Level 1 (You -> Direct Referral) */}
+            <div className="flex flex-col items-center justify-between h-[280px] w-full relative z-10 py-4">
+              {/* Node 1: Your Account */}
               <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: -20 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                className="absolute left-1/2 top-4 -translate-x-1/2 z-10 flex flex-col items-center"
+                className="z-10"
               >
-                <div className="rounded-xl border-2 border-emerald-500 bg-emerald-500 px-5 py-2.5 text-center text-white shadow-lg shadow-emerald-500/20">
-                  <p className="text-[10px] font-black uppercase tracking-wider opacity-90">Level 1 (Direct)</p>
-                  <p className="text-lg font-black tabular-nums">KSh 100</p>
-                </div>
-                <p className="mt-2 text-xs font-semibold text-zinc-400 dark:text-zinc-500">Per Activated User</p>
-              </motion.div>
-
-              {/* Level 2 (Indirect) */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.15 }}
-                className="absolute left-[15%] top-40 z-10 flex flex-col items-center"
-              >
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-center text-emerald-600 dark:text-emerald-400">
-                  <p className="text-[9px] font-black uppercase tracking-wider">Level 2</p>
-                  <p className="text-base font-black tabular-nums">KSh 50</p>
+                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-6 py-4 text-center text-navy dark:text-zinc-100 shadow-sm flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                    <Users className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Step 1</p>
+                    <p className="text-sm font-black text-navy dark:text-zinc-200">Your Account</p>
+                  </div>
                 </div>
               </motion.div>
 
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.15 }}
-                className="absolute right-[15%] top-40 z-10 flex flex-col items-center"
-              >
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-center text-emerald-600 dark:text-emerald-400">
-                  <p className="text-[9px] font-black uppercase tracking-wider">Level 2</p>
-                  <p className="text-base font-black tabular-nums">KSh 50</p>
+              {/* Connector Arrow with reward badge */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="h-32 w-0.5 border-l-2 border-dashed border-emerald-500/50" />
+                <div className="absolute z-20">
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    whileInView={{ scale: 1, opacity: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.2 }}
+                    className="rounded-full border-2 border-emerald-500 bg-emerald-500 px-5 py-2.5 text-center text-white shadow-xl shadow-emerald-500/30 font-black text-base flex flex-col items-center justify-center min-w-[120px]"
+                  >
+                    <span className="text-[9px] font-extrabold uppercase tracking-widest opacity-80 leading-none">Earnings</span>
+                    <span className="text-lg font-black leading-none mt-1">KSh 100</span>
+                  </motion.div>
                 </div>
-              </motion.div>
+              </div>
 
-              {/* Level 3 (Indirect) */}
+              {/* Node 2: Referred Friend */}
               <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: 0.3 }}
-                className="absolute left-[4%] top-[250px] z-10 flex flex-col items-center"
+                className="z-10"
               >
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 px-3 py-1.5 text-center text-zinc-500 dark:text-zinc-400">
-                  <p className="text-[8px] font-black uppercase tracking-wider">Level 3</p>
-                  <p className="text-xs font-black tabular-nums">KSh 25</p>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.3 }}
-                className="absolute left-[29%] top-[250px] z-10 flex flex-col items-center"
-              >
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 px-3 py-1.5 text-center text-zinc-500 dark:text-zinc-400">
-                  <p className="text-[8px] font-black uppercase tracking-wider">Level 3</p>
-                  <p className="text-xs font-black tabular-nums">KSh 25</p>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.3 }}
-                className="absolute right-[29%] top-[250px] z-10 flex flex-col items-center"
-              >
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 px-3 py-1.5 text-center text-zinc-500 dark:text-zinc-400">
-                  <p className="text-[8px] font-black uppercase tracking-wider">Level 3</p>
-                  <p className="text-xs font-black tabular-nums">KSh 25</p>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.3 }}
-                className="absolute right-[4%] top-[250px] z-10 flex flex-col items-center"
-              >
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 px-3 py-1.5 text-center text-zinc-500 dark:text-zinc-400">
-                  <p className="text-[8px] font-black uppercase tracking-wider">Level 3</p>
-                  <p className="text-xs font-black tabular-nums">KSh 25</p>
+                <div className="rounded-2xl border-2 border-emerald-500 bg-emerald-500 px-6 py-4 text-center text-white shadow-xl shadow-emerald-500/20 flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-white/20 text-white flex items-center justify-center">
+                    <Link className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-wider opacity-80 leading-none">Step 2</p>
+                    <p className="text-sm font-black mt-1">Activated Referral</p>
+                  </div>
                 </div>
               </motion.div>
             </div>
