@@ -8,8 +8,6 @@ import { normalizeTaskDatetimes } from "@/lib/datetime";
 import { syncTaskAssignments } from "@/lib/task-distribution";
 
 export async function GET(request: Request) {
-
-export async function GET(request: Request) {
   const { error, userId } = await requireAdmin({
     request,
     allowedRoles: ["admin"],
@@ -205,6 +203,7 @@ export async function POST(request: Request) {
     .single();
 
   if (insertError || !task) {
+    return NextResponse.json(
       { error: "Failed to create task" },
       { status: 500 }
     );

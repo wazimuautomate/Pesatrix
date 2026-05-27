@@ -42,7 +42,7 @@ export async function assignStarterTasks(userId: string): Promise<void> {
   //    So day 1 tasks unlock immediately, day 2 unlock in 24h, etc.
   const now = new Date();
   
-  const assignmentsToInsert = starterTasks.map((task) => {
+  const assignmentsToInsert = starterTasks.map((task: any) => {
     const starterDay = task.starter_day ? Number(task.starter_day) : 1;
     const unlockTime = new Date(now.getTime() + (starterDay - 1) * 24 * 60 * 60 * 1000);
     const status = starterDay === 1 ? "available" : "locked";

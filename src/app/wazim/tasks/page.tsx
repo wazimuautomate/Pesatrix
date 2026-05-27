@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { type TaskStatus, CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/task-types";
+import { type TaskStatus, type TaskCategory, CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/task-types";
 import { TaskMobileCard, TaskTableRow, type TaskRow, STATUS_COLORS, getTaskActionState } from "./components/TaskCard";
 import { cn } from "@/lib/utils";
 import { TaskForm } from "./components/TaskForm";
@@ -577,9 +577,9 @@ export default function TasksPage() {
                       <td className="p-4">
                         <Badge
                           variant="outline"
-                          className={cn("border", CATEGORY_COLORS[task.category] ?? "")}
+                          className={cn("border", CATEGORY_COLORS[task.category as TaskCategory] ?? "")}
                         >
-                          {CATEGORY_LABELS[task.category] ?? task.category}
+                          {CATEGORY_LABELS[task.category as TaskCategory] ?? task.category}
                         </Badge>
                       </td>
                       <td className="p-4 font-mono text-sm">
@@ -594,7 +594,7 @@ export default function TasksPage() {
                       <td className="p-4">
                         <Badge
                           variant="outline"
-                          className={cn("border", STATUS_COLORS[task.status] ?? "")}
+                          className={cn("border", STATUS_COLORS[task.status as TaskStatus] ?? "")}
                         >
                           {task.status}
                         </Badge>
