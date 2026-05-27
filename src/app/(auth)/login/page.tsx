@@ -22,6 +22,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { captureAndSendFingerprint, getFingerprint, sendFingerprint } from "@/lib/fraud/fingerprint";
 import { createClient } from "@/lib/supabase/client";
+import { FloatingInfoButton } from "@/components/FloatingInfoButton";
 
 const phoneSchema = z.object({
   identifier: z
@@ -415,6 +416,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={<LoginPageFallback />}>
       <LoginPageContent />
+      <FloatingInfoButton />
     </Suspense>
   );
 }

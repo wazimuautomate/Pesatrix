@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { AnimatedHowItWorks } from "@/components/marketing/animated-how-it-works";
 import { HomepageFooter, HomepageHeader } from "@/components/marketing/homepage-chrome";
+import { FloatingInfoButton } from "@/components/FloatingInfoButton";
 
 const stats = [
   { value: "10,000+", label: "Active earners" },
@@ -254,6 +255,7 @@ export default function LandingPage() {
       </main>
 
       <HomepageFooter />
+      <FloatingInfoButton />
     </div>
   );
 }

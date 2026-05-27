@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   type TaskCategory,
   CATEGORY_LABELS,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/task-types";
 import { validateTaskFinancials } from "@/lib/financial-limits";
 import { normalizeDatetime } from "@/lib/datetime";
+import { TaskForm } from "./TaskForm";
 
 type ParsedTask = {
   title: string;
@@ -42,15 +44,18 @@ type ParsedTask = {
   task_data: Record<string, unknown>;
   publish_at: string | null;
   expires_at: string | null;
+  visibility_mode: string;
+  min_referrals_required: number | string;
+  is_starter: boolean;
+  starter_day: number | string;
   _errors: string[];
   _originalIndex: number;
 };
 
-type FailedRow = {
+type FailedRowResponse = {
   row: number;
   title: string;
   errors: string[];
-  data: Record<string, unknown>;
 };
 
 type TaskImportPanelProps = {
@@ -143,6 +148,34 @@ function validateRow(raw: Record<string, unknown>, index: number): { errors: str
     }
   }
 
+  const visibilityModeRaw = String(raw.visibility_mode ?? "all").trim();
+  const visibility_mode = ["all", "referral_gated", "assigned_only", "proof_tier"].includes(visibilityModeRaw)
+    ? visibilityModeRaw
+    : "all";
+
+  const minReferralsRaw = raw.min_referrals_required;
+  const min_referrals_required = typeof minReferralsRaw === "number"
+    ? minReferralsRaw
+    : isNaN(Number(minReferralsRaw))
+    ? (visibility_mode === "referral_gated" ? 3 : 0)
+    : Number(minReferralsRaw);
+
+  if (visibility_mode === "referral_gated" && min_referrals_required < 3) {
+    errors.push("min_referrals_required must be at least 3 for referral gated tasks");
+  }
+
+  const is_starter = raw.is_starter === true || raw.is_starter === "true";
+  const starterDayRaw = raw.starter_day;
+  const starter_day = typeof starterDayRaw === "number"
+    ? starterDayRaw
+    : isNaN(Number(starterDayRaw))
+    ? (is_starter ? 1 : "")
+    : Number(starterDayRaw);
+
+  if (is_starter && (isNaN(Number(starter_day)) || Number(starter_day) < 1 || Number(starter_day) > 6)) {
+    errors.push("starter_day must be an integer between 1 and 6 for starter tasks");
+  }
+
   const td = taskData;
   const questions = (td.questions as Array<Record<string, unknown>>) ?? [];
   const normalizedQuestions = questions.map((q) => ({
@@ -226,6 +259,10 @@ function validateRow(raw: Record<string, unknown>, index: number): { errors: str
     task_data: normalizedTaskData,
     publish_at: publishAt,
     expires_at: expiresAt,
+    visibility_mode,
+    min_referrals_required,
+    is_starter,
+    starter_day,
     _errors: errors,
     _originalIndex: index,
   };
@@ -237,15 +274,15 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
   const [parsedTasks, setParsedTasks] = useState<ParsedTask[]>([]);
   const [jsonInput, setJsonInput] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
-  const [failedRows, setFailedRows] = useState<FailedRow[]>([]);
+
   const [savedCount, setSavedCount] = useState(0);
   const [saving, setSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editingTaskIndex, setEditingTaskIndex] = useState<number | null>(null);
 
   function processJson(data: unknown) {
     setParseError(null);
-    setFailedRows([]);
     setSavedCount(0);
 
     if (data === null || typeof data !== "object") {
@@ -330,6 +367,67 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
     });
   }
 
+  async function handleFormSave(payload: Record<string, unknown>, publish?: boolean) {
+    if (editingTaskIndex === null) return;
+    
+    const updatedTask: ParsedTask = {
+      title: String(payload.title),
+      category: payload.category as TaskCategory,
+      description: String(payload.description ?? ""),
+      instructions: String(payload.instructions),
+      payout_ksh: Number(payload.payout_ksh),
+      total_slots: Number(payload.total_slots),
+      difficulty: String(payload.difficulty),
+      ai_grading_enabled: Boolean(payload.ai_grading_enabled),
+      ai_rubric: String(payload.ai_rubric ?? ""),
+      requires_screenshot: Boolean(payload.requires_screenshot),
+      requires_url: Boolean(payload.requires_url),
+      min_word_count: Number(payload.min_word_count ?? 0),
+      task_data: (payload.task_data as Record<string, unknown>) ?? {},
+      publish_at: payload.publish_at ? String(payload.publish_at) : null,
+      expires_at: payload.expires_at ? String(payload.expires_at) : null,
+      visibility_mode: String(payload.visibility_mode ?? "all"),
+      min_referrals_required: Number(payload.min_referrals_required ?? 0),
+      is_starter: Boolean(payload.is_starter),
+      starter_day: payload.starter_day ? Number(payload.starter_day) : "",
+      
+      _errors: [],
+      _originalIndex: parsedTasks[editingTaskIndex]._originalIndex,
+    };
+    
+    const rawRecord: Record<string, unknown> = {
+      title: updatedTask.title,
+      category: updatedTask.category,
+      description: updatedTask.description,
+      instructions: updatedTask.instructions,
+      payout_ksh: updatedTask.payout_ksh,
+      total_slots: updatedTask.total_slots,
+      difficulty: updatedTask.difficulty,
+      ai_grading_enabled: updatedTask.ai_grading_enabled,
+      ai_rubric: updatedTask.ai_rubric,
+      requires_screenshot: updatedTask.requires_screenshot,
+      requires_url: updatedTask.requires_url,
+      min_word_count: updatedTask.min_word_count,
+      task_data: updatedTask.task_data,
+      publish_at: updatedTask.publish_at,
+      expires_at: updatedTask.expires_at,
+      visibility_mode: updatedTask.visibility_mode,
+      min_referrals_required: updatedTask.min_referrals_required,
+      is_starter: updatedTask.is_starter,
+      starter_day: updatedTask.starter_day,
+    };
+
+    const revalidate = validateRow(rawRecord, updatedTask._originalIndex);
+    updatedTask._errors = revalidate.errors;
+
+    setParsedTasks((prev) =>
+      prev.map((t, i) => (i === editingTaskIndex ? updatedTask : t))
+    );
+    setEditingTaskIndex(null);
+    toast.success("Task updated successfully");
+    return Promise.resolve();
+  }
+
   function updateTaskData(index: number, updates: Record<string, unknown>) {
     setParsedTasks((prev) =>
       prev.map((t, i) => {
@@ -412,14 +510,6 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
     setParsedTasks((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function updateFailedRow(index: number, field: string, value: unknown) {
-    setFailedRows((prev) =>
-      prev.map((r, i) =>
-        i === index ? { ...r, data: { ...r.data, [field]: value } } : r
-      )
-    );
-  }
-
   async function sendTasks(tasks: Record<string, unknown>[]) {
     const res = await fetch("/api/admin/tasks/import", {
       method: "POST",
@@ -429,17 +519,13 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
 
     if (!res.ok) {
       const result = await res.json().catch(() => null);
-      if (res.status === 409) {
-        return { networkError: false, saved: 0, failed: [] as FailedRow[], duplicateError: result?.error };
-      }
-      throw new Error(result?.error ?? "Import failed");
+      throw new Error(result?.error?.message ?? result?.error ?? "Import failed");
     }
 
     const result = await res.json();
     return {
-      networkError: false,
       saved: result.saved ?? 0,
-      failed: (result.failed ?? []) as FailedRow[],
+      failed: (result.failed ?? []) as FailedRowResponse[],
     };
   }
 
@@ -460,6 +546,10 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
       task_data: t.task_data,
       publish_at: t.publish_at,
       expires_at: t.expires_at,
+      visibility_mode: t.visibility_mode,
+      min_referrals_required: Number(t.min_referrals_required),
+      is_starter: t.is_starter,
+      starter_day: t.is_starter ? Number(t.starter_day) : null,
     }));
   }
 
@@ -474,39 +564,50 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
     try {
       const result = await sendTasks(tasksToSend(validTasks));
       setSavedCount((prev) => prev + result.saved);
+      
       if (result.failed.length > 0) {
-        setFailedRows(result.failed);
-        toast.warning(`${result.saved} tasks saved, ${result.failed.length} failed`);
-      } else {
-        toast.success(`${result.saved} tasks imported successfully`);
-        onImported();
-        onClose();
-      }
-    } catch (err) {
-      toast.error("Save failed due to a network error. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  }
+        const failedIndices = new Set(result.failed.map((fr) => fr.row - 1));
+        const errorMap = new Map<number, string[]>();
+        result.failed.forEach((fr) => {
+          errorMap.set(fr.row - 1, fr.errors);
+        });
 
-  async function handleSaveFixed() {
-    const rowsToSave = failedRows.map((r) => r.data);
-    if (rowsToSave.length === 0) return;
+        setParsedTasks((prev) => {
+          const next: ParsedTask[] = [];
+          let validIndex = 0;
+          for (const t of prev) {
+            if (t._errors.length > 0) {
+              next.push(t);
+            } else {
+              if (failedIndices.has(validIndex)) {
+                const serverErrors = errorMap.get(validIndex) ?? [];
+                next.push({
+                  ...t,
+                  _errors: Array.from(new Set([...t._errors, ...serverErrors])),
+                });
+              }
+              validIndex++;
+            }
+          }
+          return next;
+        });
 
-    setSaving(true);
-    try {
-      const result = await sendTasks(rowsToSave);
-      setSavedCount((prev) => prev + result.saved);
-      if (result.failed.length > 0) {
-        setFailedRows(result.failed);
-        toast.warning(`${result.saved} tasks saved, ${result.failed.length} still failed`);
+        toast.warning(
+          `${result.saved} tasks saved, ${result.failed.length} failed. Please correct the errors below.`
+        );
       } else {
-        toast.success(`${result.saved} tasks imported successfully`);
-        onImported();
-        onClose();
+        const remainingInvalid = parsedTasks.filter((t) => t._errors.length > 0);
+        if (remainingInvalid.length > 0) {
+          setParsedTasks(remainingInvalid);
+          toast.success(`${result.saved} tasks saved. Please fix the remaining invalid tasks.`);
+        } else {
+          toast.success(`${result.saved} tasks imported successfully`);
+          onImported();
+          onClose();
+        }
       }
-    } catch (err) {
-      toast.error("Save failed due to a network error. Please try again.");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Save failed due to an error. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -551,7 +652,7 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
             </div>
           )}
 
-          {parsedTasks.length === 0 && failedRows.length === 0 && (
+          {parsedTasks.length === 0 && (
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-3 rounded-xl border p-4">
                 <div>
@@ -628,123 +729,44 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
                     key={`${task._originalIndex}-${idx}`}
                     index={idx}
                     task={task}
-                    onUpdate={(updates) => updateTask(idx, updates)}
-                    onUpdateTaskData={(updates) => updateTaskData(idx, updates)}
-                    onUpdateQuestion={(qIdx, updates) =>
-                      updateQuestion(idx, qIdx, updates)
-                    }
-                    onAddQuestion={(type) => addQuestion(idx, type)}
-                    onRemoveQuestion={(qIdx) => removeQuestion(idx, qIdx)}
+                    onEdit={() => setEditingTaskIndex(idx)}
                     onRemove={() => removeTask(idx)}
                   />
                 ))}
               </div>
 
-              {failedRows.length > 0 && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-amber-600" />
-                    <span className="font-medium text-amber-800">
-                      {failedRows.length} row{failedRows.length > 1 ? "s" : ""} need{failedRows.length === 1 ? "s" : ""} fixing
-                    </span>
-                  </div>
-                  <div className="space-y-3">
-                    {failedRows.map((row, idx) => (
-                      <div key={idx} className="rounded-lg border border-amber-200 bg-white p-3 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="destructive">Row {row.row}</Badge>
-                          <span className="font-medium text-navy truncate">{row.title}</span>
-                        </div>
-                        <ul className="space-y-1">
-                          {row.errors.map((err, ei) => (
-                            <li key={ei} className="text-sm text-destructive flex items-start gap-1">
-                              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                              {err}
-                            </li>
-                          ))}
-                        </ul>
-                        <div className="grid gap-2 sm:grid-cols-2 pt-2">
-                          <div>
-                            <Label className="text-xs">Title</Label>
-                            <Input
-                              value={String(row.data.title ?? "")}
-                              onChange={(e) => updateFailedRow(idx, "title", e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Category</Label>
-                            <Select
-                              value={String(row.data.category ?? "survey")}
-                              onValueChange={(v) => updateFailedRow(idx, "category", v)}
-                            >
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {VALID_CATEGORIES.map((cat) => (
-                                  <SelectItem key={cat} value={cat}>{CATEGORY_LABELS[cat]}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label className="text-xs">Payout (KSh)</Label>
-                            <Input
-                              type="number"
-                              value={String(row.data.payout_ksh ?? "")}
-                              onChange={(e) => updateFailedRow(idx, "payout_ksh", Number(e.target.value))}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Total Slots</Label>
-                            <Input
-                              type="number"
-                              value={String(row.data.total_slots ?? "")}
-                              onChange={(e) => updateFailedRow(idx, "total_slots", Number(e.target.value))}
-                            />
-                          </div>
-                          <div className="sm:col-span-2">
-                            <Label className="text-xs">Instructions</Label>
-                            <Textarea
-                              value={String(row.data.instructions ?? "")}
-                              onChange={(e) => updateFailedRow(idx, "instructions", e.target.value)}
-                              rows={2}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               <div className="flex justify-end gap-2 pt-2 sticky bottom-0 bg-background border-t py-3">
                 <Button variant="outline" onClick={onClose} disabled={saving}>
                   Cancel
                 </Button>
-                {failedRows.length > 0 ? (
-                  <Button
-                    onClick={handleSaveFixed}
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
-                    Save Fixed ({failedRows.length})
-                  </Button>
-                ) : (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={handleSaveValid}
-                      disabled={saving || validCount === 0}
-                    >
-                      {saving ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Save Valid as Drafts ({validCount})
-                    </Button>
-                  </>
-                )}
+                <Button
+                  onClick={handleSaveValid}
+                  disabled={saving || validCount === 0}
+                >
+                  {saving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Save Valid as Drafts ({validCount})
+                </Button>
               </div>
+
+              <Dialog
+                open={editingTaskIndex !== null}
+                onOpenChange={(open) => {
+                  if (!open) setEditingTaskIndex(null);
+                }}
+              >
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                  <DialogTitle>Edit Imported Task</DialogTitle>
+                  {editingTaskIndex !== null ? (
+                    <TaskForm
+                      task={parsedTasks[editingTaskIndex] as any}
+                      onSave={handleFormSave}
+                      onCancel={() => setEditingTaskIndex(null)}
+                    />
+                  ) : null}
+                </DialogContent>
+              </Dialog>
             </>
           )}
         </div>
@@ -756,397 +778,69 @@ export function TaskImportPanel({ onClose, onImported }: TaskImportPanelProps) {
 function ImportTaskCard({
   index,
   task,
-  onUpdate,
-  onUpdateTaskData,
-  onUpdateQuestion,
-  onAddQuestion,
-  onRemoveQuestion,
+  onEdit,
   onRemove,
 }: {
   index: number;
   task: ParsedTask;
-  onUpdate: (updates: Partial<ParsedTask>) => void;
-  onUpdateTaskData: (updates: Record<string, unknown>) => void;
-  onUpdateQuestion: (qIndex: number, updates: Record<string, unknown>) => void;
-  onAddQuestion: (type: string) => void;
-  onRemoveQuestion: (qIndex: number) => void;
+  onEdit: () => void;
   onRemove: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const isValid = task._errors.length === 0;
-
-  const questions =
-    ((task.task_data.questions as Array<Record<string, unknown>>) ?? []);
 
   return (
     <div
-      className={`rounded-lg border ${
+      className={`rounded-lg border bg-white p-4 flex items-center justify-between gap-4 ${
         isValid ? "border-green-200" : "border-destructive/40"
       }`}
     >
-      <div
-        className="w-full flex items-center gap-3 p-4 text-left cursor-pointer hover:bg-muted/50 rounded-t-lg"
-        onClick={() => setExpanded(!expanded)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && setExpanded(!expanded)}
-      >
-        {expanded ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-navy truncate">
-              {task.title || "(untitled)"}
-            </span>
-            <Badge
-              variant="outline"
-              className="shrink-0"
-            >
-              {CATEGORY_LABELS[task.category]}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-semibold text-navy truncate max-w-[300px]">
+            {task.title || "(untitled)"}
+          </span>
+          <Badge variant="outline" className="shrink-0">
+            {CATEGORY_LABELS[task.category]}
+          </Badge>
+          {task.is_starter && (
+            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              Starter (Day {task.starter_day})
             </Badge>
-            {isValid ? (
-              <CheckCircle2 className="h-4 w-4 text-teal shrink-0" />
-            ) : (
-              <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
-            )}
-          </div>
-          {!isValid && (
-            <p className="text-xs text-destructive mt-0.5 truncate">
-              {task._errors.join("; ")}
-            </p>
+          )}
+          <Badge variant="secondary" className="font-mono text-xs">
+            KSh {task.payout_ksh}
+          </Badge>
+          {isValid ? (
+            <CheckCircle2 className="h-4 w-4 text-teal shrink-0" />
+          ) : (
+            <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
           )}
         </div>
+        {!isValid && (
+          <ul className="text-xs text-destructive mt-2 space-y-0.5">
+            {task._errors.map((err, i) => (
+              <li key={i} className="flex items-center gap-1">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {err}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      
+      <div className="flex items-center gap-2 shrink-0">
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          Edit Task
+        </Button>
         <Button
           variant="ghost"
-          size="sm"
-          className="shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
+          size="icon"
+          onClick={onRemove}
+          className="text-muted-foreground hover:text-destructive"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-4 w-4" />
         </Button>
       </div>
-
-      {expanded && (
-        <div className="border-t px-4 py-4 space-y-4">
-          {!isValid && (
-            <div className="rounded-md bg-destructive/5 border border-destructive/20 p-3 space-y-1">
-              {task._errors.map((err, i) => (
-                <p key={i} className="text-sm text-destructive flex items-start gap-1.5">
-                  <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                  {err}
-                </p>
-              ))}
-            </div>
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="sm:col-span-2 lg:col-span-3">
-              <Label>Task Title</Label>
-              <Input
-                value={task.title}
-                onChange={(e) => onUpdate({ title: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <Label>Category</Label>
-              <Select
-                value={task.category}
-                onValueChange={(v) =>
-                  onUpdate({ category: v as TaskCategory })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="survey">Survey</SelectItem>
-                  <SelectItem value="data_labeling">Data Labeling</SelectItem>
-                  <SelectItem value="social_engagement">Social Engagement</SelectItem>
-                  <SelectItem value="verification">Verification</SelectItem>
-                  <SelectItem value="content_creation">Content Creation</SelectItem>
-                  <SelectItem value="watch_respond">Watch & Respond</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Payout (KSh)</Label>
-              <Input
-                type="number"
-                value={task.payout_ksh}
-                onChange={(e) =>
-                  onUpdate({ payout_ksh: e.target.value })
-                }
-              />
-            </div>
-
-            <div>
-              <Label>Total Slots</Label>
-              <Input
-                type="number"
-                value={task.total_slots}
-                onChange={(e) =>
-                  onUpdate({ total_slots: e.target.value })
-                }
-              />
-            </div>
-
-            <div>
-              <Label>Difficulty</Label>
-              <Select
-                value={task.difficulty}
-                onValueChange={(v) => onUpdate({ difficulty: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="easy">Easy</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="hard">Hard</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="sm:col-span-2 lg:col-span-3">
-              <Label>Description</Label>
-              <Input
-                value={task.description}
-                onChange={(e) => onUpdate({ description: e.target.value })}
-              />
-            </div>
-
-            <div className="sm:col-span-2 lg:col-span-3">
-              <Label>Instructions</Label>
-              <Textarea
-                value={task.instructions}
-                onChange={(e) => onUpdate({ instructions: e.target.value })}
-                rows={2}
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Switch
-                checked={task.ai_grading_enabled}
-                onCheckedChange={(v) =>
-                  onUpdate({ ai_grading_enabled: v })
-                }
-                id={`ai-${index}`}
-              />
-              <Label htmlFor={`ai-${index}`}>AI Grading</Label>
-            </div>
-
-            {task.ai_grading_enabled && (
-              <div className="sm:col-span-2">
-                <Label>AI Rubric</Label>
-                <Textarea
-                  value={task.ai_rubric}
-                  onChange={(e) => onUpdate({ ai_rubric: e.target.value })}
-                  rows={2}
-                />
-              </div>
-            )}
-
-            <div>
-              <Label>Min Word Count</Label>
-              <Input
-                type="number"
-                value={task.min_word_count}
-                onChange={(e) =>
-                  onUpdate({ min_word_count: Number(e.target.value) })
-                }
-              />
-            </div>
-          </div>
-
-          {task.category === "watch_respond" && (
-            <>
-              <Separator />
-              <h4 className="font-medium text-navy">Video Settings</h4>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="sm:col-span-3">
-                  <Label>Video URL</Label>
-                  <Input
-                    value={String(task.task_data.video_url ?? "")}
-                    onChange={(e) =>
-                      onUpdateTaskData({ video_url: e.target.value })
-                    }
-                    placeholder="https://youtube.com/..."
-                  />
-                </div>
-                <div>
-                  <Label>Video Duration (seconds)</Label>
-                  <Input
-                    type="number"
-                    value={String(task.task_data.video_duration_seconds ?? "")}
-                    onChange={(e) =>
-                      onUpdateTaskData({
-                        video_duration_seconds: Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Min Watch Seconds</Label>
-                  <Input
-                    type="number"
-                    value={String(task.task_data.min_watch_seconds ?? 60)}
-                    onChange={(e) =>
-                      onUpdateTaskData({
-                        min_watch_seconds: Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-          {task.category === "survey" && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="font-medium text-navy mb-2">Questions</h4>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAddQuestion("multiple_choice")}
-                  >
-                    Multiple Choice
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAddQuestion("open_text")}
-                  >
-                    Open Text
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAddQuestion("yes_no")}
-                  >
-                    Yes/No
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAddQuestion("rating")}
-                  >
-                    Rating
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {questions.map((q, qi) => (
-            <div
-              key={String(q.id ?? qi)}
-              className="rounded-lg border p-3 space-y-2"
-            >
-              <div className="flex items-center gap-2">
-                <Badge variant="muted" className="text-xs">
-                  {String(q.type ?? "").replace("_", " ")}
-                </Badge>
-                <Switch
-                  checked={q.required as boolean}
-                  onCheckedChange={(v) =>
-                    onUpdateQuestion(qi, { required: v })
-                  }
-                />
-                <span className="text-xs text-muted-foreground">Required</span>
-                <div className="flex-1" />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onRemoveQuestion(qi)}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-              <Input
-                value={String(q.text ?? "")}
-                onChange={(e) =>
-                  onUpdateQuestion(qi, { text: e.target.value })
-                }
-                placeholder="Question text"
-              />
-              {q.type === "multiple_choice" && (
-                <div className="space-y-1">
-                  {((q.options as string[]) ?? []).map((opt, oi) => (
-                    <Input
-                      key={oi}
-                      value={opt}
-                      onChange={(e) => {
-                        const newOpts = [...((q.options as string[]) ?? [])];
-                        newOpts[oi] = e.target.value;
-                        onUpdateQuestion(qi, { options: newOpts });
-                      }}
-                      placeholder={`Option ${oi + 1}`}
-                      className="text-sm"
-                    />
-                  ))}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      const opts = [...((q.options as string[]) ?? []), ""];
-                      onUpdateQuestion(qi, { options: opts });
-                    }}
-                  >
-                    + Add Option
-                  </Button>
-                </div>
-              )}
-              {q.type === "open_text" && (
-                <div className="flex gap-4">
-                  <div>
-                    <Label className="text-xs">Min Words</Label>
-                    <Input
-                      type="number"
-                      value={String(q.min_words ?? 0)}
-                      onChange={(e) =>
-                        onUpdateQuestion(qi, {
-                          min_words: Number(e.target.value),
-                        })
-                      }
-                      className="w-24"
-                    />
-                  </div>
-                </div>
-              )}
-              {q.type === "rating" && (
-                <div>
-                  <Label className="text-xs">Scale</Label>
-                  <Select
-                    value={String(q.scale ?? 5)}
-                    onValueChange={(v) =>
-                      onUpdateQuestion(qi, { scale: Number(v) })
-                    }
-                  >
-                    <SelectTrigger className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">1-5</SelectItem>
-                      <SelectItem value="10">1-10</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
