@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { HelpCircle } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, Suspense } from "react";
 
-export function FloatingInfoButton() {
+function FloatingInfoButtonContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [showTooltip, setShowTooltip] = useState(false);
@@ -59,5 +59,13 @@ export function FloatingInfoButton() {
         </motion.div>
       </Link>
     </div>
+  );
+}
+
+export function FloatingInfoButton() {
+  return (
+    <Suspense fallback={null}>
+      <FloatingInfoButtonContent />
+    </Suspense>
   );
 }
